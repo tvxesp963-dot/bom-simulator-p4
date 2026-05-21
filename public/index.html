@@ -7,7 +7,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
-
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
 :root{--bg:#080c18;--bg2:#0e1325;--bg3:#141929;--bg4:#1c2238;--accent:#4da6ff;--accent2:#1a6fd4;--accent3:#0d4a99;--green:#00e676;--green2:#00b85a;--red:#ff4444;--amber:#ffb300;--cyan:#00e5ff;--purple:#b388ff;--teal:#00bcd4;--text:#dde3f5;--text2:#7a88b8;--text3:#3d4d77;--border:#1e2a4a;--border2:#263558;}
@@ -124,7 +123,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <span style="font-size:10px;color:var(--text2)">Planta 4 · Eunsung Samsung</span>
   </div>
   <div style="display:flex;gap:.5rem">
-    <span id="imsStatus" style="font-size:10px;padding:4px 10px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:var(--red)">⬤ IMS desconectado</span>
+    <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
     <button class="btn btn-secondary btn-sm" onclick="goTab('upload')">📥 Nuevo BOM</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
@@ -137,7 +136,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="tab" id="tab-cons" onclick="goTab('cons')">📦 Consolidado Pedidos</div>
   <div class="tab" id="tab-prod" onclick="goTab('prod')">🔧 Producir / Ranurar</div>
   <div class="tab" id="tab-assy" onclick="goTab('assy')">🏭 ASSY1 Capacidad</div>
-  <div class="tab" id="tab-op" onclick="goTab('op')">📋 Órdenes Producción</div>
   <div class="tab" id="tab-admin" onclick="goTab('admin')" style="color:#FFBA00">⚙️ Admin BOM</div>
 </div>
 
@@ -292,638 +290,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
 </div>
 
-
-
-<!-- ADMIN BOM -->
-<div class="page" id="page-admin">
-  <div id="adminLock" style="padding:3rem;text-align:center">
-    <div style="font-size:40px;margin-bottom:1rem">🔒</div>
-    <div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--text);margin-bottom:.5rem">Acceso restringido</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:1.5rem">Este módulo es solo para administradores.</div>
-    <div style="display:flex;gap:.5rem;justify-content:center;max-width:300px;margin:0 auto">
-      <input id="adminKey" type="password" class="si" placeholder="Contraseña admin..." style="flex:1">
-      <button class="btn btn-primary" onclick="checkAdminKey()">Entrar</button>
-    </div>
-    <div id="adminKeyErr" style="color:var(--red);font-size:12px;margin-top:.5rem;display:none">Contraseña incorrecta</div>
-  </div>
-  <div id="adminPanel" style="display:none">
-    <div class="top-actions">
-      <span style="font-size:13px;font-weight:600;color:var(--text)">⚙️ Admin BOM</span>
-      <span style="font-size:11px;color:var(--text2);margin-left:.5rem">Solo administradores</span>
-    </div>
-
-    <!-- BOM Activo -->
-    <div class="card" style="margin-bottom:1rem">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">BOM Activo en Firebase</div>
-      <div id="adminBomActivo">
-        <div style="text-align:center;padding:1.5rem;color:var(--text2);font-size:13px">⏳ Verificando...</div>
-      </div>
-    </div>
-
-    <!-- Subir nuevo BOM -->
-    <div class="card">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">Subir nuevo BOM</div>
-      <div id="adminDrop" style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s" 
-           ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" 
-           ondragleave="this.style.borderColor='var(--border2)'"
-           ondrop="event.preventDefault();this.style.borderColor='var(--border2)';adminCargarBOM(event.dataTransfer.files[0])">
-        <div style="font-size:32px;margin-bottom:.5rem">📋</div>
-        <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:.25rem">Arrastra el BOM aquí</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Mismo formato BOM Samsung — hoja "master"</div>
-        <input type="file" id="adminFileInput" accept=".xlsx" style="display:none" onchange="adminCargarBOM(this.files[0])">
-        <button class="btn btn-primary btn-sm" onclick="console.log('btn click');var f=document.getElementById('adminFileInput');f.value='';f.click()">📁 Seleccionar archivo</button>
-      </div>
-      <div id="adminUploadStatus" style="margin-top:.75rem;display:none"></div>
-    </div>
-
-    <!-- Info estructura -->
-    <div class="card" style="margin-top:1rem;background:rgba(26,111,212,.06);border-color:rgba(26,111,212,.2)">
-      <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:.5rem">ESTRUCTURA ESPERADA DEL BOM</div>
-      <div style="font-size:11px;color:var(--text2);line-height:1.8">
-        • Hoja: <b style="color:var(--text)">master</b><br>
-        • Col C: <b style="color:var(--text)">BOM Level</b> (0, 1, 2 o vacío)<br>
-        • Col D: <b style="color:var(--text)">No.</b> (número de componente o vacío)<br>
-        • Col E: <b style="color:var(--text)">Code No.</b> — SM-XXXXXXX para modelo, GHxx-XXXXX para componentes<br>
-        • Col F: <b style="color:var(--text)">Description</b><br>
-        • Col G: <b style="color:var(--text)">Inventory</b> (número)<br>
-        • Col I: <b style="color:var(--text)">Production Plan</b> — target para modelo, P1 PEDIR / S1 PRODUCIR / etc. para componentes
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ÓRDENES DE PRODUCCIÓN -->
-<div class="page" id="page-op">
-  <div id="opEmpty" class="empty" style="padding:4rem">
-    <div class="empty-icon">📋</div>
-    <div class="empty-title">Procesa un BOM y sincroniza el IMS</div>
-    <div class="empty-sub">Las órdenes se generan automáticamente</div>
-    <div style="display:flex;gap:.5rem;justify-content:center;margin-top:1rem">
-      <button class="btn btn-primary" onclick="goTab('upload')">📥 Cargar BOM</button>
-      <button class="btn btn-success" onclick="sincIMS()">🔄 Sync IMS</button>
-    </div>
-  </div>
-  <div id="opContent" style="display:none">
-    <div class="top-actions">
-      <span style="font-size:12px;color:var(--text2)" id="opTitle"></span>
-      <div style="display:flex;gap:.5rem;margin-left:auto">
-        <button class="btn btn-success btn-sm" onclick="imprimirTodasOP()">🖨 Imprimir todas</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportarExcel()">📊 Excel</button>
-      </div>
-    </div>
-    <div id="opAlerts" style="margin-bottom:.7rem"></div>
-    <div id="opTablas"></div>
-  </div>
-</div>
-
 <script>
-let BOM = [], workbook = null, simFiltro = 'todos';
-
-
-// ── ADMIN BOM ──
-const ADMIN_PASSWORD = 'BomP4!2026';
-let adminAuthed = false;
-
-function checkAdminKey() {
-  const key = document.getElementById('adminKey').value;
-  if (key === ADMIN_PASSWORD) {
-    adminAuthed = true;
-    document.getElementById('adminLock').style.display = 'none';
-    document.getElementById('adminPanel').style.display = 'block';
-    cargarBomActivo();
-  } else {
-    document.getElementById('adminKeyErr').style.display = 'block';
-    document.getElementById('adminKey').value = '';
-  }
-}
-window.checkAdminKey = checkAdminKey;
-
-async function cargarBomActivo() {
-  const el = document.getElementById('adminBomActivo');
-  if (!db) { el.innerHTML = '<div style="color:var(--red);font-size:13px">⚠️ Firebase no conectado</div>'; return; }
-  try {
-    const doc = await db.collection('bom_simulator_p4').doc('bom_activo').get();
-    if (!doc.exists) {
-      el.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:1rem;text-align:center">📭 No hay BOM activo. Sube uno para comenzar.</div>';
-      return;
-    }
-    const d = doc.data();
-    const fecha = d.fecha ? new Date(d.fecha).toLocaleDateString('es-MX') : '—';
-    el.innerHTML = `
-      <div style="background:var(--bg3);border-radius:10px;padding:.85rem 1rem">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem">
-          <div style="display:flex;align-items:center;gap:.75rem">
-            <span style="font-size:24px">📊</span>
-            <div>
-              <div style="font-size:13px;font-weight:600;color:var(--text)">${d.nombre || 'BOM activo'}</div>
-              <div style="font-size:11px;color:var(--text2)">Subido ${fecha} · ${d.semana || ''}</div>
-            </div>
-          </div>
-          <span style="background:rgba(0,184,90,.15);color:#00B85A;border:1px solid rgba(0,184,90,.3);border-radius:20px;font-size:10px;font-weight:600;padding:3px 10px">Activo</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.75rem">
-          <div style="background:var(--bg2);border-radius:8px;padding:.5rem;text-align:center">
-            <div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--accent)">${d.modelos || 0}</div>
-            <div style="font-size:10px;color:var(--text2)">Modelos</div>
-          </div>
-          <div style="background:var(--bg2);border-radius:8px;padding:.5rem;text-align:center">
-            <div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--accent)">${d.componentes || 0}</div>
-            <div style="font-size:10px;color:var(--text2)">Componentes</div>
-          </div>
-          <div style="background:var(--bg2);border-radius:8px;padding:.5rem;text-align:center">
-            <div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--accent)">${d.semana || '—'}</div>
-            <div style="font-size:10px;color:var(--text2)">Semana</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:.5rem">
-          <button class="btn btn-primary btn-sm" onclick="cargarBomDesdeFirebase()">▶ Usar este BOM</button>
-          <button class="btn btn-secondary btn-sm" style="color:var(--red);border-color:rgba(255,68,68,.3)" onclick="eliminarBomActivo()">🗑 Eliminar</button>
-        </div>
-      </div>`;
-  } catch(e) {
-    el.innerHTML = '<div style="color:var(--red);font-size:13px">Error al cargar: ' + e.message + '</div>';
-  }
-}
-window.cargarBomActivo = cargarBomActivo;
-
-async function adminCargarBOM(file) {
-  console.log('adminCargarBOM llamado, file:', file ? file.name : 'null');
-  if (!file) { console.log('Sin archivo'); return; }
-  if (!adminAuthed) { console.log('No autenticado'); alert('Acceso no autorizado'); return; }
-  const statusEl = document.getElementById('adminUploadStatus');
-  statusEl.style.display = 'block';
-  statusEl.innerHTML = '<div style="color:var(--amber);font-size:13px">⏳ Procesando BOM...</div>';
-  
-  const reader = new FileReader();
-  reader.onload = async function(e) {
-    try {
-      // Procesar con XLSX — usando la misma función que el simulador
-      const data = new Uint8Array(e.target.result);
-      const wb2 = XLSX.read(data, { type: 'array', cellStyles: true });
-      const sheetName = wb2.SheetNames.includes('master') ? 'master' : (wb2.SheetNames.includes('Sheet1') ? 'Sheet1' : wb2.SheetNames[0]);
-      // Cargar en workbook global y procesar igual que el simulador
-      workbook = wb2;
-      // Actualizar selector de hoja
-      const sel = document.getElementById('sheetSel');
-      if (sel) {
-        sel.innerHTML = wb2.SheetNames.map(s => `<option value="${s}">${s}</option>`).join('');
-        sel.value = sheetName;
-      }
-      adminMode = true;
-      // Forzar la hoja correcta antes de procesar
-      const selEl = document.getElementById('sheetSel');
-      if (selEl) selEl.value = sheetName;
-      // Llamar procesarBOM directamente con el ws correcto
-      const wsDirect = wb2.Sheets[sheetName];
-      if (wsDirect) {
-        // Resetear BOM y procesar directamente sin depender del selector
-        BOM = [];
-        const hiddenRowsD = new Set();
-        if (wsDirect['!rows']) wsDirect['!rows'].forEach((r,i)=>{ if(r&&r.hidden) hiddenRowsD.add(i); });
-        let COL_CODE_D=4, COL_NO_D=3, COL_LEVEL_D=2, COL_DESC_D=5, COL_INV_D=6, COL_PLAN_D=8;
-        // Detectar columnas buscando "Code No." en el header
-        Object.keys(wsDirect).filter(k=>!k.startsWith('!')).forEach(key=>{
-          const cell=wsDirect[key];
-          if(cell&&String(cell.v||'').trim()==='Code No.'){
-            const addr=XLSX.utils.decode_cell(key);
-            COL_CODE_D=addr.c;
-            // Detectar si Level está antes del Code No.
-            const prevCell=wsDirect[XLSX.utils.encode_cell({r:addr.r,c:addr.c-1})];
-            const prev2Cell=wsDirect[XLSX.utils.encode_cell({r:addr.r,c:addr.c-2})];
-            if(prevCell&&String(prevCell.v||'').toLowerCase().includes('level')){
-              COL_LEVEL_D=addr.c-1; COL_NO_D=addr.c; // Level en col anterior, Code es también No.
-            } else if(prev2Cell&&String(prev2Cell.v||'').toLowerCase().includes('level')){
-              COL_LEVEL_D=addr.c-2; COL_NO_D=addr.c-1;
-            }
-            COL_DESC_D=addr.c+1; COL_INV_D=addr.c+2; COL_PLAN_D=addr.c+4;
-          }
-        });
-        // Formato simple: Level=C(2), Code=D(3), Desc=E(4), sin Inv/Plan
-        // Verificar si hay columna "Level" en C
-        const firstRowKeys=Object.keys(wsDirect).filter(k=>!k.startsWith('!')&&XLSX.utils.decode_cell(k).r<=5);
-        firstRowKeys.forEach(key=>{
-          const cell=wsDirect[key];
-          if(cell&&String(cell.v||'').toLowerCase().trim()==='level'){
-            const addr=XLSX.utils.decode_cell(key);
-            COL_LEVEL_D=addr.c;
-          }
-        });
-        const fullRangeD=XLSX.utils.decode_range(wsDirect['!ref']||'A1:Z500');
-        let curSM=null, curTarget=0, inBundleD=false;
-        const getCD=(R,C)=>{ const c=wsDirect[XLSX.utils.encode_cell({r:R,c:C})]; return c?c.v:null; };
-        for(let R=fullRangeD.s.r;R<=fullRangeD.e.r;R++){
-          const isHid=hiddenRowsD.has(R);
-          if(isHid){
-            if(!inBundleD) continue;
-            const pnC=wsDirect[XLSX.utils.encode_cell({r:R,c:COL_CODE_D})];
-            const pnV=pnC?String(pnC.v||'').trim():'';
-            if(!pnV.startsWith('GH')){inBundleD=false;continue;}
-            const dC=wsDirect[XLSX.utils.encode_cell({r:R,c:COL_DESC_D})];
-            const iC=wsDirect[XLSX.utils.encode_cell({r:R,c:COL_INV_D})];
-            let fam='OTRO';
-            if(pnV.startsWith('GH90'))fam='GH90';
-            else if(pnV.startsWith('GH69'))fam='GH69';
-            else if(pnV.startsWith('GH68'))fam='GH68';
-            BOM.push({sm:curSM,target:curTarget,pn:pnV,desc:dC?String(dC.v||'').trim():'',familia:fam,
-              inv:iC&&typeof iC.v==='number'?Math.round(iC.v):0,plan:'',planta:'Sin Planta',
-              qtyPlan:0,groupNo:null,isBold:false,level:2,isLevel1:false,isLevel2:true,isBundleSub:true});
-            continue;
-          }
-          inBundleD=false;
-          const codeRaw=getCD(R,COL_CODE_D); if(!codeRaw) continue;
-          const codeVal=String(codeRaw).trim();
-          if(!codeVal||['Code No.','Code No','No.','Description','Inventory'].includes(codeVal)) continue;
-          const noRaw=getCD(R,COL_NO_D);
-          const noIsEmpty=(noRaw===null||String(noRaw).trim()==='');
-          const isModel=/^SM-/i.test(codeVal)||(/^S\d{3,4}/.test(codeVal)&&!codeVal.startsWith('GH'));
-          // En formato simple, el modelo tiene Level=0
-          const levelRawD=getCD(R,COL_LEVEL_D);
-          const isLevel0=levelRawD!==null&&parseInt(String(levelRawD))===0;
-          if(isModel||(isLevel0&&codeVal.startsWith('GH')=== false&&!['Level','Code No.','Description'].includes(codeVal))){
-            curSM=codeVal;
-            const tR=getCD(R,COL_PLAN_D);
-            curTarget=typeof tR==='number'?Math.round(tR):(tR&&!isNaN(parseInt(String(tR))))?parseInt(String(tR)):0;
-            continue;
-          }
-          if(!curSM) continue;
-          const descV=getCD(R,COL_DESC_D); const invV=getCD(R,COL_INV_D); const planV=getCD(R,COL_PLAN_D);
-          const descVal=descV?String(descV).trim():''; const planVal=planV?String(planV).trim():'';
-          let inv=0; if(typeof invV==='number')inv=Math.round(invV);
-          let familia='OTRO';
-          if(codeVal.startsWith('GH90'))familia='GH90';
-          else if(codeVal.startsWith('GH69'))familia='GH69';
-          else if(codeVal.startsWith('GH68'))familia='GH68';
-          const pu=planVal.toUpperCase();
-          let planta='Sin Planta';
-          if(pu.includes('P1'))planta='P1';
-          else if(pu.includes('P3'))planta='P3';
-          else if(pu.includes('ALIBER'))planta='ALIBER';
-          else if(pu.includes('S1')||pu.includes('S2'))planta='S1/S2';
-          else if(pu.includes('S3')||pu.includes('S4'))planta='S3/S4';
-          else if(pu.includes('VC')||pu.includes('ZHONG'))planta='VC/Zhongke';
-          else if(pu.includes('ASSY'))planta='ASSY1';
-          const qtyM=planVal.match(/\d[\d,]*/);
-          const qtyPlan=qtyM?parseInt(qtyM[0].replace(/,/g,'')):0;
-          const groupNo=noRaw?parseInt(String(noRaw)):null;
-          const levelRaw=getCD(R,COL_LEVEL_D);
-          const levelInt=levelRaw!==null&&!isNaN(parseInt(String(levelRaw)))?parseInt(String(levelRaw)):(noIsEmpty?2:1);
-          const isLevel1=!isNaN(groupNo)&&levelInt<=1;
-          const isLevel2=noIsEmpty&&!isModel;
-          if(familia==='GH90'&&(descVal.toUpperCase().includes('BUNDLE')||descVal.toUpperCase().includes('LIT')))inBundleD=true;
-          BOM.push({sm:curSM,target:curTarget,pn:codeVal,desc:descVal,familia,inv,plan:planVal,planta,
-            qtyPlan,groupNo,isBold:isLevel1,level:levelInt,isLevel1,isLevel2});
-        }
-      }
-      adminMode = false;
-      const bomData = BOM;
-      
-      if (!bomData.length) {
-        statusEl.innerHTML = '<div style="color:var(--red);font-size:13px">❌ No se detectaron componentes. Verifica el formato del BOM.</div>';
-        return;
-      }
-
-      // Extraer semana del nombre del archivo
-      const semMatch = file.name.match(/W(\d+)/i);
-      const semana = semMatch ? 'W' + semMatch[1] : 'W—';
-      const modelos = [...new Set(bomData.map(r => r.sm))].length;
-
-      // Guardar en Firestore (mes-production-esp)
-      if (db) {
-        statusEl.innerHTML = '<div style="color:var(--amber);font-size:13px">⏳ Guardando en Firestore...</div>';
-        await db.collection('bom_simulator_p4').doc('bom_activo').set({
-          nombre: file.name, semana, fecha: new Date().toISOString(),
-          modelos, componentes: bomData.length,
-          bom: JSON.stringify(bomData)
-        });
-        statusEl.innerHTML = `<div style="color:var(--green);font-size:13px">✅ BOM guardado — ${modelos} modelos · ${bomData.length} componentes · ${semana}</div>`;
-        cargarBomActivo();
-      } else {
-        statusEl.innerHTML = '<div style="color:var(--amber);font-size:13px">⚠️ BOM cargado localmente (Firestore no disponible)</div>';
-      }
-      BOM = bomData;
-      actualizarInvBOM();
-      renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); renderOP();
-    } catch(err) {
-      statusEl.innerHTML = '<div style="color:var(--red);font-size:13px">❌ Error: ' + err.message + '</div>';
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-window.adminCargarBOM = adminCargarBOM;
-
-async function eliminarBomActivo() {
-  if (!confirm('¿Eliminar el BOM activo? El simulador quedará sin datos.')) return;
-  if (!db) return;
-  await db.collection('bom_simulator_p4').doc('bom_activo').delete();
-  BOM = [];
-  document.getElementById('adminBomActivo').innerHTML = '<div style="color:var(--text2);font-size:13px;padding:1rem;text-align:center">📭 No hay BOM activo.</div>';
-}
-window.eliminarBomActivo = eliminarBomActivo;
-
-function safeToast(msg, type) {
-  try { if(typeof toast === 'function') toast(msg, type); else console.log(msg); } catch(e) { console.log(msg); }
-}
-async function cargarBomDesdeFirebase() {
-  if (BOM && BOM.length > 0) {
-    actualizarInvBOM();
-    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); renderOP();
-    safeToast('✅ BOM cargado — ' + BOM.length + ' componentes', 'ok');
-    goTab('sim');
-    return;
-  }
-  if (!db) { safeToast('BOM no disponible. Sube un BOM primero.','err'); return; }
-  try {
-    const doc = await db.collection('bom_simulator_p4').doc('bom_activo').get();
-    if (!doc.exists) { safeToast('No hay BOM activo','err'); return; }
-    const d = doc.data();
-    BOM = JSON.parse(d.bom);
-    actualizarInvBOM();
-    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); renderOP();
-    document.getElementById('semanaRef').value = d.semana || '';
-    safeToast('✅ BOM ' + d.semana + ' cargado', 'ok');
-    goTab('sim');
-  } catch(e) { safeToast('Error: ' + e.message, 'err'); }
-}
-window.cargarBomDesdeFirebase = cargarBomDesdeFirebase;
-
-// Función helper para extraer BOM (reutiliza lógica de procesarBOM)
-function extraerBOM(ws2) {
-  try { return procesarBOMsheet(ws2); } catch(e) { console.error('extraerBOM:', e); return []; }
-}
-
-// Al cargar la app, intentar cargar BOM desde Firebase automáticamente
-async function autoCargarBOM() {
-  if (!db) return;
-  try {
-    const doc = await db.collection('bom_simulator_p4').doc('bom_activo').get();
-    if (!doc.exists) return;
-    const d = doc.data();
-    BOM = JSON.parse(d.bom);
-    document.getElementById('semanaRef').value = d.semana || '';
-    actualizarInvBOM();
-    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); renderOP();
-    console.log('BOM auto-cargado:', d.semana, BOM.length, 'componentes');
-  } catch(e) { console.log('autoCargarBOM:', e.message); }
-}
-window.autoCargarBOM = autoCargarBOM;
-
-// ── IMS FIRESTORE ──
-let imsInventario = {}; // { pn: stock }
-let db = null;
-let adminMode = false;
-
-function initIMS() {
-  try {
-    if (typeof firebase === 'undefined') {
-      console.warn('Firebase SDK no disponible todavía');
-      return false;
-    }
-    const firebaseConfig = {
-      apiKey: "AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",
-      authDomain: "mes-production-esp.firebaseapp.com",
-      projectId: "mes-production-esp",
-    };
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    return true;
-  } catch(e) { console.error('Firebase init:', e); return false; }
-}
-
-async function sincIMS() {
-  const statusEl = document.getElementById('imsStatus');
-  statusEl.textContent = '⬤ Sincronizando...';
-  statusEl.style.color = 'var(--amber)';
-  statusEl.style.borderColor = 'rgba(255,179,0,.3)';
-  statusEl.style.background = 'rgba(255,179,0,.1)';
-  if (!db) {
-    const ok = initIMS();
-    if (!ok) {
-      // Reintentar cuando Firebase esté disponible
-      setTimeout(sincIMS, 1500);
-      return;
-    }
-  }
-  if (!db) { statusEl.textContent = '⬤ Error conexión'; statusEl.style.color = 'var(--red)'; return; }
-  try {
-    const snap = await db.collection('planta4_inventario').get();
-    imsInventario = {};
-    snap.forEach(doc => {
-      const d = doc.data();
-      if (d.pn) imsInventario[d.pn.trim().toUpperCase()] = d.actual || 0;
-    });
-    const total = Object.keys(imsInventario).length;
-    statusEl.textContent = `⬤ IMS · ${total} partes`;
-    statusEl.style.color = 'var(--green)';
-    statusEl.style.borderColor = 'rgba(0,230,118,.3)';
-    statusEl.style.background = 'rgba(0,230,118,.08)';
-    // Actualizar inventarios en BOM si ya está cargado
-    if (BOM.length) {
-      actualizarInvBOM();
-      renderOP();
-    }
-    console.log('IMS sincronizado:', total, 'partes');
-  } catch(e) {
-    console.error('Sync IMS error:', e);
-    statusEl.textContent = '⬤ Error sync';
-    statusEl.style.color = 'var(--red)';
-  }
-}
-
-function getIMS(pn) {
-  if (!pn) return 0;
-  return imsInventario[pn.trim().toUpperCase()] || 0;
-}
-
-function actualizarInvBOM() {
-  // Actualizar inv de cada fila del BOM con datos reales del IMS
-  BOM.forEach(r => {
-    const imsVal = getIMS(r.pn);
-    if (imsVal > 0) r.inv = imsVal;
-  });
-}
-
-// ── CÁLCULO CON MATERIALES COMPARTIDOS ──
-function calcPlanProduccion() {
-  // Obtener todos los modelos únicos con su línea y prioridad
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  
-  // Calcular % completitud por modelo (materiales con inv > 0 / total)
-  const modeloStats = modelos.map(sm => {
-    const comps = BOM.filter(r => r.sm === sm);
-    const conInv = comps.filter(r => r.inv > 0).length;
-    const pct = comps.length > 0 ? Math.round((conInv / comps.length) * 100) : 0;
-    const linea = comps[0]?.planta || '';
-    const target = comps[0]?.target || 0;
-    
-    // Cuello de botella: componente con menor ratio inv/requerido
-    let minRatio = 1;
-    let cuello = null;
-    comps.forEach(r => {
-      if (r.qtyPlan > 0) {
-        const ratio = r.inv / r.qtyPlan;
-        if (ratio < minRatio) { minRatio = ratio; cuello = r; }
-      }
-    });
-    const puedeProducir = Math.floor(minRatio * target);
-    
-    return { sm, pct, comps: comps.length, conInv, linea, target, puedeProducir, cuello };
-  }).sort((a, b) => b.pct - a.pct);
-
-  // Detectar materiales compartidos entre modelos
-  const pnModelos = {};
-  BOM.forEach(r => {
-    if (!pnModelos[r.pn]) pnModelos[r.pn] = [];
-    if (!pnModelos[r.pn].includes(r.sm)) pnModelos[r.pn].push(r.sm);
-  });
-  const compartidos = Object.entries(pnModelos).filter(([pn, sms]) => sms.length > 1)
-    .map(([pn, sms]) => ({ pn, sms, inv: getIMS(pn) }));
-
-  return { modeloStats, compartidos };
-}
-
-// ── RENDERIZAR ÓRDENES DE PRODUCCIÓN ──
-function renderOP() {
-  if (!BOM.length) return;
-  
-  const semana = document.getElementById('semanaRef').value;
-  document.getElementById('opTitle').textContent = `Órdenes de producción — ${semana}`;
-  
-  const { modeloStats, compartidos } = calcPlanProduccion();
-  
-  // Alertas de materiales compartidos
-  let alertsHtml = '';
-  if (compartidos.length > 0) {
-    alertsHtml += `<div class="alert alert-warn">⚠️ ${compartidos.length} materiales compartidos entre modelos — el inventario se distribuye según prioridad (mayor % primero). 
-      <span style="cursor:pointer;color:var(--accent)" onclick="document.getElementById('sharedList').style.display=document.getElementById('sharedList').style.display==='none'?'block':'none'"> Ver detalle</span>
-      <div id="sharedList" style="display:none;margin-top:.5rem">
-        ${compartidos.slice(0,8).map(c=>`<div style="font-size:10px;color:var(--text2);padding:2px 0">${c.pn} — usado en: ${c.sms.join(', ')} · Stock: ${c.inv.toLocaleString()}</div>`).join('')}
-      </div>
-    </div>`;
-  }
-  
-  const lineas = [
-    {key:'S1/S2', label:'S1 / S2', color:'var(--accent)', dias:5, target:7000},
-    {key:'S3/S4', label:'S3 / S4', color:'var(--teal)', dias:5, target:9000},
-    {key:'VC/Zhongke', label:'VC / Zhongke', color:'var(--amber)', dias:5, target:8000},
-    {key:'ASSY1', label:'ASSY1', color:'var(--green)', dias:5, target:10000},
-  ];
-
-  let opNo = 1;
-  let html = '';
-
-  lineas.forEach(linea => {
-    const modelosLinea = modeloStats.filter(m => m.linea === linea.key);
-    if (!modelosLinea.length) return;
-
-    modelosLinea.forEach(modelo => {
-      const comps = BOM.filter(r => r.sm === modelo.sm);
-      const faltantes = comps.filter(r => r.inv < r.qtyPlan && r.qtyPlan > 0);
-      const ok = comps.filter(r => r.inv >= r.qtyPlan && r.qtyPlan > 0);
-      const statusColor = modelo.pct === 100 ? 'var(--green)' : modelo.pct >= 60 ? 'var(--amber)' : 'var(--red)';
-      const statusLabel = modelo.pct === 100 ? 'Lista' : modelo.pct >= 60 ? 'Parcial' : 'Bloqueada';
-      const statusTag = modelo.pct === 100 ? 'tag-ok' : modelo.pct >= 60 ? 'tag-warn' : 'tag-err';
-
-      html += `
-      <div class="card" style="border-color:${statusColor}40;margin-bottom:1rem" id="op-${opNo}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.8rem;padding-bottom:.6rem;border-bottom:1px solid var(--border)">
-          <div>
-            <div style="font-size:10px;color:var(--text2);margin-bottom:3px">OP-${String(opNo).padStart(3,'0')} · ${linea.label} · ${semana} · ${new Date().toLocaleDateString('es-MX')}</div>
-            <div style="font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--text)">${modelo.sm}</div>
-            <div style="font-size:10px;color:var(--text2);margin-top:2px">Prioridad #${opNo} · ${modelo.pct}% materiales listos · ${modelo.conInv}/${modelo.comps} componentes</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:${statusColor}">${modelo.puedeProducir > 0 ? modelo.puedeProducir.toLocaleString() : modelo.target.toLocaleString()}</div>
-            <div style="font-size:9px;color:var(--text2)">pzas plan</div>
-            <span class="tag ${statusTag}" style="margin-top:4px;display:inline-block">${statusLabel}</span>
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:4px;padding:4px 0;margin-bottom:4px;border-bottom:1px solid var(--border)">
-          <span style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Material</span>
-          <span style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;text-align:right">Requerido</span>
-          <span style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;text-align:right">Stock IMS</span>
-          <span style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;text-align:right">Diferencia</span>
-          <span style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;text-align:right">Estado</span>
-        </div>
-
-        ${comps.filter(r => r.qtyPlan > 0).map(r => {
-          const diff = r.inv - r.qtyPlan;
-          const pnCompartido = compartidos.find(c => c.pn === r.pn && c.sms.length > 1);
-          const esPlanta = ['P1','P3','ALIBER'].includes(r.planta);
-          const stColor = diff >= 0 ? 'var(--green)' : diff > -r.qtyPlan * 0.3 ? 'var(--amber)' : 'var(--red)';
-          const stLabel = diff >= 0 ? 'OK' : esPlanta ? (r.planta + ' PEDIR') : 'FALTANTE';
-          const stTag = diff >= 0 ? 'tag-ok' : esPlanta ? 'tag-warn' : 'tag-err';
-          return `<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:4px;padding:5px 0;border-bottom:1px solid rgba(30,42,74,.4);align-items:center;font-size:11px">
-            <div>
-              <span style="font-family:'Rajdhani',sans-serif;font-weight:600;color:var(--accent)">${r.pn}</span>
-              ${pnCompartido ? '<span style="font-size:8px;background:rgba(255,179,0,.1);border:1px solid rgba(255,179,0,.3);color:var(--amber);border-radius:3px;padding:1px 4px;margin-left:4px">compartido</span>' : ''}
-              <div style="font-size:10px;color:var(--text2)">${r.desc || ''}</div>
-            </div>
-            <div style="text-align:right;color:var(--text2)">${r.qtyPlan > 0 ? r.qtyPlan.toLocaleString() : '—'}</div>
-            <div style="text-align:right;font-weight:600;color:${r.inv > 0 ? 'var(--text)' : 'var(--red)'}">${r.inv > 0 ? r.inv.toLocaleString() : '0'}</div>
-            <div style="text-align:right;font-weight:600;color:${stColor}">${diff >= 0 ? '+'+diff.toLocaleString() : diff.toLocaleString()}</div>
-            <div style="text-align:right"><span class="tag ${stTag}">${stLabel}</span></div>
-          </div>`;
-        }).join('')}
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border)">
-          <div style="display:flex;gap:.5rem;align-items:center">
-            <span style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;background:${linea.color}22;color:${linea.color};border:1px solid ${linea.color}44">${linea.key.replace('/',' ')}</span>
-            <span style="font-size:10px;color:var(--text2)">Target: ${linea.target.toLocaleString()} pzas/día · ${linea.dias} días = ${(linea.target * linea.dias).toLocaleString()} pzas</span>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="imprimirOP('op-${opNo}','${modelo.sm}')">🖨 Imprimir</button>
-        </div>
-      </div>`;
-      opNo++;
-    });
-  });
-
-  if (!html) html = '<div class="alert alert-info">ℹ️ No hay órdenes generadas. Carga un BOM y sincroniza el IMS.</div>';
-  
-  document.getElementById('opAlerts').innerHTML = alertsHtml;
-  document.getElementById('opTablas').innerHTML = html;
-  document.getElementById('opEmpty').style.display = 'none';
-  document.getElementById('opContent').style.display = 'block';
-}
-
-function imprimirOP(id, modelo) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const w = window.open('', '_blank', 'width=900,height=700');
-  w.document.write(`<!DOCTYPE html><html><head><title>OP - ${modelo}</title>
-    <style>body{font-family:Arial,sans-serif;padding:20px;color:#111}
-    .tag{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:600;border:1px solid #ccc}
-    .tag-ok{background:#eaf3de;color:#3b6d11;border-color:#3b6d11}
-    .tag-warn{background:#faeeda;color:#854f0b;border-color:#854f0b}
-    .tag-err{background:#fcebeb;color:#a32d2d;border-color:#a32d2d}
-    button{display:none}</style></head>
-    <body>${el.innerHTML}</body></html>`);
-  w.document.close();
-  w.print();
-}
-
-function imprimirTodasOP() {
-  const el = document.getElementById('opTablas');
-  if (!el || !el.innerHTML) return;
-  const semana = document.getElementById('semanaRef').value;
-  const w = window.open('', '_blank', 'width=1000,height=800');
-  w.document.write(`<!DOCTYPE html><html><head><title>Órdenes de Producción - ${semana}</title>
-    <style>body{font-family:Arial,sans-serif;padding:20px;color:#111}
-    .card{border:1px solid #ccc;border-radius:8px;padding:16px;margin-bottom:20px;page-break-inside:avoid}
-    .tag{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:600;border:1px solid #ccc}
-    .tag-ok{background:#eaf3de;color:#3b6d11;border-color:#3b6d11}
-    .tag-warn{background:#faeeda;color:#854f0b;border-color:#854f0b}
-    .tag-err{background:#fcebeb;color:#a32d2d;border-color:#a32d2d}
-    button{display:none}@media print{button{display:none}}</style></head>
-    <body><h2>Órdenes de Producción — ${semana}</h2>${el.innerHTML}</body></html>`);
-  w.document.close();
-  w.print();
-}
-
-// Init Firebase al cargar
-window.addEventListener('DOMContentLoaded', () => { setTimeout(() => { initIMS(); sincIMS(); setTimeout(autoCargarBOM, 2000); }, 500); });
-
-
+let BOM = [], workbook = null, simFiltro = 'todos', simTargetsPorModelo = {};
 
 function goTab(n) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -956,106 +324,8 @@ function cargarArchivo(file) {
   reader.readAsArrayBuffer(file);
 }
 
-function procesarBOMsheet(ws) {
-  if (!ws) return [];
-  const hiddenRows = new Set();
-  if (ws['!rows']) {
-    ws['!rows'].forEach((r, i) => { if (r && r.hidden) hiddenRows.add(i); });
-  }
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z400');
-  const result = [];
-  let currentSM = null, currentTarget = 0;
-  let COL_LEVEL=2, COL_NO=3, COL_CODE=4, COL_DESC=5, COL_INV=6, COL_REQ=7, COL_PLAN=8;
-  const allKeys2 = Object.keys(ws).filter(k => !k.startsWith('!'));
-  for (const key of allKeys2) {
-    const cell = ws[key];
-    if (cell && String(cell.v||'').trim() === 'Code No.') {
-      const addr = XLSX.utils.decode_cell(key);
-      COL_CODE = addr.c; COL_NO = addr.c-1; COL_LEVEL = addr.c-2;
-      COL_DESC = addr.c+1; COL_INV = addr.c+2; COL_REQ = addr.c+3; COL_PLAN = addr.c+4;
-      break;
-    }
-  }
-  const fullRange2 = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z400');
-  function getCell2(col) {
-    const cell = ws[XLSX.utils.encode_cell({r: currentR2, c: col})];
-    return cell ? cell.v : null;
-  }
-  let currentR2 = 0;
-  let inBundle2 = false;
-  for (let R = fullRange2.s.r; R <= fullRange2.e.r; R++) {
-    currentR2 = R;
-    const isHidden = hiddenRows.has(R);
-    if (isHidden) {
-      if (!inBundle2) continue;
-      const pnCell = ws[XLSX.utils.encode_cell({r:R, c:COL_CODE})];
-      const pnVal = pnCell ? String(pnCell.v||'').trim() : '';
-      if (!pnVal.startsWith('GH')) { inBundle2 = false; continue; }
-      const descCell = ws[XLSX.utils.encode_cell({r:R, c:COL_DESC})];
-      const invCell = ws[XLSX.utils.encode_cell({r:R, c:COL_INV})];
-      let fam = 'OTRO';
-      if (pnVal.startsWith('GH90')) fam='GH90';
-      else if (pnVal.startsWith('GH69')) fam='GH69';
-      else if (pnVal.startsWith('GH68')) fam='GH68';
-      result.push({ sm: currentSM, target: currentTarget, pn: pnVal,
-        desc: descCell ? String(descCell.v||'').trim() : '',
-        familia: fam, inv: invCell && typeof invCell.v==='number' ? Math.round(invCell.v) : 0,
-        plan: '', planta: 'Sin Planta', qtyPlan: 0, groupNo: null,
-        isBold: false, level: 2, isLevel1: false, isLevel2: true, isBundleSub: true });
-      continue;
-    }
-    inBundle2 = false;
-    const codeRaw = getCell2(COL_CODE);
-    if (!codeRaw) continue;
-    const codeVal = String(codeRaw).trim();
-    if (!codeVal || ['Code No.','Code No','No.','Description','Inventory'].includes(codeVal)) continue;
-    const noRaw = getCell2(COL_NO);
-    const noIsEmpty = (noRaw === null || String(noRaw).trim() === '');
-    const isModelRow = /^SM-/i.test(codeVal) || (/^S\d{3,4}/.test(codeVal) && !codeVal.startsWith('GH'));
-    if (isModelRow && noIsEmpty) {
-      currentSM = codeVal;
-      const tRaw = getCell2(COL_PLAN);
-      currentTarget = typeof tRaw === 'number' ? Math.round(tRaw) : (tRaw && !isNaN(parseInt(String(tRaw)))) ? parseInt(String(tRaw)) : 0;
-      continue;
-    }
-    if (!currentSM) continue;
-    const descRaw = getCell2(COL_DESC);
-    const invRaw = getCell2(COL_INV);
-    const planRaw = getCell2(COL_PLAN);
-    const descVal = descRaw ? String(descRaw).trim() : '';
-    const planVal = planRaw ? String(planRaw).trim() : '';
-    const inv = typeof invRaw === 'number' ? Math.round(invRaw) : 0;
-    let familia = 'OTRO';
-    if (codeVal.startsWith('GH90')) familia='GH90';
-    else if (codeVal.startsWith('GH69')) familia='GH69';
-    else if (codeVal.startsWith('GH68')) familia='GH68';
-    let planta = 'Sin Planta';
-    const planUp = planVal.toUpperCase();
-    if (planUp.includes('P1')) planta='P1';
-    else if (planUp.includes('P3')) planta='P3';
-    else if (planUp.includes('ALIBER')) planta='ALIBER';
-    else if (planUp.includes('S1')||planUp.includes('S2')) planta='S1/S2';
-    else if (planUp.includes('S3')||planUp.includes('S4')) planta='S3/S4';
-    else if (planUp.includes('VC')||planUp.includes('ZHONG')) planta='VC/Zhongke';
-    else if (planUp.includes('ASSY')) planta='ASSY1';
-    const qtyMatch = planVal.match(/\d[\d,]*/);
-    const qtyPlan = qtyMatch ? parseInt(qtyMatch[0].replace(/,/g,'')) : 0;
-    const groupNoRaw = getCell2(COL_NO);
-    const groupNo = groupNoRaw ? parseInt(String(groupNoRaw)) : null;
-    const levelRaw = getCell2(COL_LEVEL);
-    const levelInt = levelRaw !== null && !isNaN(parseInt(String(levelRaw))) ? parseInt(String(levelRaw)) : (noIsEmpty ? 2 : 1);
-    const isLevel1 = !isNaN(groupNo) && levelInt <= 1;
-    const isLevel2 = noIsEmpty && !isModelRow;
-    const isBold = isLevel1;
-    if (familia==='GH90' && (descVal.toUpperCase().includes('BUNDLE')||descVal.toUpperCase().includes('LIT'))) inBundle2=true;
-    result.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia,
-      inv, plan: planVal, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2 });
-  }
-  return result;
-}
-
 function procesarBOM() {
-  if (!workbook) { if (!adminMode) alert('Primero sube un archivo Excel'); return; }
+  if (!workbook) { alert('Primero sube un archivo Excel'); return; }
   const ws = workbook.Sheets[document.getElementById('sheetSel').value];
   if (!ws) { alert('Hoja no encontrada'); return; }
 
@@ -1067,54 +337,15 @@ function procesarBOM() {
 
   // Leer celda por celda usando el rango del sheet
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z400');
-  BOM = []; // range kept for compat
+  BOM = [];
   let currentSM = null, currentTarget = 0;
 
-  // Columnas fijas (0-indexed): C=2, D=3(No.), E=4(Code No.), F=5(Desc), G=6(Inv), H=7(Request), I=8(Plan)
-  let COL_LEVEL=2, COL_NO=3, COL_CODE=4, COL_DESC=5, COL_INV=6, COL_REQ=7, COL_PLAN=8;
-  // Auto-detectar offset buscando "Code No." en cualquier fila/columna
-  const allKeys = Object.keys(ws).filter(k => !k.startsWith('!'));
-  for (const key of allKeys) {
-    const cell = ws[key];
-    if (cell && String(cell.v||'').trim() === 'Code No.') {
-      const addr = XLSX.utils.decode_cell(key);
-      COL_CODE = addr.c;
-      COL_NO = addr.c - 1;
-      COL_LEVEL = addr.c - 2;
-      COL_DESC = addr.c + 1;
-      COL_INV = addr.c + 2;
-      COL_REQ = addr.c + 3;
-      COL_PLAN = addr.c + 4;
-      break;
-    }
-  }
-  // Leer TODAS las filas incluyendo ocultas para no perder modelos
-  const fullRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z400');
+  // Columnas (0-indexed): C=2(No.), D=3(Level), E=4(Code), F=5(Desc), G=6(Inv), I=8(Plan)
+  const COL_NO=2, COL_LEVEL=3, COL_CODE=4, COL_DESC=5, COL_INV=6, COL_PLAN=8;
 
-  let inBundle = false; // flag cuando estamos dentro de un bundle GH90
-  for (let R = fullRange.s.r; R <= fullRange.e.r; R++) {
+  for (let R = range.s.r; R <= range.e.r; R++) {
     const isHiddenRow = hiddenRows.has(R);
-    if (isHiddenRow) {
-      // Solo leer si estamos dentro de un bundle y la fila tiene PN GH
-      if (!inBundle) continue;
-      const pnCell = ws[XLSX.utils.encode_cell({r:R, c:COL_CODE})];
-      const pnVal = pnCell ? String(pnCell.v||'').trim() : '';
-      if (!pnVal.startsWith('GH')) { inBundle = false; continue; }
-      const descCell = ws[XLSX.utils.encode_cell({r:R, c:COL_DESC})];
-      const invCell = ws[XLSX.utils.encode_cell({r:R, c:COL_INV})];
-      const descV = descCell ? String(descCell.v||'').trim() : '';
-      const invV = invCell && typeof invCell.v === 'number' ? Math.round(invCell.v) : 0;
-      let fam = 'OTRO';
-      if (pnVal.startsWith('GH90')) fam = 'GH90';
-      else if (pnVal.startsWith('GH69')) fam = 'GH69';
-      else if (pnVal.startsWith('GH68')) fam = 'GH68';
-      else if (pnVal.startsWith('GH39') || pnVal.startsWith('GH64')) fam = 'OTRO';
-      BOM.push({ sm: currentSM, target: currentTarget, pn: pnVal, desc: descV, familia: fam,
-        inv: invV, plan: '', planta: 'Sin Planta', qtyPlan: 0, groupNo: null,
-        isBold: false, level: 2, isLevel1: false, isLevel2: true, isBundleSub: true });
-      continue;
-    }
-    inBundle = false; // fila visible resetea el flag
+    if (isHiddenRow) continue;
 
     const getCell = (C) => {
       const cell = ws[XLSX.utils.encode_cell({r:R, c:C})];
@@ -1138,17 +369,13 @@ function procesarBOM() {
     const planRaw = getCell(COL_PLAN);
     const planVal = planRaw !== null ? String(planRaw).trim() : '';
 
-    // SM model row: starts with SM- OR short code like "S911 CRN", "S916 CRN"
+    // SM model row: starts with SM- OR is a short model code like "S911 CRN"
     const isModelRow = /^SM-/i.test(codeVal) || 
-                       (/^S\d{3,4}/.test(codeVal) && !codeVal.startsWith('GH'));
-    // Modelo se detecta cuando Code tiene el modelo y No. está vacío
-    const noIsEmpty = (noRaw === null || String(noRaw).trim() === '');
-    if (isModelRow && noIsEmpty) {
+                       (/^[A-Z]\d{3,4}/.test(codeVal) && !codeVal.startsWith('GH') && !codeVal.startsWith('GH'));
+    if (isModelRow && !noRaw) {
       currentSM = codeVal;
-      // Target está en col I (COL_PLAN) de esa misma fila
-      const tRaw = getCell(COL_PLAN);
-      const tNum = typeof tRaw === 'number' ? Math.round(tRaw) : 
-                   (tRaw && !isNaN(parseInt(String(tRaw)))) ? parseInt(String(tRaw)) : 0;
+      const tNum = typeof planRaw === 'number' ? planRaw : 
+                   (planVal && !isNaN(parseInt(planVal))) ? parseInt(planVal) : 0;
       currentTarget = tNum;
       continue;
     }
@@ -1203,19 +430,12 @@ function procesarBOM() {
     const levelInt = levelRaw !== null && !isNaN(parseInt(levelRaw)) ? parseInt(levelRaw) : null;
     const isLevel1 = levelInt === 1 || (groupNo !== null && levelInt === null);
     const isLevel2 = levelInt === 2;
-    // Si es un GH90 Bundle, activar flag para leer sus sub-componentes ocultos
-    if (familia === 'GH90' && (descVal.toUpperCase().includes('BUNDLE') || descVal.toUpperCase().includes('LIT'))) {
-      inBundle = true;
-    }
     BOM.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia, inv, plan, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2 });
   }
 
-  if (!BOM.length) {
-    if (!adminMode) alert('No se detectaron componentes. Verifica la hoja.');
-    return false;
-  }
+  if (!BOM.length) { alert('No se detectaron componentes. Verifica la hoja.'); return; }
 
-  renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); renderOP();
+  renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
   document.getElementById('btnExport').style.display = 'flex';
 }
 
@@ -1324,9 +544,19 @@ function renderSim() {
 }
 
 function onModeloChange() {
+  // Guardar target del modelo anterior
+  const prevSM = document.getElementById('simModelo').dataset.prev;
+  if (prevSM) {
+    simTargetsPorModelo[prevSM] = parseInt(document.getElementById('simTarget').value) || 0;
+  }
   const sm = document.getElementById('simModelo').value;
-  const target = BOM.find(r => r.sm === sm)?.target || 0;
-  document.getElementById('simTarget').value = target;
+  document.getElementById('simModelo').dataset.prev = sm;
+  // Cargar target del nuevo modelo
+  if (simTargetsPorModelo[sm] !== undefined) {
+    document.getElementById('simTarget').value = simTargetsPorModelo[sm];
+  } else {
+    document.getElementById('simTarget').value = BOM.find(r => r.sm === sm)?.target || 0;
+  }
   calcSim();
 }
 
@@ -1663,6 +893,213 @@ function exportarExcel() {
 const _d=new Date();
 const _wn=Math.ceil(((_d-new Date(_d.getFullYear(),0,1))/86400000+new Date(_d.getFullYear(),0,1).getDay()+1)/7);
 document.getElementById('semanaRef').value=`Semana ${_wn}`;
+
+// ── IMS + ADMIN BOM ──
+var db = null;
+var imsInventario = {};
+var adminAuthed = false;
+
+function initIMS() {
+  try {
+    if (typeof firebase === 'undefined') return false;
+    var cfg = {apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"};
+    if (!firebase.apps.length) firebase.initializeApp(cfg);
+    db = firebase.firestore();
+    return true;
+  } catch(e) { return false; }
+}
+
+
+function getInvIMS(pn, desc) {
+  var pnUp = pn.toUpperCase();
+  var descUp = (desc||'').trim().toUpperCase();
+  // 1. Buscar por PN+DESC exacta
+  if (descUp && imsInventario[pnUp+'||'+descUp] !== undefined)
+    return imsInventario[pnUp+'||'+descUp];
+  // 2. Buscar por PN solo
+  return imsInventario[pnUp] || 0;
+}
+function actualizarInvBOM() {
+  BOM.forEach(function(r) {
+    r.inv = getInvIMS(r.pn, r.desc);
+  });
+}
+function sincIMS() {
+  var st = document.getElementById('imsStatus');
+  if (!st) return;
+  st.textContent = '⬤ Sync...'; st.style.color = '#FFBA00';
+  if (!db) initIMS();
+  if (!db) { st.textContent = '⬤ Sin Firebase'; return; }
+  db.collection('planta4_inventario').get().then(function(snap) {
+    imsInventario = {};
+    snap.forEach(function(doc) {
+      var d=doc.data();
+      if (!d.pn) return;
+      var pn = d.pn.trim().toUpperCase();
+      var desc = (d.desc||'').trim().toUpperCase();
+      // Guardar por PN solo (suma total)
+      imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
+      // Guardar por PN+DESC exacta
+      if (desc) {
+        var keyExact = pn + '||' + desc;
+        imsInventario[keyExact] = (d.actual||0);
+      }
+    });
+    var total = Object.keys(imsInventario).length;
+    st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
+    st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
+    // Actualizar inventarios en BOM si ya está cargado
+    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); }
+  }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
+}
+
+function checkAdminKey() {
+  if (document.getElementById('adminKey').value === 'BomP4!2026') {
+    adminAuthed = true;
+    document.getElementById('adminLock').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'block';
+    cargarBomActivo();
+  } else {
+    document.getElementById('adminKeyErr').style.display = 'block';
+    document.getElementById('adminKey').value = '';
+  }
+}
+
+function cargarBomActivo() {
+  var el = document.getElementById('adminBomActivo');
+  if (!db) { el.innerHTML='<div style="color:var(--text2);font-size:13px;padding:1rem;text-align:center">Firebase no conectado</div>'; return; }
+  db.collection('bom_simulator_p4').doc('bom_activo').get().then(function(doc) {
+    if (!doc.exists) { el.innerHTML='<div style="color:var(--text2);font-size:13px;text-align:center;padding:1rem">📭 No hay BOM activo</div>'; return; }
+    var d = doc.data();
+    el.innerHTML = '<div style="background:var(--bg3);border-radius:10px;padding:.85rem 1rem"><div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">'+( d.nombre||'BOM')+'</div><div style="font-size:11px;color:var(--text2);margin-bottom:10px">'+(d.semana||'')+' · '+(d.modelos||0)+' modelos · '+(d.componentes||0)+' componentes</div><button class="btn btn-primary btn-sm" onclick="usarBomActivo()">▶ Usar este BOM</button></div>';
+  }).catch(function(e) { el.innerHTML='<div style="color:var(--red);font-size:13px">Error: '+e.message+'</div>'; });
+}
+
+function usarBomActivo() {
+  if (!db) return;
+  db.collection('bom_simulator_p4').doc('bom_activo').get().then(function(doc) {
+    if (!doc.exists) return;
+    var d = doc.data();
+    BOM = JSON.parse(d.bom);
+    document.getElementById('semanaRef').value = d.semana||'';
+    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+    goTab('sim');
+  });
+}
+
+function adminCargarBOM(file) {
+  if (!file) return;
+  var statusEl = document.getElementById('adminUploadStatus');
+  statusEl.textContent = '⏳ Procesando...'; statusEl.style.color = '#FFBA00';
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb2 = XLSX.read(data, {type:'array'});
+      var sheetName = wb2.SheetNames.includes('master') ? 'master' : wb2.SheetNames[0];
+      var ws2 = wb2.Sheets[sheetName];
+      var COL_LEVEL=2, COL_CODE=3, COL_DESC=4;
+      Object.keys(ws2).filter(function(k){return !k.startsWith('!');}).forEach(function(key) {
+        var cell=ws2[key];
+        if (cell && String(cell.v||'').trim()==='Code No.') {
+          var addr=XLSX.utils.decode_cell(key); COL_CODE=addr.c; COL_LEVEL=addr.c-1; COL_DESC=addr.c+1;
+        }
+      });
+      var range = XLSX.utils.decode_range(ws2['!ref']||'A1:Z400');
+      var bomData = [], curSM = null;
+      for (var R=range.s.r; R<=range.e.r; R++) {
+        var cc=ws2[XLSX.utils.encode_cell({r:R,c:COL_CODE})]; if(!cc||!cc.v) continue;
+        var codeVal=String(cc.v).trim(); if(!codeVal||codeVal==='Code No.') continue;
+        var lc=ws2[XLSX.utils.encode_cell({r:R,c:COL_LEVEL})];
+        var levelVal=lc?parseInt(String(lc.v||'')):NaN;
+        var dc=ws2[XLSX.utils.encode_cell({r:R,c:COL_DESC})];
+        var descVal=dc?String(dc.v||'').trim():'';
+        if (levelVal===0||/^SM-/i.test(codeVal)||(/^S\d{3,4}/.test(codeVal)&&!codeVal.startsWith('GH'))) {
+          curSM=codeVal; continue;
+        }
+        if (!curSM) continue;
+        var fam='OTRO';
+        if(codeVal.startsWith('GH90'))fam='GH90';
+        else if(codeVal.startsWith('GH69'))fam='GH69';
+        else if(codeVal.startsWith('GH68'))fam='GH68';
+        // Buscar por PN+condicion primero, luego solo PN
+        var pnUp = codeVal.toUpperCase();
+        var descUp = descVal.toUpperCase();
+        var inv = getInvIMS(codeVal, descVal);
+        bomData.push({sm:curSM,target:0,pn:codeVal,desc:descVal,familia:fam,inv:inv,plan:'',planta:'Sin Planta',qtyPlan:0,groupNo:isNaN(levelVal)?null:levelVal,isBold:levelVal===1,level:isNaN(levelVal)?2:levelVal,isLevel1:levelVal===1,isLevel2:levelVal===2});
+      }
+      if (!bomData.length) { statusEl.textContent='❌ No se detectaron componentes'; statusEl.style.color='var(--red)'; return; }
+      BOM=bomData; renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+      var semMatch=file.name.match(/W(\d+)/i);
+      var semana=semMatch?'W'+semMatch[1]:'W—';
+      var modelos=[...new Set(bomData.map(function(r){return r.sm;}))].length;
+      statusEl.textContent='⏳ Guardando...';
+      if (db) {
+        db.collection('bom_simulator_p4').doc('bom_activo').set({nombre:file.name,semana:semana,fecha:new Date().toISOString(),modelos:modelos,componentes:bomData.length,bom:JSON.stringify(bomData)}).then(function(){
+          statusEl.textContent='✅ BOM guardado — '+modelos+' modelos · '+bomData.length+' componentes · '+semana;
+          statusEl.style.color='var(--green)'; cargarBomActivo();
+        });
+      } else {
+        statusEl.textContent='✅ BOM cargado — '+modelos+' modelos (sin Firebase)';
+        statusEl.style.color='var(--green)';
+      }
+    } catch(err) { statusEl.textContent='❌ Error: '+err.message; statusEl.style.color='var(--red)'; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function autoCargarBOM() {
+  if (!db) return;
+  db.collection('bom_simulator_p4').doc('bom_activo').get().then(function(doc) {
+    if (!doc.exists) return;
+    var d=doc.data(); BOM=JSON.parse(d.bom);
+    document.getElementById('semanaRef').value=d.semana||'';
+    actualizarInvBOM();
+    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+  }).catch(function(){});
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
+});
 </script>
+
+<div class="page" id="page-admin">
+  <div id="adminLock" style="padding:3rem;text-align:center">
+    <div style="font-size:40px;margin-bottom:1rem">🔒</div>
+    <div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:var(--text);margin-bottom:.5rem">Acceso Admin</div>
+    <div style="display:flex;gap:.5rem;justify-content:center;max-width:300px;margin:1rem auto">
+      <input id="adminKey" type="password" class="si" placeholder="Contraseña..." style="flex:1">
+      <button class="btn btn-primary" onclick="checkAdminKey()">Entrar</button>
+    </div>
+    <div id="adminKeyErr" style="color:var(--red);font-size:12px;margin-top:.5rem;display:none">Contraseña incorrecta</div>
+  </div>
+  <div id="adminPanel" style="display:none">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">📊 BOM Activo en Firebase</div>
+      <div id="adminBomActivo"><div style="color:var(--text2);font-size:13px;padding:1rem;text-align:center">⏳ Verificando...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📥 Subir nuevo BOM</div>
+      <div style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center"
+           ondragover="event.preventDefault()" ondrop="event.preventDefault();adminCargarBOM(event.dataTransfer.files[0])">
+        <div style="font-size:13px;color:var(--text);margin-bottom:.5rem">Arrastra el BOM aquí</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:1rem">Hoja "master" — formato Samsung</div>
+        <input type="file" id="adminFileInput" accept=".xlsx" style="display:none" onchange="adminCargarBOM(this.files[0])">
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('adminFileInput').value='';document.getElementById('adminFileInput').click()">📁 Seleccionar archivo</button>
+      </div>
+      <div id="adminUploadStatus" style="margin-top:.75rem;font-size:13px"></div>
+    </div>
+    <div class="card" style="margin-top:1rem;background:rgba(26,111,212,.06);border-color:rgba(26,111,212,.2)">
+      <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:.5rem">ESTRUCTURA ESPERADA</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.8">
+        • Col C: <b style="color:var(--text)">Level</b> (0, 1, 2)<br>
+        • Col D: <b style="color:var(--text)">Code No.</b> — modelo o PN<br>
+        • Col E: <b style="color:var(--text)">Description</b>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

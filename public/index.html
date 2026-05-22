@@ -999,17 +999,25 @@ function adminCargarBOM(file) {
       var sheetName = wb2.SheetNames.includes('master') ? 'master' : wb2.SheetNames[0];
       var ws2 = wb2.Sheets[sheetName];
       var COL_LEVEL=2, COL_CODE=3, COL_DESC=4;
+      // Detectar columnas SOLO en la primera fila que tenga "Code No."
+      var firstCodeNoRow = -1;
       Object.keys(ws2).filter(function(k){return !k.startsWith('!');}).forEach(function(key) {
         var cell=ws2[key];
         if (cell && String(cell.v||'').trim()==='Code No.') {
-          var addr=XLSX.utils.decode_cell(key); COL_CODE=addr.c; COL_LEVEL=addr.c-1; COL_DESC=addr.c+1;
+          var addr=XLSX.utils.decode_cell(key);
+          if (firstCodeNoRow === -1 || addr.r < firstCodeNoRow) {
+            firstCodeNoRow = addr.r;
+            COL_CODE=addr.c; COL_LEVEL=addr.c-1; COL_DESC=addr.c+1;
+          }
         }
       });
       var range = XLSX.utils.decode_range(ws2['!ref']||'A1:Z400');
       var bomData = [], curSM = null;
       for (var R=range.s.r; R<=range.e.r; R++) {
         var cc=ws2[XLSX.utils.encode_cell({r:R,c:COL_CODE})]; if(!cc||!cc.v) continue;
-        var codeVal=String(cc.v).trim(); if(!codeVal||codeVal==='Code No.') continue;
+        var codeVal=String(cc.v).trim();
+        // Ignorar filas separadoras (Code No., Description, etc.)
+        if(!codeVal||codeVal==='Code No.'||codeVal==='Description'||codeVal==='Level') continue;
         var lc=ws2[XLSX.utils.encode_cell({r:R,c:COL_LEVEL})];
         var levelVal=lc?parseInt(String(lc.v||'')):NaN;
         var dc=ws2[XLSX.utils.encode_cell({r:R,c:COL_DESC})];

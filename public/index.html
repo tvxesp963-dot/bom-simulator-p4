@@ -113,6 +113,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .top-actions{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem}
 @media(max-width:640px){.stats-grid{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
+
+.dest-sel{font-size:10px;padding:2px 4px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;max-width:70px}
+.dest-p1{background:rgba(26,111,212,.15);color:var(--accent);border-color:rgba(26,111,212,.4)}
+.dest-p3{background:rgba(0,184,90,.1);color:#00B85A;border-color:rgba(0,184,90,.3)}
+.dest-aliber{background:rgba(255,179,0,.1);color:var(--amber);border-color:rgba(255,179,0,.3)}
+.dest-auto{background:var(--bg3);color:var(--text2);border-color:var(--border)}
+@media(max-width:600px){
+  .dt th:nth-child(3),.dt td:nth-child(3){display:none}
+  .dt th:nth-child(6),.dt td:nth-child(6){display:none}
+  .pn-cell{max-width:80px;font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -125,14 +136,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div style="display:flex;gap:.5rem">
     <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
-    <button class="btn btn-secondary btn-sm" onclick="goTab('upload')">📥 Nuevo BOM</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
   </div>
 </div>
 
 <div class="nav">
-  <div class="tab active" id="tab-upload" onclick="goTab('upload')">📥 Cargar BOM</div>
-  <div class="tab" id="tab-sim" onclick="goTab('sim')">⚡ Simulador</div>
+  <div class="tab" id="tab-sim" onclick="goTab('sim')" class="tab active">⚡ Simulador</div>
   <div class="tab" id="tab-cons" onclick="goTab('cons')">📦 Consolidado Pedidos</div>
   <div class="tab" id="tab-prod" onclick="goTab('prod')">🔧 Producir / Ranurar</div>
   <div class="tab" id="tab-assy" onclick="goTab('assy')">🏭 ASSY1 Capacidad</div>
@@ -140,7 +149,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </div>
 
 <!-- UPLOAD -->
-<div class="page active" id="page-upload">
+<div class="page" id="page-upload">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
     <div>
       <div class="card">
@@ -194,7 +203,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </div>
 
 <!-- SIMULADOR -->
-<div class="page" id="page-sim">
+<div class="page active" id="page-sim">
   <div id="simEmpty" class="empty" style="padding:4rem">
     <div class="empty-icon">⚡</div>
     <div class="empty-title">Primero carga tu BOM</div>
@@ -209,8 +218,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           <select class="select" id="simModelo" onchange="onModeloChange()"></select>
         </div>
         <div class="grid2" style="margin-bottom:.7rem">
-          <div><label class="label">Target</label><input class="input" id="simTarget" type="number" onchange="calcSim()"></div>
+          <div><label class="label">Producir</label><input class="input" id="simTarget" type="number" onchange="guardarTarget();calcSim()"></div>
           <div><label class="label">Días</label><input class="input" id="simDias" type="number" value="5" onchange="calcSim()"></div>
+          <div style="grid-column:1/-1;display:flex;align-items:center;gap:.5rem;margin-top:.25rem">
+            <span id="simSavedTag" style="font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.3);color:#00e676;display:none">● Guardado</span>
+            <button class="btn btn-secondary btn-sm" onclick="refrescarPlan()" style="margin-left:auto;color:var(--red);border-color:rgba(255,68,68,.3)">↺ Refrescar plan</button>
+          </div>
         </div>
         <div class="chips" id="simChips">
           <span class="chip active" onclick="filtSim('todos',this)">Todos</span>
@@ -543,6 +556,32 @@ function renderSim() {
   onModeloChange();
 }
 
+
+function guardarTarget() {
+  var sm = document.getElementById('simModelo').value;
+  var val = parseInt(document.getElementById('simTarget').value) || 0;
+  simTargetsPorModelo[sm] = val;
+  try { localStorage.setItem('simTargets_p4', JSON.stringify(simTargetsPorModelo)); } catch(e){}
+  var tag = document.getElementById('simSavedTag');
+  if (tag) { tag.style.display = 'inline'; clearTimeout(tag._t); tag._t = setTimeout(function(){ tag.style.display='none'; }, 2000); }
+}
+
+function cargarTargets() {
+  try {
+    var saved = localStorage.getItem('simTargets_p4');
+    if (saved) simTargetsPorModelo = JSON.parse(saved);
+  } catch(e){}
+}
+
+function refrescarPlan() {
+  var sm = document.getElementById('simModelo').value;
+  if (!confirm('¿Limpiar el target de ' + sm + '?')) return;
+  delete simTargetsPorModelo[sm];
+  try { localStorage.setItem('simTargets_p4', JSON.stringify(simTargetsPorModelo)); } catch(e){}
+  document.getElementById('simTarget').value = 0;
+  document.getElementById('simModelo').dataset.prev = '';
+  calcSim();
+}
 function onModeloChange() {
   // Guardar target del modelo anterior
   const prevSM = document.getElementById('simModelo').dataset.prev;
@@ -600,6 +639,38 @@ function getGrupo(r) {
   return 'HEREDAR';
 }
 
+
+function getDestino(r) {
+  if (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'OK') return r.planta;
+  var d = (r.desc||'').toUpperCase();
+  var fam = r.familia || '';
+  // GH90
+  if (fam === 'GH90') {
+    if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) return 'P3';
+    return 'P1'; // Strip
+  }
+  // GH69
+  if (fam === 'GH69') {
+    if (d.includes('PULP') || d.includes('TRAY')) return 'ALIBER';
+    if (d.includes('INSERT') || d.includes('MANUAL') || d.includes('BUNDLE')) return 'P3';
+    return 'P1'; // Chip Board, Sheet, Gift Box, Lower Box
+  }
+  // GH68
+  if (fam === 'GH68') {
+    if (d.includes('QSG') || d.includes('HAC') || d.includes('IBG') || d.includes('GUIDE') || d.includes('INSERT')) return 'P3';
+    return 'P1'; // Back Sticker, otros
+  }
+  return 'Sin Planta';
+}
+
+function onDestinoChange(pn, desc, val) {
+  var item = BOM.find(function(r){ return r.pn===pn && r.desc===desc; });
+  if (item) {
+    item.planta = val === 'auto' ? getDestino(item) : val;
+    renderCons(); renderProd();
+  }
+}
+
 function renderSimTable() {
   const sm = document.getElementById('simModelo').value;
   const target = parseInt(document.getElementById('simTarget').value) || 0;
@@ -642,11 +713,22 @@ function renderSimTable() {
     const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
     const indent = isSubComponent ? 'padding-left:24px;background:rgba(77,166,255,.02)' : 'font-weight:600';
     const prefix = isSubComponent ? '<span style="color:var(--text3);font-size:9px;margin-right:4px">└─</span>' : '';
+    // Destino automático o manual
+    const dest = getDestino(r);
+    const destClass = dest==='P1'?'dest-p1':dest==='P3'?'dest-p3':dest==='ALIBER'?'dest-aliber':'dest-auto';
+    const pnEsc = r.pn.replace(/'/g,"\'");
+    const descEsc = (r.desc||'').replace(/'/g,"\'");
+    const destSel = `<select class="dest-sel ${destClass}" onchange="this.className='dest-sel dest-'+this.value.toLowerCase();onDestinoChange('${pnEsc}','${descEsc}',this.value)">
+      <option value="P1" ${dest==='P1'?'selected':''}>P1</option>
+      <option value="P3" ${dest==='P3'?'selected':''}>P3</option>
+      <option value="ALIBER" ${dest==='ALIBER'?'selected':''}>ALIBER</option>
+      <option value="auto" ${!['P1','P3','ALIBER'].includes(dest)?'selected':''}>Auto</option>
+    </select>`;
     return `<tr style="${indent}">
       <td class="pn-cell" style="color:${famColor};width:110px">${prefix}${r.pn}</td>
       <td>${r.desc}</td>
       <td style="width:70px;text-align:center"><span class="fam fam-${r.familia}">${r.familia}</span></td>
-      <td style="width:60px;text-align:center">${r.planta && r.planta!=='Sin Planta'&&r.planta!=='OK'?`<span class="tag tag-info" style="font-size:8px">${r.planta}</span>`:'—'}</td>
+      <td style="width:75px;text-align:center">${destSel}</td>
       <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString():'—'}</td>
       <td style="width:100px;text-align:right;color:var(--text2)">${r.familia==='GH90'?'—':target.toLocaleString()}</td>
       <td style="width:100px;text-align:right;color:${dc};font-weight:600">${dtxt}</td>
@@ -706,35 +788,80 @@ function filtSim(f, el) {
 
 // CONSOLIDADO
 function renderCons() {
-  document.getElementById('consTitle').textContent = `Materiales a pedir — ${document.getElementById('semanaRef').value}`;
-  const plantas = ['P1','P3','ALIBER'];
-  let html = '';
-  plantas.forEach(pl => {
-    const rows = BOM.filter(r => r.planta === pl);
-    if (!rows.length) return;
-    html += `<div class="planta-header"><span class="planta-name">📦 ${pl}</span><span style="font-size:10px;color:var(--text2)">${rows.length} materiales · ${rows.reduce((s,r)=>s+r.qtyPlan,0).toLocaleString()} pzas a pedir</span></div>
-    <div class="table-wrap" style="border-radius:0 0 10px 10px;margin-bottom:1rem">
-      <table class="dt" style="table-layout:fixed;width:100%">
-        <colgroup>
-          <col style="width:110px"><col style="width:auto"><col style="width:130px">
-          <col style="width:60px"><col style="width:90px"><col style="width:90px"><col style="width:150px">
-        </colgroup>
-        <thead><tr>
-          <th>N° Parte</th><th>Descripción</th><th>Modelo SM</th><th style="text-align:center">Familia</th>
-          <th style="text-align:right">Inventario</th><th style="text-align:right">A Pedir</th><th>Plan</th>
-        </tr></thead><tbody>
-        ${rows.map(r=>`<tr>
-          <td class="pn-cell" style="overflow:hidden;text-overflow:ellipsis">${r.pn}</td>
-          <td style="overflow:hidden;text-overflow:ellipsis">${r.desc}</td>
-          <td style="font-size:9px;color:var(--text2);overflow:hidden;text-overflow:ellipsis">${r.sm}</td>
-          <td style="text-align:center"><span class="fam fam-${r.familia}">${r.familia}</span></td>
-          <td style="text-align:right">${r.inv>0?r.inv.toLocaleString():'—'}</td>
-          <td style="text-align:right;color:var(--amber);font-weight:600">${r.qtyPlan>0?r.qtyPlan.toLocaleString():r.inv===0?'SIN INV':'—'}</td>
-          <td style="font-size:9px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;max-width:150px;white-space:nowrap">${r.plan||'—'}</td>
-        </tr>`).join('')}
-        </tbody></table></div>`;
+  document.getElementById('consTitle').textContent = `Consolidado Pedidos — ${document.getElementById('semanaRef').value}`;
+  const EXTRA = 1.10;
+  const plantas = [
+    {key:'P1', label:'P1 — Planta 1', sub:'Chip Boards · Sheets · Strip', color:'rgba(26,111,212,.15)', bc:'rgba(26,111,212,.4)', tc:'var(--accent)'},
+    {key:'P3', label:'P3 — Planta 3', sub:'Bundles · Inserts · QSG', color:'rgba(0,184,90,.1)', bc:'rgba(0,184,90,.3)', tc:'#00B85A'},
+    {key:'ALIBER', label:'ALIBER', sub:'Pulp Tray', color:'rgba(255,179,0,.1)', bc:'rgba(255,179,0,.3)', tc:'var(--amber)'}
+  ];
+  // Obtener todos los modelos con su target
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+  const modeloTargets = {};
+  modelos.forEach(sm => {
+    modeloTargets[sm] = simTargetsPorModelo[sm] || 0;
   });
-  if (!html) html = '<div class="alert alert-success">✅ No hay materiales a pedir</div>';
+
+  let html = '';
+  let hayAlgo = false;
+
+  plantas.forEach(pl => {
+    let plantaHtml = '';
+    modelos.forEach(sm => {
+      const target = modeloTargets[sm] || 0;
+      if (!target) return;
+      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && r.inv < target);
+      if (!rows.length) return;
+      const rowsCalc = rows.map(r => ({...r, falta: target - r.inv, aPedir: Math.ceil((target - r.inv) * EXTRA)}));
+      const totalPedir = rowsCalc.reduce((s,r) => s + r.aPedir, 0);
+      hayAlgo = true;
+      plantaHtml += `
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
+          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">${sm}</span>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()} · ${rowsCalc.length} faltantes · ${totalPedir.toLocaleString()} pzas</span>
+            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.key}</span>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="dt" style="width:100%;min-width:500px">
+          <thead><tr style="font-size:10px">
+            <th>N° Parte</th><th>Descripción</th>
+            <th style="text-align:right">Inv. Actual</th>
+            <th style="text-align:right">Diferencia</th>
+            <th style="text-align:right;color:var(--amber)">A Pedir +10%</th>
+          </tr></thead><tbody>
+          ${rowsCalc.map((r,i)=>`<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
+            <td class="pn-cell" style="color:${pl.tc}">${r.pn}</td>
+            <td>${r.desc}</td>
+            <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
+            <td style="text-align:right;color:var(--red);font-weight:600">-${r.falta.toLocaleString()}</td>
+            <td style="text-align:right;color:var(--amber);font-weight:700">${r.aPedir.toLocaleString()}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+        </div>
+      </div>`;
+    });
+
+    if (!plantaHtml) return;
+    html += `
+    <div style="margin-bottom:1.25rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+        <span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.label}</span>
+        <span style="font-size:11px;color:var(--text2)">${pl.sub}</span>
+      </div>
+      ${plantaHtml}
+    </div>`;
+  });
+
+  if (!hayAlgo) {
+    const anyTarget = modelos.some(sm => (simTargetsPorModelo[sm]||0) > 0);
+    html = anyTarget
+      ? '<div class="alert alert-success">✅ Inventario suficiente — no hay materiales a pedir</div>'
+      : '<div class="alert alert-info">ℹ️ Ingresa el target de producción en el Simulador para ver los pedidos</div>';
+  }
   document.getElementById('consEmpty').style.display = 'none';
   document.getElementById('consContent').style.display = 'block';
   document.getElementById('consTablas').innerHTML = html;
@@ -916,12 +1043,27 @@ function getInvIMS(pn, desc) {
   // 1. Buscar por PN+DESC exacta
   if (descUp && imsInventario[pnUp+'||'+descUp] !== undefined)
     return imsInventario[pnUp+'||'+descUp];
-  // 2. Buscar por PN solo
+  // 2. Buscar por PN+DESC parcial (palabras clave)
+  var keywords = ['VIRGEN','VIRGIN','RANURADO','GROOVING','TOP','BOTTOM','BOT','BUNDLE','STRIP','INSERT','PULP','SET PAD','PHONE PAD','BACK STICKER','QSG','HAC','MANUAL','GIFT BOX','LOWER BOX','SHEET'];
+  var bestKey = null, bestScore = 0;
+  Object.keys(imsInventario).forEach(function(key) {
+    if (key.indexOf(pnUp+'||') === 0) {
+      var imsDesc = key.replace(pnUp+'||','');
+      var score = 0;
+      keywords.forEach(function(kw) {
+        if (descUp.indexOf(kw) >= 0 && imsDesc.indexOf(kw) >= 0) score++;
+      });
+      if (score > bestScore) { bestScore = score; bestKey = key; }
+    }
+  });
+  if (bestKey && bestScore > 0) return imsInventario[bestKey];
+  // 3. Buscar por PN solo (total)
   return imsInventario[pnUp] || 0;
 }
 function actualizarInvBOM() {
   BOM.forEach(function(r) {
     r.inv = getInvIMS(r.pn, r.desc);
+    if (!r.planta || r.planta === 'Sin Planta') r.planta = getDestino(r);
   });
 }
 function sincIMS() {
@@ -1068,7 +1210,7 @@ function autoCargarBOM() {
 }
 
 window.addEventListener('DOMContentLoaded', function() {
-  setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
+  cargarTargets(); setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
 });
 </script>
 

@@ -970,12 +970,13 @@ function renderProd() {
           </div>
         </div>
         <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;min-width:400px">
+        <table class="dt" style="width:100%;table-layout:fixed">
           <thead><tr style="font-size:10px">
-            <th>Material</th><th>N° Parte</th>
-            <th style="text-align:right">Disponible</th>
-            <th style="text-align:right">Requerido</th>
-            <th style="text-align:center">Estado</th>
+            <th style="width:36%">Material</th>
+            <th style="width:20%">N° Parte</th>
+            <th style="width:14%;text-align:right">Disponible</th>
+            <th style="width:14%;text-align:right">Requerido</th>
+            <th style="width:16%;text-align:center">Estado</th>
           </tr></thead><tbody>
           ${mats.map((m,i)=>{
             const ok=m.inv>=target;

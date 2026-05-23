@@ -1,0 +1,1 @@
+{ "hosting": { "target": "bom", "public": "public", "ignore": ["firebase.json","**/.*","**/node_modules/**"] } } 

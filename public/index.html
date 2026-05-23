@@ -284,7 +284,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div id="prodContent" style="display:none">
     <div class="top-actions">
       <span style="font-size:12px;color:var(--text2)" id="prodTitle"></span>
-      <button class="btn btn-success btn-sm" style="margin-left:auto" onclick="exportarExcel()">📊 Descargar Excel</button>
+      <div style="display:flex;gap:.5rem;margin-left:auto">
+        <button class="btn btn-primary btn-sm" id="btnPublicar" onclick="publicarPlan()">📤 Publicar Plan al MES</button>
+        <button class="btn btn-success btn-sm" onclick="exportarExcel()">📊 Descargar Excel</button>
+      </div>
     </div>
     <div id="prodTablas"></div>
   </div>
@@ -1321,6 +1324,170 @@ function autoCargarBOM() {
     renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
   }).catch(function(){});
 }
+
+
+// ── PUBLICAR PLAN AL MES ──
+async function publicarPlan() {
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm]||0) > 0);
+  if (!conTarget.length) { alert('Ingresa el target de al menos un modelo antes de publicar.'); return; }
+  if (!confirm('¿Publicar el plan de producción al MES?')) return;
+  const btn = document.getElementById('btnPublicar');
+  btn.textContent = '⏳ Sincronizando IMS...'; btn.disabled = true;
+
+  // Sync IMS fresco antes de calcular el plan
+  await new Promise((resolve) => {
+    if (!db) { resolve(); return; }
+    db.collection('planta4_inventario').get().then(function(snap) {
+      imsInventario = {};
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        if (!d.pn) return;
+        var pn = d.pn.trim().toUpperCase();
+        var desc = (d.desc||'').trim().toUpperCase();
+        imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
+        if (desc) imsInventario[pn+'||'+desc] = (d.actual||0);
+      });
+      actualizarInvBOM();
+      resolve();
+    }).catch(() => resolve());
+  });
+
+  btn.textContent = '⏳ Calculando plan...';
+
+  const plan = {
+    fecha: new Date().toISOString().split('T')[0],
+    semana: document.getElementById('semanaRef').value,
+    publicadoEn: new Date().toISOString(),
+    lineas: {} // { 'S1/S2': [{sm, cantidad, materiales[], listo}] }
+  };
+
+  // Inventario compartido — pool dinámico que se va reduciendo
+  const pool = {};
+  BOM.forEach(r => {
+    if (!pool[r.pn]) pool[r.pn] = r.inv || 0;
+  });
+  const takePool = (pn, cant) => {
+    if (!pn) return 0;
+    const disponible = pool[pn] || 0;
+    const tomar = Math.min(disponible, cant);
+    pool[pn] = disponible - tomar;
+    return tomar;
+  };
+
+  // Ordenar modelos por prioridad: mayor % de componentes con inventario primero
+  const modelosOrdenados = conTarget.slice().sort((a, b) => {
+    const compA = BOM.filter(r => r.sm===a && r.familia!=='GH90');
+    const compB = BOM.filter(r => r.sm===b && r.familia!=='GH90');
+    const pctA = compA.length ? compA.filter(r=>r.inv>0).length/compA.length : 0;
+    const pctB = compB.length ? compB.filter(r=>r.inv>0).length/compB.length : 0;
+    return pctB - pctA;
+  });
+
+  const addLinea = (linea, sm, cant, materiales) => {
+    if (!plan.lineas[linea]) plan.lineas[linea] = [];
+    if (cant > 0 || materiales.some(m=>m.cant>0)) {
+      plan.lineas[linea].push({sm, cantidad: cant, materiales, listo: false});
+    }
+  };
+
+  modelosOrdenados.forEach(sm => {
+    const target = simTargetsPorModelo[sm] || 0;
+    const cbTopV = getComp(sm,['CHIP BOARD TOP','VIRGEN']);
+    const cbTopR = getComp(sm,['CHIP BOARD TOP','RANURADO']);
+    const shTop  = getComp(sm,['SHEET TOP']);
+    const cbBotV = getComp(sm,['CHIP BOARD BOTTOM','VIRGEN']);
+    const cbBotR = getComp(sm,['CHIP BOARD BOTTOM','RANURADO']);
+    const shBot  = getComp(sm,['SHEET LOWER']);
+    const setPad = getComp(sm,['SET PAD']);
+    const bStick = getComp(sm,['BACK STICKER']);
+    const pulp   = getComp(sm,['PULP TRAY']);
+    const strip  = BOM.find(r=>r.sm===sm&&r.familia==='GH90'&&(r.desc||'').toUpperCase().includes('STRIP'));
+    const bundle = BOM.find(r=>r.sm===sm&&r.familia==='GH90'&&(r.desc||'').toUpperCase().includes('BUNDLE'));
+
+    // VC: tomar del pool de virgen
+    const vcTopDisp = cbTopV ? Math.min(pool[cbTopV.pn]||0, target) : 0;
+    const vcBotDisp = cbBotV ? Math.min(pool[cbBotV.pn]||0, target) : 0;
+    const vcTopToma = takePool(cbTopV?.pn, vcTopDisp);
+    const vcBotToma = takePool(cbBotV?.pn, vcBotDisp);
+    const vcMats = [];
+    if (cbTopV && vcTopToma>0) vcMats.push({pn:cbTopV.pn, desc:cbTopV.desc||'', cant:vcTopToma});
+    if (cbBotV && vcBotToma>0) vcMats.push({pn:cbBotV.pn, desc:cbBotV.desc||'', cant:vcBotToma});
+    addLinea('VC', sm, Math.min(vcTopToma,vcBotToma)||vcTopToma||vcBotToma, vcMats);
+
+    // S1/S2 + Zhongke: Chip Board Top Ranurado (pool + lo que VC ranuró) + Sheet Top
+    const topRanDisp = (cbTopR ? pool[cbTopR.pn]||0 : 0) + vcTopToma;
+    const shTopDisp = shTop ? pool[shTop.pn]||0 : 0;
+    const topPuede = Math.min(topRanDisp, shTopDisp, target);
+    const topRanToma = cbTopR ? takePool(cbTopR.pn, Math.min(pool[cbTopR.pn]||0, topPuede)) : 0;
+    const shTopToma = takePool(shTop?.pn, topPuede);
+    const topMats = [];
+    if (cbTopR && topRanToma>0) topMats.push({pn:cbTopR.pn, desc:cbTopR.desc||'', cant:topRanToma});
+    else if (cbTopV && vcTopToma>0) topMats.push({pn:cbTopV.pn, desc:(cbTopV.desc||'')+' (ranurado)', cant:vcTopToma});
+    if (shTop && shTopToma>0) topMats.push({pn:shTop.pn, desc:shTop.desc||'', cant:shTopToma});
+    addLinea('S1/S2', sm, topPuede, topMats);
+    addLinea('Zhongke', sm, topPuede, topMats.map(m=>({...m})));
+
+    // S3: Chip Board Bottom Ranurado + Sheet Lower + Set Pad + Back Sticker
+    const botRanDisp = (cbBotR ? pool[cbBotR.pn]||0 : 0) + vcBotToma;
+    const shBotDisp = shBot ? pool[shBot.pn]||0 : 0;
+    const setPadDisp = setPad ? pool[setPad.pn]||0 : 0;
+    const bStickDisp = bStick ? pool[bStick.pn]||0 : 0;
+    const s3Arr = [botRanDisp, shBotDisp, setPadDisp, target];
+    if (bStick) s3Arr.push(bStickDisp);
+    const s3Puede = Math.min(...s3Arr);
+    const botRanToma = cbBotR ? takePool(cbBotR.pn, Math.min(pool[cbBotR.pn]||0, s3Puede)) : 0;
+    const shBotToma = takePool(shBot?.pn, s3Puede);
+    const setPadToma = takePool(setPad?.pn, s3Puede);
+    const bStickToma = bStick ? takePool(bStick.pn, s3Puede) : 0;
+    const s3Mats = [];
+    if (cbBotR && botRanToma>0) s3Mats.push({pn:cbBotR.pn, desc:cbBotR.desc||'', cant:botRanToma});
+    if (shBot && shBotToma>0) s3Mats.push({pn:shBot.pn, desc:shBot.desc||'', cant:shBotToma});
+    if (setPad && setPadToma>0) s3Mats.push({pn:setPad.pn, desc:setPad.desc||'', cant:setPadToma});
+    if (bStick && bStickToma>0) s3Mats.push({pn:bStick.pn, desc:bStick.desc||'', cant:bStickToma});
+    addLinea('S3', sm, s3Puede, s3Mats);
+
+    // S4: Chip Board Bottom + Sheet Lower + Pulp Tray
+    if (pulp) {
+      const pulpDisp = pool[pulp.pn]||0;
+      const s4Puede = Math.min(botRanDisp - (botRanToma||0), pool[shBot?.pn]||0, pulpDisp, target);
+      if (s4Puede > 0) {
+        const s4Mats = [];
+        if (cbBotR) s4Mats.push({pn:cbBotR.pn, desc:cbBotR.desc||'', cant:s4Puede});
+        if (shBot) s4Mats.push({pn:shBot.pn, desc:shBot.desc||'', cant:s4Puede});
+        s4Mats.push({pn:pulp.pn, desc:pulp.desc||'', cant:takePool(pulp.pn, s4Puede)});
+        addLinea('S4', sm, s4Puede, s4Mats);
+      }
+    }
+
+    // ASSY1: Strip + Bundle
+    const stripDisp = strip ? pool[strip.pn]||0 : 0;
+    const bundleDisp = bundle ? pool[bundle.pn]||0 : 0;
+    const assy1Puede = Math.min(stripDisp, bundleDisp, topPuede, s3Puede, target);
+    const stripToma = takePool(strip?.pn, assy1Puede);
+    const bundleToma = takePool(bundle?.pn, assy1Puede);
+    const assyMats = [];
+    if (strip && stripToma>0) assyMats.push({pn:strip.pn, desc:strip.desc||'', cant:stripToma});
+    if (bundle && bundleToma>0) assyMats.push({pn:bundle.pn, desc:bundle.desc||'', cant:bundleToma});
+    addLinea('ASSY1', sm, assy1Puede, assyMats);
+  });
+
+  try {
+    if (db) {
+      await db.collection('plan_produccion').doc('plan_activo').set(plan);
+      btn.textContent = '✅ Plan publicado';
+      btn.style.background = 'rgba(0,184,90,.3)';
+      setTimeout(()=>{ btn.textContent='📤 Publicar Plan al MES'; btn.disabled=false; btn.style.background=''; }, 3000);
+    } else {
+      alert('Firebase no disponible — no se pudo publicar');
+      btn.textContent = '📤 Publicar Plan al MES'; btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.textContent = '📤 Publicar Plan al MES'; btn.disabled = false;
+  }
+}
+window.publicarPlan = publicarPlan;
 
 window.addEventListener('DOMContentLoaded', function() {
   cargarTargets(); setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);

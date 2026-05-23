@@ -868,41 +868,154 @@ function renderCons() {
 }
 
 // PRODUCIR
-function renderProd() {
-  document.getElementById('prodTitle').textContent = `Plan de producción — ${document.getElementById('semanaRef').value}`;
-  const lineas = [
-    {key:'S1/S2',label:'S1 / S2',info:'7,000 pcs/día',color:'var(--accent)'},
-    {key:'S3/S4',label:'S3 / S4',info:'10,000 pcs/día',color:'var(--teal)'},
-    {key:'VC/Zhongke',label:'VC / Zhongke — Ranurar',info:'',color:'var(--amber)'},
-    {key:'ASSY1',label:'ASSY1',info:'12,000 pcs/día',color:'var(--green)'},
-  ];
-  let html = '';
-  lineas.forEach(l => {
-    const rows = BOM.filter(r => r.planta === l.key);
-    if (!rows.length) return;
-    html += `<div class="planta-header" style="border-color:${l.color}40"><span class="planta-name" style="color:${l.color}">🔧 ${l.label}</span><span style="font-size:10px;color:var(--text2)">${l.info} · ${rows.length} materiales</span></div>
-    <div class="table-wrap" style="border-radius:0 0 10px 10px;margin-bottom:1rem">
-      <table class="dt" style="table-layout:fixed;width:100%">
-        <colgroup>
-          <col style="width:110px"><col style="width:auto"><col style="width:130px">
-          <col style="width:60px"><col style="width:90px"><col style="width:100px"><col style="width:150px">
-        </colgroup>
-        <thead><tr>
-          <th>N° Parte</th><th>Descripción</th><th>Modelo SM</th><th style="text-align:center">Familia</th>
-          <th style="text-align:right">Inventario</th><th style="text-align:right">Cant. Plan</th><th>Plan</th>
-        </tr></thead><tbody>
-        ${rows.map(r=>`<tr>
-          <td class="pn-cell" style="color:${l.color};overflow:hidden;text-overflow:ellipsis">${r.pn}</td>
-          <td style="overflow:hidden;text-overflow:ellipsis">${r.desc}</td>
-          <td style="font-size:9px;color:var(--text2);overflow:hidden;text-overflow:ellipsis">${r.sm}</td>
-          <td style="text-align:center"><span class="fam fam-${r.familia}">${r.familia}</span></td>
-          <td style="text-align:right">${r.inv>0?r.inv.toLocaleString():'—'}</td>
-          <td style="text-align:right;color:${l.color};font-weight:600">${r.qtyPlan>0?r.qtyPlan.toLocaleString():'—'}</td>
-          <td style="font-size:9px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;max-width:200px;white-space:nowrap">${r.plan||'—'}</td>
-        </tr>`).join('')}
-        </tbody></table></div>`;
+function getComp(sm, descKeywords) {
+  // Buscar componente del modelo por palabras clave en descripción
+  var kws = descKeywords.map(function(k){ return k.toUpperCase(); });
+  return BOM.find(function(r) {
+    return r.sm === sm && kws.every(function(k){ return (r.desc||'').toUpperCase().includes(k); });
   });
-  if (!html) html = '<div class="alert alert-info">ℹ️ No hay materiales de producción</div>';
+}
+
+function renderProd() {
+  document.getElementById('prodTitle').textContent = 'Plan de Producción — ' + document.getElementById('semanaRef').value;
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+
+  let html = '';
+  let hayAlgo = false;
+
+  modelos.forEach(sm => {
+    const target = simTargetsPorModelo[sm] || 0;
+    if (!target) return;
+    hayAlgo = true;
+
+    const inv = r => r ? (r.inv || 0) : 0;
+
+    // Materiales clave
+    const cbTopVirgen = getComp(sm, ['CHIP BOARD TOP','VIRGEN']);
+    const cbTopRan    = getComp(sm, ['CHIP BOARD TOP','RANURADO']);
+    const sheetTop    = getComp(sm, ['SHEET TOP']);
+    const cbBotVirgen = getComp(sm, ['CHIP BOARD BOTTOM','VIRGEN']);
+    const cbBotRan    = getComp(sm, ['CHIP BOARD BOTTOM','RANURADO']);
+    const sheetBot    = getComp(sm, ['SHEET LOWER']);
+    const setPad      = getComp(sm, ['SET PAD']);
+    const backSticker = getComp(sm, ['BACK STICKER']);
+    const pulpTray    = getComp(sm, ['PULP TRAY']);
+    const lowerBox    = getComp(sm, ['LOWER BOX']);
+    const strip       = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
+    const giftBox     = getComp(sm, ['GIFT BOX']);
+    const bundle      = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
+
+    // ── VC: cuánto puede ranurar ──
+    const vcTopPuede = Math.min(inv(cbTopVirgen), target);
+    const vcBotPuede = Math.min(inv(cbBotVirgen), target);
+
+    // Stock ranurado total = inventario actual + lo que VC puede ranurar
+    const topRanTotal = inv(cbTopRan) + vcTopPuede;
+    const botRanTotal = inv(cbBotRan) + vcBotPuede;
+
+    // ── S1/S2 + Zhongke comparten pool TOP ──
+    const topMats = [
+      {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''},
+      {label:'Sheet Top Box', inv: inv(sheetTop), pn: sheetTop?.pn||'—', nota:''},
+    ];
+    const topPuede = Math.min(...topMats.map(m=>m.inv));
+
+    // ── S3: BOTTOM con etiqueta ──
+    const s3Mats = [
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
+      {label:'Sheet Lower Box (Bottom)', inv: inv(sheetBot), pn: sheetBot?.pn||'—', nota:''},
+      {label:'Set Pad', inv: inv(setPad), pn: setPad?.pn||'—', nota:''},
+    ];
+    if (backSticker) s3Mats.push({label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
+    const s3Puede = Math.min(...s3Mats.map(m=>m.inv));
+
+    // ── S4: BOTTOM sin etiqueta ──
+    const s4Mats = [
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
+      {label:'Sheet Lower Box (Bottom)', inv: inv(sheetBot), pn: sheetBot?.pn||'—', nota:''},
+      {label:'Pulp Tray', inv: inv(pulpTray), pn: pulpTray?.pn||'—', nota:''},
+    ];
+    const s4Puede = pulpTray ? Math.min(...s4Mats.map(m=>m.inv)) : 0;
+
+    // ── ASSY1 ──
+    const botPuede = Math.max(s3Puede, s4Puede); // lo producido en S3 o S4
+    const assy1Mats = [
+      {label:'Strip (GH90)', inv: inv(strip), pn: strip?.pn||'—', nota:''},
+      {label:'Gift Box Top (S1/S2/Zhongke)', inv: topPuede, pn: giftBox?.pn||'—', nota:'de producción TOP'},
+      {label:'Lower Box Bottom (S3/S4)', inv: botPuede, pn: lowerBox?.pn||'—', nota:'de producción BOTTOM'},
+      {label:'Bundle (P3)', inv: inv(bundle), pn: bundle?.pn||'—', nota:'pedir a P3'},
+    ];
+    const assy1Puede = Math.min(...assy1Mats.map(m=>m.inv));
+
+    const pct = Math.min(100, Math.round((assy1Puede/target)*100));
+    const sc = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
+    const stag = pct>=100?'<span class="tag tag-ok">✓ LISTO</span>':pct>0?'<span class="tag tag-warn">⚠ PARCIAL</span>':'<span class="tag tag-err">✗ BLOQUEADO</span>';
+
+    const lineaCard = (label, color, icon, mats, puede) => {
+      if (!mats.length || mats.every(m=>m.inv===0 && !m.nota)) return '';
+      const cuello = mats.reduce((mn,m)=>m.inv<mn.inv?m:mn, mats[0]);
+      const pctLinea = Math.min(100, Math.round((puede/target)*100));
+      return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
+          <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
+            </div>
+            <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
+            <span style="font-size:10px;color:var(--text2)">/ ${target.toLocaleString()}</span>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="dt" style="width:100%;min-width:400px">
+          <thead><tr style="font-size:10px">
+            <th>Material</th><th>N° Parte</th>
+            <th style="text-align:right">Disponible</th>
+            <th style="text-align:right">Requerido</th>
+            <th style="text-align:center">Estado</th>
+          </tr></thead><tbody>
+          ${mats.map((m,i)=>{
+            const ok=m.inv>=target;
+            const tc=ok?'var(--green)':m.inv>0?'var(--amber)':'var(--red)';
+            const tag=ok?'<span class="tag tag-ok">OK</span>':'<span class="tag tag-err">FALTA</span>';
+            const esCuello = m===cuello && !ok;
+            return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
+              <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
+              <td style="font-family:monospace;font-size:10px;color:${color}">${m.pn}</td>
+              <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
+              <td style="text-align:right">${target.toLocaleString()}</td>
+              <td style="text-align:center">${tag}</td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+        </div>
+      </div>`;
+    };
+
+    html += `
+    <div style="background:var(--bg2);border:1px solid ${sc}40;border-radius:12px;margin-bottom:1.25rem;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
+        <span style="font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;color:var(--text)">${sm}</span>
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <span style="font-size:11px;color:var(--text2)">Target: ${target.toLocaleString()} · ASSY1: <b style="color:${sc}">${assy1Puede.toLocaleString()}</b></span>
+          ${stag}
+        </div>
+      </div>
+      <div style="padding:.75rem">
+        ${lineaCard('VC — Ranurar','var(--amber)','⚙️',
+          [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'},
+           {label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
+          Math.min(vcTopPuede,vcBotPuede))}
+        ${lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
+        ${lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
+        ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
+        ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
+      </div>
+    </div>`;
+  });
+
+  if (!hayAlgo) html = '<div class="alert alert-info">ℹ️ Ingresa el target en el Simulador para ver el plan de producción</div>';
   document.getElementById('prodEmpty').style.display = 'none';
   document.getElementById('prodContent').style.display = 'block';
   document.getElementById('prodTablas').innerHTML = html;

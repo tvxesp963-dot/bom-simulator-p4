@@ -144,7 +144,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="tab" id="tab-sim" onclick="goTab('sim')" class="tab active">⚡ Simulador</div>
   <div class="tab" id="tab-cons" onclick="goTab('cons')">📦 Consolidado Pedidos</div>
   <div class="tab" id="tab-prod" onclick="goTab('prod')">🔧 Producir / Ranurar</div>
-  <div class="tab" id="tab-assy" onclick="goTab('assy')">🏭 ASSY1 Capacidad</div>
+  
   <div class="tab" id="tab-admin" onclick="goTab('admin')" style="color:#FFBA00">⚙️ Admin BOM</div>
 </div>
 
@@ -294,11 +294,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </div>
 
 <!-- ASSY1 -->
-<div class="page" id="page-assy">
-  <div id="assyEmpty" class="empty" style="padding:4rem">
-    <div class="empty-icon">🏭</div><div class="empty-title">Sin datos</div>
-    <button class="btn btn-primary" style="margin-top:1rem" onclick="goTab('upload')">📥 Cargar BOM</button>
-  </div>
   <div id="assyContent" style="display:none">
     <div class="sh">Capacidad ASSY1 — ranking por % de sub-componentes con inventario &gt; 0</div>
     <div class="alert alert-warn">⚠️ Regla: solo inventario actual. Lo que producen S1/S4/VC alimenta ASSY1 la semana <strong>siguiente</strong>.</div>
@@ -1241,11 +1236,43 @@ function renderProd() {
 function renderAssy() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
   const rows = modelos.map(sm => {
-    const comps = BOM.filter(r => r.sm===sm && r.familia!=='GH90');
-    const conInv = comps.filter(r => r.inv>0).length;
-    const pct = comps.length>0?Math.round((conInv/comps.length)*100):0;
-    const gh90 = BOM.find(r => r.sm===sm && r.familia==='GH90');
-    return {sm, gh90:gh90?.pn||'—', gh90desc:gh90?.desc||'', comps:comps.length, conInv, pct, target:BOM.find(r=>r.sm===sm)?.target||0};
+    const target = BOM.find(r=>r.sm===sm)?.target||0;
+    // Aplicar misma lógica de medio proceso que en los demás módulos
+    const comps = BOM.filter(r => r.sm===sm && r.familia!=='GH90' && componenteNecesario(r, sm, target||1));
+    // Contar como disponible: inv>0 o cubierto por medio proceso
+    const topRanA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
+    const botRanA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
+    const giftA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX'));
+    const lowerA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX'));
+    const bundleA = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
+    const stripA = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
+    const topRanInvA = topRanA ? (topRanA.inv||0) : 0;
+    const botRanInvA = botRanA ? (botRanA.inv||0) : 0;
+    const giftInvA = giftA ? (giftA.inv||0) : 0;
+    const lowerInvA = lowerA ? (lowerA.inv||0) : 0;
+    const bundleInvA = bundleA ? (bundleA.inv||0) : 0;
+    const stripInvA = stripA ? (stripA.inv||0) : 0;
+
+    // GH90 disponibles: Strip y Bundle
+    const gh90Disp = (stripInvA > 0 ? 1 : 0) + (bundleInvA > 0 ? 1 : 0);
+    const gh90Total = (stripA ? 1 : 0) + (bundleA ? 1 : 0);
+
+    // Componentes no-GH90 disponibles (considerando medio proceso)
+    const conInv = comps.filter(r => {
+      if (r.inv > 0) return true;
+      const d = (r.desc||'').toUpperCase();
+      // Virgen TOP cubierto si Ranurado TOP tiene inv
+      if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInvA > 0) return true;
+      // Virgen BOT cubierto si Ranurado BOT tiene inv
+      if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInvA > 0) return true;
+      return false;
+    }).length;
+
+    const totalComps = comps.length + gh90Total;
+    const totalConInv = conInv + gh90Disp;
+    const pct = totalComps>0?Math.round((totalConInv/totalComps)*100):0;
+    const gh90 = stripA || bundleA;
+    return {sm, gh90:gh90?.pn||'—', gh90desc:gh90?.desc||'', comps:totalComps, conInv:totalConInv, pct, target};
   }).sort((a,b)=>b.pct-a.pct);
 
   const assyTbody = rows.map((r,i) => {

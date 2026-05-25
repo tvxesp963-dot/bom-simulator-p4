@@ -606,10 +606,49 @@ function calcSim() {
   const sm = document.getElementById('simModelo').value;
   const target = parseInt(document.getElementById('simTarget').value) || 0;
   const dias = parseInt(document.getElementById('simDias').value) || 5;
-  const comps = BOM.filter(r => r.sm === sm && r.familia !== 'GH90');
+  // Calcular inventario de Ranurado para saber si Virgen es relevante
+  const topRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
+  const botRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
+  const topRanInvC = topRan ? (topRan.inv||0) : 0;
+  const botRanInvC = botRan ? (botRan.inv||0) : 0;
+
+  // Calcular inventario de medio proceso (Gift Box, Lower Box, Strip, Bundle)
+  const giftBoxC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX'));
+  const lowerBoxC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX'));
+  const stripC = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
+  const bundleC = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
+
+  const comps = BOM.filter(r => {
+    if (r.sm !== sm || r.familia === 'GH90') return false;
+    const d = (r.desc||'').toUpperCase();
+    // Excluir Virgen TOP si Ranurado TOP cubre el target
+    if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInvC >= target) return false;
+    // Excluir Virgen BOT si Ranurado BOT cubre el target
+    if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInvC >= target) return false;
+    // Excluir sub-items de Gift Box si Gift Box cubre el target
+    if (giftBoxC && (giftBoxC.inv||0) >= target && d.includes('GIFT BOX')) return false;
+    // Excluir Lower Box del cuello si Ranurado BOT puede producirlo
+    if (d.includes('LOWER BOX') && botRanInvC >= target) return false;
+    // Excluir sub-items de Lower Box si Lower Box cubre el target
+    if (lowerBoxC && (lowerBoxC.inv||0) >= target && d.includes('LOWER BOX')) return false;
+    return true;
+  });
+
+  // Para el cálculo de capacidad, considerar inventario de medio proceso
+  const giftBoxDisp = giftBoxC ? Math.max(giftBoxC.inv||0, 0) : 0;
+  const lowerBoxDisp = lowerBoxC ? Math.max(lowerBoxC.inv||0, 0) : 0;
+  const stripDisp = stripC ? (stripC.inv||0) : 0;
+  const bundleDisp = bundleC ? (bundleC.inv||0) : 0;
 
   let maxProd = target, cuello = null;
   comps.forEach(r => { if (r.inv < target && r.inv < maxProd) { maxProd = r.inv; cuello = r; } });
+
+  // También considerar medio proceso en maxProd
+  if (giftBoxC && (giftBoxC.inv||0) < target) maxProd = Math.min(maxProd, giftBoxC.inv||0);
+  // Lower Box no es cuello si Ranurado BOT puede producirlo
+  if (lowerBoxC && (lowerBoxC.inv||0) < target && botRanInvC < target) maxProd = Math.min(maxProd, lowerBoxC.inv||0);
+  if (stripC && (stripC.inv||0) < target) maxProd = Math.min(maxProd, stripC.inv||0);
+  if (bundleC && (bundleC.inv||0) < target) maxProd = Math.min(maxProd, bundleC.inv||0);
 
   const pct = target > 0 ? Math.min(100, Math.round((maxProd/target)*100)) : 0;
   const color = pct>=100?'var(--green)':pct>=70?'var(--amber)':'var(--red)';
@@ -742,14 +781,26 @@ function renderSimTable() {
   // Separar en secciones respetando el orden del BOM
   const secENSAMBLE = [], secTOP = [], secBOT = [];
   const targetSim2 = parseInt(document.getElementById('simTarget')?.value) || 0;
+
+  // Pre-calcular inventario de Ranurado por modelo para saber si VC es necesario
+  const getRanuradoInv = (desc) => {
+    const match = BOM.find(r => {
+      const d = (r.desc||'').toUpperCase();
+      return d.includes('RANURADO') && d.includes(desc.toUpperCase());
+    });
+    return match ? (match.inv || 0) : 0;
+  };
+  const topRanInv = getRanuradoInv('TOP');
+  const botRanInv = getRanuradoInv('BOTTOM');
+
   bomGroups.forEach(g => {
     const sec = g.section;
-    if(sec === 'BUNDLE') return; // Se procesa por separado al final
+    if(sec === 'BUNDLE') return;
     const header = g.header;
     const headerInv = header ? (header.inv || 0) : 0;
     const headerDesc = (header?.desc || '').toUpperCase();
 
-    // Si es Gift Box Top o Lower Box Bottom y tiene inventario >= target → solo mostrar header OK
+    // Si es Gift Box Top, Lower Box Bottom o Strip con inventario suficiente → banner OK
     const esMedioProceso = headerDesc.includes('GIFT BOX') || headerDesc.includes('LOWER BOX') || headerDesc.includes('STRIP');
     if (esMedioProceso && headerInv >= targetSim2 && targetSim2 > 0) {
       const label = headerDesc.includes('GIFT BOX') ? 'Gift Box Top OK — No requiere producción TOP'
@@ -767,9 +818,21 @@ function renderSimTable() {
       return;
     }
 
+    // Si el Ranurado cubre el target, el Virgen no es necesario → ocultar sub-items Virgen
+    const esGrupoTop = headerDesc.includes('TOP') && !headerDesc.includes('GIFT');
+    const esGrupoBot = (headerDesc.includes('BOTTOM') || headerDesc.includes('BOT')) && !headerDesc.includes('LOWER BOX');
+    const ranCubreTop = topRanInv >= targetSim2 && targetSim2 > 0;
+    const ranCubreBot = botRanInv >= targetSim2 && targetSim2 > 0;
+
     const rows = [];
     if(passFilter(header)) rows.push(rowHTML(header, false));
-    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true)); });
+    g.subs.forEach(s => {
+      const sDesc = (s.desc||'').toUpperCase();
+      // Si Ranurado cubre, omitir sub-items de Virgen en TOP o BOT
+      if (esGrupoTop && ranCubreTop && sDesc.includes('VIRGEN')) return;
+      if (esGrupoBot && ranCubreBot && sDesc.includes('VIRGEN')) return;
+      if(passFilter(s)) rows.push(rowHTML(s, true));
+    });
     if(rows.length === 0) return;
     const block = rows.join('');
     if(sec === 'ENSAMBLE') secENSAMBLE.push(block);
@@ -1015,14 +1078,30 @@ function renderProd() {
     const s4Puede = pulpTray ? Math.min(...s4Mats.map(m=>m.inv)) : 0;
 
     // ── ASSY1 ──
-    const botPuede = Math.max(s3Puede, s4Puede); // lo producido en S3 o S4
+    const botPuede = Math.max(s3Puede, s4Puede);
+
+    // Lógica medio proceso: si inventario real >= target, usar inventario real
+    const stripInv = inv(strip);
+    const giftBoxInv = inv(giftBox);
+    const lowerBoxInv = inv(lowerBox);
+    const bundleInv = inv(bundle);
+
+    // Strip: si tiene suficiente en inventario, no necesita producción
+    const stripDisp = stripInv >= target ? stripInv : stripInv;
+    // Gift Box Top: usar inventario real si cubre, si no usar topPuede + inventario
+    const giftBoxDisp = giftBoxInv >= target ? giftBoxInv : giftBoxInv + topPuede;
+    // Lower Box Bottom: usar inventario real si cubre, si no usar botPuede + inventario
+    const lowerBoxDisp = lowerBoxInv >= target ? lowerBoxInv : lowerBoxInv + botPuede;
+    // Bundle: si cubre target, ASSY1 puede producir sin línea
+    const bundleDisp = bundleInv >= target ? bundleInv : bundleInv;
+
     const assy1Mats = [
-      {label:'Strip (GH90)', inv: inv(strip), pn: strip?.pn||'—', nota:''},
-      {label:'Gift Box Top (S1/S2/Zhongke)', inv: topPuede, pn: giftBox?.pn||'—', nota:'de producción TOP'},
-      {label:'Lower Box Bottom (S3/S4)', inv: botPuede, pn: lowerBox?.pn||'—', nota:'de producción BOTTOM'},
-      {label:'Bundle (P3)', inv: inv(bundle), pn: bundle?.pn||'—', nota:'pedir a P3'},
+      {label:'Strip (GH90)', inv: stripDisp, pn: strip?.pn||'—', nota: stripInv>=target?'inventario suficiente':''},
+      {label:'Gift Box Top (S1/S2/Zhongke)', inv: giftBoxDisp, pn: giftBox?.pn||'—', nota: giftBoxInv>=target?'inventario suficiente':'de producción TOP'},
+      {label:'Lower Box Bottom (S3/S4)', inv: lowerBoxDisp, pn: lowerBox?.pn||'—', nota: lowerBoxInv>=target?'inventario suficiente':'de producción BOTTOM'},
+      {label:'Bundle (P3)', inv: bundleDisp, pn: bundle?.pn||'—', nota: bundleInv>=target?'inventario suficiente':'pedir a P3'},
     ];
-    const assy1Puede = Math.min(...assy1Mats.map(m=>m.inv));
+    const assy1Puede = Math.min(...assy1Mats.map(m=>m.inv), target);
 
     const pct = Math.min(100, Math.round((assy1Puede/target)*100));
     const sc = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';

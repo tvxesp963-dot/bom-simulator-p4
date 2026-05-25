@@ -741,11 +741,34 @@ function renderSimTable() {
 
   // Separar en secciones respetando el orden del BOM
   const secENSAMBLE = [], secTOP = [], secBOT = [];
+  const targetSim2 = parseInt(document.getElementById('simTarget')?.value) || 0;
   bomGroups.forEach(g => {
     const sec = g.section;
     if(sec === 'BUNDLE') return; // Se procesa por separado al final
+    const header = g.header;
+    const headerInv = header ? (header.inv || 0) : 0;
+    const headerDesc = (header?.desc || '').toUpperCase();
+
+    // Si es Gift Box Top o Lower Box Bottom y tiene inventario >= target → solo mostrar header OK
+    const esMedioProceso = headerDesc.includes('GIFT BOX') || headerDesc.includes('LOWER BOX') || headerDesc.includes('STRIP');
+    if (esMedioProceso && headerInv >= targetSim2 && targetSim2 > 0) {
+      const label = headerDesc.includes('GIFT BOX') ? 'Gift Box Top OK — No requiere producción TOP'
+        : headerDesc.includes('LOWER BOX') ? 'Lower Box Bottom OK — No requiere producción BOTTOM'
+        : 'Strip OK — No requiere pedido a P1';
+      const bannerRow = `<tr>
+        <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
+          <span style="color:var(--green);font-weight:700;font-size:12px">✓ ${label}</span>
+          <span style="color:var(--text2);font-size:11px;margin-left:8px">${header.pn} · ${headerInv.toLocaleString()} en inventario ≥ target ${targetSim2.toLocaleString()}</span>
+        </td>
+      </tr>`;
+      if(sec === 'TOP') secTOP.push(bannerRow);
+      else if(sec === 'BOT') secBOT.push(bannerRow);
+      else secENSAMBLE.push(bannerRow);
+      return;
+    }
+
     const rows = [];
-    if(passFilter(g.header)) rows.push(rowHTML(g.header, false));
+    if(passFilter(header)) rows.push(rowHTML(header, false));
     g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true)); });
     if(rows.length === 0) return;
     const block = rows.join('');
@@ -755,10 +778,25 @@ function renderSimTable() {
   });
 
   const secBUNDLE = [];
+  let bundleOK = false;
   bomGroups.forEach(g => {
     if(g.section !== 'BUNDLE') return;
+    const bundleHeader = g.header;
+    const bundleInv = bundleHeader ? (bundleHeader.inv || 0) : 0;
+    const targetSim = parseInt(document.getElementById('simTarget')?.value) || 0;
+    // Si Bundle >= target, marcar como OK y no mostrar componentes
+    if (bundleHeader && bundleInv >= targetSim && targetSim > 0) {
+      bundleOK = true;
+      secBUNDLE.push(`<tr>
+        <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
+          <span style="color:var(--green);font-weight:700;font-size:12px">✓ Bundle OK — No requiere producción P3</span>
+          <span style="color:var(--text2);font-size:11px;margin-left:8px">${bundleHeader.pn} · ${bundleInv.toLocaleString()} en inventario ≥ target ${targetSim.toLocaleString()}</span>
+        </td>
+      </tr>`);
+      return;
+    }
     const rows = [];
-    if(passFilter(g.header)) rows.push(rowHTML(g.header, false));
+    if(passFilter(bundleHeader)) rows.push(rowHTML(bundleHeader, false));
     g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true)); });
     if(rows.length > 0) secBUNDLE.push(rows.join(''));
   });
@@ -813,35 +851,71 @@ function renderCons() {
     modelos.forEach(sm => {
       const target = modeloTargets[sm] || 0;
       if (!target) return;
+      // Componentes normales (no GH90)
       const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && r.inv < target);
-      if (!rows.length) return;
-      const rowsCalc = rows.map(r => ({...r, falta: target - r.inv, aPedir: Math.ceil((target - r.inv) * EXTRA)}));
-      const totalPedir = rowsCalc.reduce((s,r) => s + r.aPedir, 0);
+
+      // GH90 para P3: Bundle (ensamble padre)
+      const bundleRows = pl.key === 'P3'
+        ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'))
+        : [];
+
+      // Si el Bundle tiene suficiente inventario >= target, no mostrar este modelo en P3
+      const bundle = bundleRows[0];
+      if (pl.key === 'P3' && bundle && bundle.inv >= target) return;
+
+      // Cuánto falta producir según el Bundle (inventario del padre)
+      const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundle.inv) : target;
+
+      // Componentes P3: calculados contra necesitaProducir (no target completo)
+      const rowsP3 = pl.key === 'P3'
+        ? BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90')
+            .filter(r => r.inv < necesitaProducir)
+        : [];
+      const rowsActual = pl.key === 'P3' ? rowsP3 : rows;
+
+      if (!rowsActual.length && !bundleRows.filter(r=>r.inv<target).length) return;
+
+      const rowsCalc = rowsActual.map(r => ({...r, falta: necesitaProducir - r.inv, aPedir: Math.ceil((necesitaProducir - r.inv) * EXTRA)}));
+      const bundleCalc = bundleRows.map(r => ({...r, falta: Math.max(0, target - r.inv), aPedir: r.inv < target ? Math.ceil((target - r.inv) * EXTRA) : 0}));
+
+      const totalPedir = [...rowsCalc, ...bundleCalc].reduce((s,r) => s + (r.aPedir||0), 0);
+      const totalFaltantes = rowsActual.length + bundleRows.filter(r=>r.inv<target).length;
       hayAlgo = true;
+
+      const renderRow = (r, i, color) => `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
+        <td class="pn-cell" style="color:${color||pl.tc}">${r.pn}</td>
+        <td>${r.desc}</td>
+        <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
+        <td style="text-align:right;color:${r.falta>0?'var(--red)':'var(--green)'};font-weight:600">${r.falta>0?'-'+r.falta.toLocaleString():'+'+Math.abs(r.falta).toLocaleString()}</td>
+        <td style="text-align:right;color:${r.aPedir>0?'var(--amber)':'var(--text)'};font-weight:700">${r.aPedir>0?r.aPedir.toLocaleString():'—'}</td>
+      </tr>`;
+
+      const sectionHeader = (label, bg, tc) => `<tr style="background:${bg}">
+        <td colspan="5" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
+      </tr>`;
+
       plantaHtml += `
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
           <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">${sm}</span>
           <div style="display:flex;align-items:center;gap:.5rem">
-            <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()} · ${rowsCalc.length} faltantes · ${totalPedir.toLocaleString()} pzas</span>
+            <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()} · ${totalFaltantes} faltantes · ${totalPedir.toLocaleString()} pzas</span>
             <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.key}</span>
           </div>
         </div>
         <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;min-width:500px">
+        <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
+          <colgroup><col style="width:18%"><col style="width:34%"><col style="width:14%"><col style="width:14%"><col style="width:20%"></colgroup>
           <thead><tr style="font-size:10px">
             <th>N° Parte</th><th>Descripción</th>
             <th style="text-align:right">Inv. Actual</th>
             <th style="text-align:right">Diferencia</th>
             <th style="text-align:right;color:var(--amber)">A Pedir +10%</th>
           </tr></thead><tbody>
-          ${rowsCalc.map((r,i)=>`<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
-            <td class="pn-cell" style="color:${pl.tc}">${r.pn}</td>
-            <td>${r.desc}</td>
-            <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
-            <td style="text-align:right;color:var(--red);font-weight:600">-${r.falta.toLocaleString()}</td>
-            <td style="text-align:right;color:var(--amber);font-weight:700">${r.aPedir.toLocaleString()}</td>
-          </tr>`).join('')}
+          ${bundleCalc.length ? sectionHeader('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
+          ${bundleCalc.map((r,i)=>renderRow(r,i,'#a78bfa')).join('')}
+          ${rowsCalc.length ? sectionHeader(pl.key==='P3'?'Componentes P3':'Componentes P1','rgba(255,255,255,.03)','var(--text2)') : ''}
+          ${rowsCalc.map((r,i)=>renderRow(r,i,null)).join('')}
           </tbody>
         </table>
         </div>
@@ -954,68 +1028,68 @@ function renderProd() {
     const sc = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
     const stag = pct>=100?'<span class="tag tag-ok">✓ LISTO</span>':pct>0?'<span class="tag tag-warn">⚠ PARCIAL</span>':'<span class="tag tag-err">✗ BLOQUEADO</span>';
 
-    // lineaCard: genera filas <tr> para tabla unificada (igual que Consolidado)
     const lineaCard = (label, color, icon, mats, puede) => {
-      if (!mats.length) return '';
+      if (!mats.length || mats.every(m=>m.inv===0 && !m.nota)) return '';
+      const cuello = mats.reduce((mn,m)=>m.inv<mn.inv?m:mn, mats[0]);
       const pctLinea = Math.min(100, Math.round((puede/target)*100));
-      let rows = `<tr style="background:${color}18;border-top:2px solid ${color}50">
-        <td style="padding:.3rem .75rem;font-size:11px;font-weight:700;color:${color}">${icon} ${label}</td>
-        <td colspan="3" style="padding:.3rem .75rem"></td>
-        <td style="padding:.3rem .75rem;text-align:right">
-          <div style="display:flex;align-items:center;justify-content:flex-end;gap:.5rem">
-            <div style="width:50px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden">
+      return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
+          <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
               <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
             </div>
-            <span style="font-size:11px;font-weight:700;color:${color}">${puede.toLocaleString()}<span style="font-size:9px;font-weight:400;color:var(--text2)"> / ${target.toLocaleString()}</span></span>
+            <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
+            <span style="font-size:10px;color:var(--text2)">/ ${target.toLocaleString()}</span>
           </div>
-        </td>
-      </tr>`;
-      mats.forEach((m,i) => {
-        const ok = m.inv >= target;
-        const tc = ok ? 'var(--green)' : m.inv > 0 ? 'var(--amber)' : 'var(--red)';
-        const tag = ok ? '<span class="tag tag-ok">OK</span>' : '<span class="tag tag-err">FALTA</span>';
-        rows += `<tr style="${i%2?'background:rgba(255,255,255,.015)':''}">
-          <td style="padding-left:1.5rem;font-size:11px">${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}</td>
-          <td style="font-family:monospace;font-size:10px;color:${color}">${m.pn}</td>
-          <td style="text-align:right;color:${tc};font-weight:600;font-size:11px">${m.inv.toLocaleString()}</td>
-          <td style="text-align:right;font-size:11px">${target.toLocaleString()}</td>
-          <td style="text-align:center">${tag}</td>
-        </tr>`;
-      });
-      return rows;
+        </div>
+        <div style="overflow-x:auto">
+        <table class="dt" style="width:100%;table-layout:fixed">
+          <thead><tr style="font-size:10px">
+            <th style="width:36%">Material</th>
+            <th style="width:20%">N° Parte</th>
+            <th style="width:14%;text-align:right">Disponible</th>
+            <th style="width:14%;text-align:right">Requerido</th>
+            <th style="width:16%;text-align:center">Estado</th>
+          </tr></thead><tbody>
+          ${mats.map((m,i)=>{
+            const ok=m.inv>=target;
+            const tc=ok?'var(--green)':m.inv>0?'var(--amber)':'var(--red)';
+            const tag=ok?'<span class="tag tag-ok">OK</span>':'<span class="tag tag-err">FALTA</span>';
+            const esCuello = m===cuello && !ok;
+            return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
+              <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
+              <td style="font-family:monospace;font-size:10px;color:${color}">${m.pn}</td>
+              <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
+              <td style="text-align:right">${target.toLocaleString()}</td>
+              <td style="text-align:center">${tag}</td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+        </div>
+      </div>`;
     };
 
     html += `
     <div style="background:var(--bg2);border:1px solid ${sc}40;border-radius:12px;margin-bottom:1.25rem;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
         <span style="font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;color:var(--text)">${sm}</span>
         <div style="display:flex;align-items:center;gap:.75rem">
           <span style="font-size:11px;color:var(--text2)">Target: ${target.toLocaleString()} · ASSY1: <b style="color:${sc}">${assy1Puede.toLocaleString()}</b></span>
           ${stag}
         </div>
       </div>
-      <table class="dt" style="width:100%;table-layout:fixed">
-        <colgroup>
-          <col style="width:36%"><col style="width:20%">
-          <col style="width:14%"><col style="width:14%"><col style="width:16%">
-        </colgroup>
-        <thead><tr style="font-size:10px">
-          <th>Material</th><th>N° Parte</th>
-          <th style="text-align:right">Disponible</th>
-          <th style="text-align:right">Requerido</th>
-          <th style="text-align:center">Estado</th>
-        </tr></thead>
-        <tbody>
-          ${lineaCard('VC — Ranurar','var(--amber)','⚙️',
-            [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'},
-             {label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
-            Math.min(vcTopPuede,vcBotPuede))}
-          ${lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
-          ${lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
-          ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
-          ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
-        </tbody>
-      </table>
+      <div style="padding:.75rem">
+        ${lineaCard('VC — Ranurar','var(--amber)','⚙️',
+          [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'},
+           {label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
+          Math.min(vcTopPuede,vcBotPuede))}
+        ${lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
+        ${lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
+        ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
+        ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
+      </div>
     </div>`;
   });
 
@@ -1464,13 +1538,24 @@ async function publicarPlan() {
     // ASSY1: Strip + Bundle
     const stripDisp = strip ? pool[strip.pn]||0 : 0;
     const bundleDisp = bundle ? pool[bundle.pn]||0 : 0;
-    const assy1Puede = Math.min(stripDisp, bundleDisp, topPuede, s3Puede, target);
+
+    // Si Bundle >= target, ASSY1 puede producir sin necesidad de TOP/BOT de línea
+    const bundleCubreTarget = bundle && bundleDisp >= target;
+    const assy1Puede = bundleCubreTarget
+      ? Math.min(stripDisp, bundleDisp, target)
+      : Math.min(stripDisp, bundleDisp, topPuede, s3Puede, target);
+
     const stripToma = takePool(strip?.pn, assy1Puede);
     const bundleToma = takePool(bundle?.pn, assy1Puede);
     const assyMats = [];
     if (strip && stripToma>0) assyMats.push({pn:strip.pn, desc:strip.desc||'', cant:stripToma});
     if (bundle && bundleToma>0) assyMats.push({pn:bundle.pn, desc:bundle.desc||'', cant:bundleToma});
     addLinea('ASSY1', sm, assy1Puede, assyMats);
+
+    // Si Bundle cubre el target, no necesita producir en P3 — agregar nota al plan
+    if (bundleCubreTarget && bundle) {
+      addLinea('TERMINAR ASSY', sm, assy1Puede, [{pn:bundle.pn, desc:'Bundle disponible — no requiere producción P3', cant:bundleToma}]);
+    }
   });
 
   try {

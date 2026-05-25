@@ -954,68 +954,68 @@ function renderProd() {
     const sc = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
     const stag = pct>=100?'<span class="tag tag-ok">✓ LISTO</span>':pct>0?'<span class="tag tag-warn">⚠ PARCIAL</span>':'<span class="tag tag-err">✗ BLOQUEADO</span>';
 
+    // lineaCard: genera filas <tr> para tabla unificada (igual que Consolidado)
     const lineaCard = (label, color, icon, mats, puede) => {
-      if (!mats.length || mats.every(m=>m.inv===0 && !m.nota)) return '';
-      const cuello = mats.reduce((mn,m)=>m.inv<mn.inv?m:mn, mats[0]);
+      if (!mats.length) return '';
       const pctLinea = Math.min(100, Math.round((puede/target)*100));
-      return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
-          <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+      let rows = `<tr style="background:${color}18;border-top:2px solid ${color}50">
+        <td style="padding:.3rem .75rem;font-size:11px;font-weight:700;color:${color}">${icon} ${label}</td>
+        <td colspan="3" style="padding:.3rem .75rem"></td>
+        <td style="padding:.3rem .75rem;text-align:right">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:.5rem">
+            <div style="width:50px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden">
               <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
             </div>
-            <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
-            <span style="font-size:10px;color:var(--text2)">/ ${target.toLocaleString()}</span>
+            <span style="font-size:11px;font-weight:700;color:${color}">${puede.toLocaleString()}<span style="font-size:9px;font-weight:400;color:var(--text2)"> / ${target.toLocaleString()}</span></span>
           </div>
-        </div>
-        <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;table-layout:fixed">
-          <thead><tr style="font-size:10px">
-            <th style="width:36%">Material</th>
-            <th style="width:20%">N° Parte</th>
-            <th style="width:14%;text-align:right">Disponible</th>
-            <th style="width:14%;text-align:right">Requerido</th>
-            <th style="width:16%;text-align:center">Estado</th>
-          </tr></thead><tbody>
-          ${mats.map((m,i)=>{
-            const ok=m.inv>=target;
-            const tc=ok?'var(--green)':m.inv>0?'var(--amber)':'var(--red)';
-            const tag=ok?'<span class="tag tag-ok">OK</span>':'<span class="tag tag-err">FALTA</span>';
-            const esCuello = m===cuello && !ok;
-            return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
-              <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
-              <td style="font-family:monospace;font-size:10px;color:${color}">${m.pn}</td>
-              <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
-              <td style="text-align:right">${target.toLocaleString()}</td>
-              <td style="text-align:center">${tag}</td>
-            </tr>`;
-          }).join('')}
-          </tbody>
-        </table>
-        </div>
-      </div>`;
+        </td>
+      </tr>`;
+      mats.forEach((m,i) => {
+        const ok = m.inv >= target;
+        const tc = ok ? 'var(--green)' : m.inv > 0 ? 'var(--amber)' : 'var(--red)';
+        const tag = ok ? '<span class="tag tag-ok">OK</span>' : '<span class="tag tag-err">FALTA</span>';
+        rows += `<tr style="${i%2?'background:rgba(255,255,255,.015)':''}">
+          <td style="padding-left:1.5rem;font-size:11px">${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}</td>
+          <td style="font-family:monospace;font-size:10px;color:${color}">${m.pn}</td>
+          <td style="text-align:right;color:${tc};font-weight:600;font-size:11px">${m.inv.toLocaleString()}</td>
+          <td style="text-align:right;font-size:11px">${target.toLocaleString()}</td>
+          <td style="text-align:center">${tag}</td>
+        </tr>`;
+      });
+      return rows;
     };
 
     html += `
     <div style="background:var(--bg2);border:1px solid ${sc}40;border-radius:12px;margin-bottom:1.25rem;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
         <span style="font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;color:var(--text)">${sm}</span>
         <div style="display:flex;align-items:center;gap:.75rem">
           <span style="font-size:11px;color:var(--text2)">Target: ${target.toLocaleString()} · ASSY1: <b style="color:${sc}">${assy1Puede.toLocaleString()}</b></span>
           ${stag}
         </div>
       </div>
-      <div style="padding:.75rem">
-        ${lineaCard('VC — Ranurar','var(--amber)','⚙️',
-          [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'},
-           {label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
-          Math.min(vcTopPuede,vcBotPuede))}
-        ${lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
-        ${lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
-        ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
-        ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
-      </div>
+      <table class="dt" style="width:100%;table-layout:fixed">
+        <colgroup>
+          <col style="width:36%"><col style="width:20%">
+          <col style="width:14%"><col style="width:14%"><col style="width:16%">
+        </colgroup>
+        <thead><tr style="font-size:10px">
+          <th>Material</th><th>N° Parte</th>
+          <th style="text-align:right">Disponible</th>
+          <th style="text-align:right">Requerido</th>
+          <th style="text-align:center">Estado</th>
+        </tr></thead>
+        <tbody>
+          ${lineaCard('VC — Ranurar','var(--amber)','⚙️',
+            [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'},
+             {label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
+            Math.min(vcTopPuede,vcBotPuede))}
+          ${lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
+          ${lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
+          ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
+          ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
+        </tbody>
+      </table>
     </div>`;
   });
 

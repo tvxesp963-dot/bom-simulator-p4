@@ -446,7 +446,7 @@ function procesarBOM() {
 
   if (!BOM.length) { alert('No se detectaron componentes. Verifica la hoja.'); return; }
 
-  renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+  renderPreview(); renderSim(); renderCons(); renderProd();
   document.getElementById('btnExport').style.display = 'flex';
 }
 
@@ -595,6 +595,42 @@ function onModeloChange() {
     document.getElementById('simTarget').value = BOM.find(r => r.sm === sm)?.target || 0;
   }
   calcSim();
+}
+
+
+// ── FUNCIÓN CENTRALIZADA: decide si un componente es relevante dado el inventario de medio proceso ──
+function componenteNecesario(r, sm, target) {
+  const d = (r.desc||'').toUpperCase();
+  const inv = n => n ? (n.inv||0) : 0;
+
+  // Buscar inventarios de medio proceso y ranurado
+  const topRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (x.desc||'').toUpperCase().includes('RANURADO'));
+  const botRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (x.desc||'').toUpperCase().includes('RANURADO'));
+  const giftBox   = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('GIFT BOX'));
+  const lowerBox  = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('LOWER BOX'));
+  const topRanInv = inv(topRan);
+  const botRanInv = inv(botRan);
+  const giftInv   = inv(giftBox);
+  const lowerInv  = inv(lowerBox);
+
+  // Virgen TOP innecesario si Ranurado TOP cubre
+  if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= target) return false;
+  // Virgen BOT innecesario si Ranurado BOT cubre
+  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInv >= target) return false;
+  // Sheet Top Box innecesario si Gift Box cubre
+  if (d.includes('SHEET TOP') && giftInv >= target) return false;
+  // Gift Box innecesario si tiene inventario suficiente
+  if (d.includes('GIFT BOX') && giftInv >= target) return false;
+  // Sheet Lower Box innecesario si Lower Box cubre
+  if ((d.includes('SHEET LOWER') || d.includes('SHEET LOW')) && lowerInv >= target) return false;
+  // Lower Box innecesario si tiene inventario suficiente o Ranurado BOT cubre
+  if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && (lowerInv >= target || botRanInv >= target)) return false;
+  // Chip Board Bottom Ranurado innecesario si Lower Box ya cubre
+  if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO') && lowerInv >= target) return false;
+  // Chip Board Top Ranurado innecesario si Gift Box ya cubre
+  if (d.includes('CHIP BOARD TOP') && d.includes('RANURADO') && giftInv >= target) return false;
+
+  return true;
 }
 
 function calcSim() {
@@ -907,7 +943,35 @@ function renderCons() {
   let html = '';
   let hayAlgo = false;
 
+  // Pool compartido de inventario — se descuenta conforme se asigna a modelos
+  const poolCompartido = {};
+  BOM.forEach(r => {
+    if (!r.pn) return;
+    const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    if (poolCompartido[key] === undefined) poolCompartido[key] = r.inv || 0;
+  });
+  // Helper para obtener y descontar del pool
+  const tomarPool = (pn, desc, cantidad) => {
+    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    const disponible = poolCompartido[key] || 0;
+    const tomar = Math.min(disponible, cantidad);
+    poolCompartido[key] = disponible - tomar;
+    return tomar;
+  };
+  const verPool = (pn, desc) => {
+    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    return poolCompartido[key] || 0;
+  };
+
   plantas.forEach(pl => {
+    // Resetear pool al inicio de cada planta para calcular independiente por planta
+    const poolPlanta = {};
+    BOM.forEach(r => {
+      if (!r.pn) return;
+      const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+      if (poolPlanta[key] === undefined) poolPlanta[key] = r.inv || 0;
+    });
+
     let plantaHtml = '';
     modelos.forEach(sm => {
       const target = modeloTargets[sm] || 0;
@@ -929,12 +993,24 @@ function renderCons() {
         ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'))
         : [];
 
-      // Si el Bundle tiene suficiente inventario >= target, no mostrar este modelo en P3
+      // Usar pool compartido para Bundle — descuenta entre modelos
       const bundle = bundleRows[0];
-      if (pl.key === 'P3' && bundle && bundle.inv >= target) return;
+      const bundleInvDisp = bundle ? (poolPlanta[(bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase()] ?? (bundle.inv||0)) : 0;
 
-      // Cuánto falta producir según el Bundle (inventario del padre)
-      const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundle.inv) : target;
+      if (pl.key === 'P3' && bundle && bundleInvDisp >= target) {
+        // Descontar del pool aunque no necesite producir
+        const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
+        poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - target);
+        return;
+      }
+
+      // Cuánto falta producir según el Bundle disponible en pool
+      const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundleInvDisp) : target;
+      // Descontar Bundle del pool
+      if (bundle) {
+        const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
+        poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - Math.min(bundleInvDisp, target));
+      }
 
       // Componentes P3: calculados contra necesitaProducir (no target completo)
       const rowsP3 = pl.key === 'P3'
@@ -946,7 +1022,7 @@ function renderCons() {
       if (!rowsActual.length && !bundleRows.filter(r=>r.inv<target).length) return;
 
       const rowsCalc = rowsActual.map(r => ({...r, falta: necesitaProducir - r.inv, aPedir: Math.ceil((necesitaProducir - r.inv) * EXTRA)}));
-      const bundleCalc = bundleRows.map(r => ({...r, falta: Math.max(0, target - r.inv), aPedir: r.inv < target ? Math.ceil((target - r.inv) * EXTRA) : 0}));
+      const bundleCalc = bundleRows.map(r => ({...r, inv: bundleInvDisp, falta: Math.max(0, target - bundleInvDisp), aPedir: bundleInvDisp < target ? Math.ceil((target - bundleInvDisp) * EXTRA) : 0}));
 
       const totalPedir = [...rowsCalc, ...bundleCalc].reduce((s,r) => s + (r.aPedir||0), 0);
       const totalFaltantes = rowsActual.length + bundleRows.filter(r=>r.inv<target).length;
@@ -1023,41 +1099,6 @@ function getComp(sm, descKeywords) {
   });
 }
 
-// ── FUNCIÓN CENTRALIZADA: decide si un componente es relevante dado el inventario de medio proceso ──
-function componenteNecesario(r, sm, target) {
-  const d = (r.desc||'').toUpperCase();
-  const inv = n => n ? (n.inv||0) : 0;
-
-  // Buscar inventarios de medio proceso y ranurado
-  const topRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (x.desc||'').toUpperCase().includes('RANURADO'));
-  const botRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (x.desc||'').toUpperCase().includes('RANURADO'));
-  const giftBox   = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('GIFT BOX'));
-  const lowerBox  = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('LOWER BOX'));
-  const topRanInv = inv(topRan);
-  const botRanInv = inv(botRan);
-  const giftInv   = inv(giftBox);
-  const lowerInv  = inv(lowerBox);
-
-  // Virgen TOP innecesario si Ranurado TOP cubre
-  if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= target) return false;
-  // Virgen BOT innecesario si Ranurado BOT cubre
-  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInv >= target) return false;
-  // Sheet Top Box innecesario si Gift Box cubre
-  if (d.includes('SHEET TOP') && giftInv >= target) return false;
-  // Gift Box innecesario si tiene inventario suficiente
-  if (d.includes('GIFT BOX') && giftInv >= target) return false;
-  // Sheet Lower Box innecesario si Lower Box cubre
-  if ((d.includes('SHEET LOWER') || d.includes('SHEET LOW')) && lowerInv >= target) return false;
-  // Lower Box innecesario si tiene inventario suficiente o Ranurado BOT cubre
-  if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && (lowerInv >= target || botRanInv >= target)) return false;
-  // Chip Board Bottom Ranurado innecesario si Lower Box ya cubre
-  if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO') && lowerInv >= target) return false;
-  // Chip Board Top Ranurado innecesario si Gift Box ya cubre
-  if (d.includes('CHIP BOARD TOP') && d.includes('RANURADO') && giftInv >= target) return false;
-
-  return true;
-}
-
 function renderProd() {
   document.getElementById('prodTitle').textContent = 'Plan de Producción — ' + document.getElementById('semanaRef').value;
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
@@ -1065,12 +1106,33 @@ function renderProd() {
   let html = '';
   let hayAlgo = false;
 
+  // Pool compartido — se descuenta entre modelos igual que en publicarPlan
+  const poolRend = {};
+  BOM.forEach(r => {
+    if (!r.pn) return;
+    const k = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    if (poolRend[k] === undefined) poolRend[k] = r.inv || 0;
+  });
+  const invPool = r => {
+    if (!r) return 0;
+    const k = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    return poolRend[k] || 0;
+  };
+  const takeRend = (r, cant) => {
+    if (!r) return 0;
+    const k = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    const disp = poolRend[k] || 0;
+    const tomar = Math.min(disp, cant);
+    poolRend[k] = disp - tomar;
+    return tomar;
+  };
+
   modelos.forEach(sm => {
     const target = simTargetsPorModelo[sm] || 0;
     if (!target) return;
     hayAlgo = true;
 
-    const inv = r => r ? (r.inv || 0) : 0;
+    const inv = r => invPool(r);
 
     // Materiales clave
     const cbTopVirgen = getComp(sm, ['CHIP BOARD TOP','VIRGEN']);
@@ -1127,20 +1189,23 @@ function renderProd() {
     // ── ASSY1 ──
     const botPuede = Math.max(s3Puede, s4Puede);
 
-    // Lógica medio proceso: si inventario real >= target, usar inventario real
+    // Lógica medio proceso con pool compartido — descuenta entre modelos
     const stripInv = inv(strip);
     const giftBoxInv = inv(giftBox);
     const lowerBoxInv = inv(lowerBox);
     const bundleInv = inv(bundle);
 
-    // Strip: si tiene suficiente en inventario, no necesita producción
-    const stripDisp = stripInv >= target ? stripInv : stripInv;
-    // Gift Box Top: usar inventario real si cubre, si no usar topPuede + inventario
+    // Descontar del pool lo que se usará en este modelo
+    const stripDisp = stripInv;
     const giftBoxDisp = giftBoxInv >= target ? giftBoxInv : giftBoxInv + topPuede;
-    // Lower Box Bottom: usar inventario real si cubre, si no usar botPuede + inventario
     const lowerBoxDisp = lowerBoxInv >= target ? lowerBoxInv : lowerBoxInv + botPuede;
-    // Bundle: si cubre target, ASSY1 puede producir sin línea
-    const bundleDisp = bundleInv >= target ? bundleInv : bundleInv;
+    const bundleDisp = bundleInv; // Pool ya descontó al calcular inv()
+
+    // Descontar Bundle del pool para modelos siguientes
+    if (bundle) takeRend(bundle, Math.min(bundleInv, target));
+    if (strip) takeRend(strip, Math.min(stripInv, target));
+    if (giftBox && giftBoxInv >= target) takeRend(giftBox, target);
+    if (lowerBox && lowerBoxInv >= target) takeRend(lowerBox, target);
 
     const assy1Mats = [
       {label:'Strip (GH90)', inv: stripDisp, pn: strip?.pn||'—', nota: stripInv>=target?'inventario suficiente':''},
@@ -1207,19 +1272,22 @@ function renderProd() {
         </div>
       </div>
       <div style="padding:.75rem">
-        ${(vcTopNecesario > 0 || vcBotNecesario > 0)
-          ? lineaCard('VC — Ranurar','var(--amber)','⚙️',
-              [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'},
-               {label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
-              Math.min(vcTopPuede,vcBotPuede))
-          : `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">⚙️ VC — No necesita ranurar</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Ranurado disponible cubre el target</span></td></tr>`}
+        ${vcTopNecesario > 0
+          ? lineaCard('VC1 — Ranurar TOP','var(--amber)','⚙️',
+              [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'}],
+              vcTopPuede)
+          : `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">⚙️ VC1 — No necesita ranurar</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Ranurado TOP disponible cubre el target</span></td></tr>`}
+        ${vcBotNecesario > 0
+          ? lineaCard('VC2 — Ranurar BOT','#00B8A0','⚙️',
+              [{label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
+              vcBotPuede)
+          : `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">⚙️ VC2 — No necesita ranurar</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Ranurado BOT disponible cubre el target</span></td></tr>`}
         ${giftBoxDisp >= target
           ? `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">🏭 S1/S2 + Zhongke — No necesita producir</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Gift Box Top ${giftBoxDisp.toLocaleString()} cubre el target</span></td></tr>`
           : lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
         ${lowerBoxDisp >= target
           ? `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">🏭 S3 — No necesita producir</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Lower Box Bottom ${lowerBoxDisp.toLocaleString()} cubre el target</span></td></tr>`
           : lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
-        ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
         ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
         ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
       </div>
@@ -1233,84 +1301,6 @@ function renderProd() {
 }
 
 // ASSY1
-function renderAssy() {
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const rows = modelos.map(sm => {
-    const target = BOM.find(r=>r.sm===sm)?.target||0;
-    // Aplicar misma lógica de medio proceso que en los demás módulos
-    const comps = BOM.filter(r => r.sm===sm && r.familia!=='GH90' && componenteNecesario(r, sm, target||1));
-    // Contar como disponible: inv>0 o cubierto por medio proceso
-    const topRanA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
-    const botRanA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
-    const giftA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX'));
-    const lowerA = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX'));
-    const bundleA = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
-    const stripA = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
-    const topRanInvA = topRanA ? (topRanA.inv||0) : 0;
-    const botRanInvA = botRanA ? (botRanA.inv||0) : 0;
-    const giftInvA = giftA ? (giftA.inv||0) : 0;
-    const lowerInvA = lowerA ? (lowerA.inv||0) : 0;
-    const bundleInvA = bundleA ? (bundleA.inv||0) : 0;
-    const stripInvA = stripA ? (stripA.inv||0) : 0;
-
-    // GH90 disponibles: Strip y Bundle
-    const gh90Disp = (stripInvA > 0 ? 1 : 0) + (bundleInvA > 0 ? 1 : 0);
-    const gh90Total = (stripA ? 1 : 0) + (bundleA ? 1 : 0);
-
-    // Componentes no-GH90 disponibles (considerando medio proceso)
-    const conInv = comps.filter(r => {
-      if (r.inv > 0) return true;
-      const d = (r.desc||'').toUpperCase();
-      // Virgen TOP cubierto si Ranurado TOP tiene inv
-      if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInvA > 0) return true;
-      // Virgen BOT cubierto si Ranurado BOT tiene inv
-      if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInvA > 0) return true;
-      return false;
-    }).length;
-
-    const totalComps = comps.length + gh90Total;
-    const totalConInv = conInv + gh90Disp;
-    const pct = totalComps>0?Math.round((totalConInv/totalComps)*100):0;
-    const gh90 = stripA || bundleA;
-    return {sm, gh90:gh90?.pn||'—', gh90desc:gh90?.desc||'', comps:totalComps, conInv:totalConInv, pct, target};
-  }).sort((a,b)=>b.pct-a.pct);
-
-  const assyTbody = rows.map((r,i) => {
-    const color = r.pct===100?'var(--green)':r.pct>=50?'var(--amber)':'var(--red)';
-    const tag = r.pct===100?'<span class="tag tag-ok">✓ LISTO</span>':'<span class="tag tag-err">⚠ INCOMPLETO</span>';
-    return `<tr>
-      <td style="text-align:center;font-family:Rajdhani,sans-serif;font-weight:700;color:${color}">#${i+1}</td>
-      <td style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:11px;overflow:hidden;text-overflow:ellipsis">${r.sm}</td>
-      <td style="font-family:monospace;font-size:10px;color:var(--accent);overflow:hidden;text-overflow:ellipsis">${r.gh90}</td>
-      <td style="font-size:10px;color:var(--text2);overflow:hidden;text-overflow:ellipsis">${r.gh90desc}</td>
-      <td style="text-align:right;color:var(--text2)">${r.comps}</td>
-      <td style="text-align:right;color:${color};font-weight:600">${r.conInv}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div class="prog" style="flex:1"><div class="prog-fill" style="width:${r.pct}%;background:${color}"></div></div>
-          <span style="font-family:Rajdhani,sans-serif;font-weight:700;color:${color};min-width:36px;text-align:right">${r.pct}%</span>
-        </div>
-      </td>
-      <td style="text-align:center">${tag}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('assyList').innerHTML = `<div class="table-wrap"><table class="dt" style="table-layout:fixed;width:100%">
-    <colgroup>
-      <col style="width:45px"><col style="width:160px"><col style="width:110px">
-      <col style="width:auto"><col style="width:65px"><col style="width:65px">
-      <col style="width:180px"><col style="width:100px">
-    </colgroup>
-    <thead><tr>
-      <th style="text-align:center">#</th><th>Modelo SM</th><th>GH90</th><th>Descripción</th>
-      <th style="text-align:right">Total</th><th style="text-align:right">Con Inv.</th>
-      <th>% Disponible</th><th style="text-align:center">Estado</th>
-    </tr></thead>
-    <tbody>${assyTbody}</tbody>
-  </table></div>`;
-
-  document.getElementById('assyEmpty').style.display = 'none';
-  document.getElementById('assyContent').style.display = 'block';
-}
 
 // EXPORT
 function exportarExcel() {
@@ -1447,7 +1437,7 @@ function sincIMS() {
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
     // Actualizar inventarios en BOM si ya está cargado
-    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); }
+    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 
@@ -1480,7 +1470,7 @@ function usarBomActivo() {
     var d = doc.data();
     BOM = JSON.parse(d.bom);
     document.getElementById('semanaRef').value = d.semana||'';
-    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+    renderPreview(); renderSim(); renderCons(); renderProd();
     goTab('sim');
   });
 }
@@ -1535,7 +1525,7 @@ function adminCargarBOM(file) {
         bomData.push({sm:curSM,target:0,pn:codeVal,desc:descVal,familia:fam,inv:inv,plan:'',planta:'Sin Planta',qtyPlan:0,groupNo:isNaN(levelVal)?null:levelVal,isBold:levelVal===1,level:isNaN(levelVal)?2:levelVal,isLevel1:levelVal===1,isLevel2:levelVal===2});
       }
       if (!bomData.length) { statusEl.textContent='❌ No se detectaron componentes'; statusEl.style.color='var(--red)'; return; }
-      BOM=bomData; renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+      BOM=bomData; renderPreview(); renderSim(); renderCons(); renderProd();
       var semMatch=file.name.match(/W(\d+)/i);
       var semana=semMatch?'W'+semMatch[1]:'W—';
       var modelos=[...new Set(bomData.map(function(r){return r.sm;}))].length;
@@ -1561,7 +1551,7 @@ function autoCargarBOM() {
     var d=doc.data(); BOM=JSON.parse(d.bom);
     document.getElementById('semanaRef').value=d.semana||'';
     actualizarInvBOM();
-    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+    renderPreview(); renderSim(); renderCons(); renderProd();
   }).catch(function(){});
 }
 
@@ -1653,7 +1643,8 @@ async function publicarPlan() {
     const vcMats = [];
     if (cbTopV && vcTopToma>0) vcMats.push({pn:cbTopV.pn, desc:cbTopV.desc||'', cant:vcTopToma});
     if (cbBotV && vcBotToma>0) vcMats.push({pn:cbBotV.pn, desc:cbBotV.desc||'', cant:vcBotToma});
-    addLinea('VC', sm, Math.min(vcTopToma,vcBotToma)||vcTopToma||vcBotToma, vcMats);
+    if(vcTopToma>0) addLinea('VC1', sm, vcTopToma, [{pn:cbTopV?.pn||'—', desc:'Chip Board Top (Virgen)', cant:vcTopToma}]);
+    if(vcBotToma>0) addLinea('VC2', sm, vcBotToma, [{pn:cbBotV?.pn||'—', desc:'Chip Board Bottom (Virgen)', cant:vcBotToma}]);
 
     // S1/S2 + Zhongke: Chip Board Top Ranurado (pool + lo que VC ranuró) + Sheet Top
     const topRanDisp = (cbTopR ? pool[cbTopR.pn]||0 : 0) + vcTopToma;

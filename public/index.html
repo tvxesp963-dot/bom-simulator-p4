@@ -1731,6 +1731,112 @@ async function publicarPlan() {
 }
 window.publicarPlan = publicarPlan;
 
+// ── CREAR PARTES NUEVAS EN IMS ──
+// Crea en planta4_inventario las partes del BOM activo que aún no existen.
+// Las partes ya existentes NO se modifican (se preserva su stock real).
+// Estructura idéntica a la del IMS (alta manual).
+function _getDocIdIMS(pn, desc) {
+  return (pn + '_' + (desc||'')).replace(/[.#$[\]/\s]/g,'_').substring(0,100);
+}
+
+async function crearPartesNuevasIMS() {
+  var st = document.getElementById('crearIMSStatus');
+  var btn = document.getElementById('btnCrearIMS');
+  if (!st) return;
+
+  if (!db) { st.textContent='❌ Firebase no conectado'; st.style.color='#ff4444'; return; }
+  if (!BOM || !BOM.length) { st.textContent='⚠️ Primero carga un BOM'; st.style.color='#FFBA00'; return; }
+
+  if (!confirm('Se crearán en el IMS las partes nuevas del BOM con estatus "Pendiente" y stock 0.\nLas partes que ya existen NO se modificarán.\n\n¿Continuar?')) return;
+
+  btn.disabled = true;
+  st.textContent = '⏳ Leyendo inventario del IMS...';
+  st.style.color = '#FFBA00';
+
+  try {
+    // 1. Leer TODAS las partes existentes en IMS (por PN)
+    var snap = await db.collection('planta4_inventario').get();
+    var pnsExistentes = new Set();
+    snap.forEach(function(doc){
+      var d = doc.data();
+      if (d.pn) pnsExistentes.add(d.pn.trim().toUpperCase());
+    });
+
+    // 2. Partes únicas del BOM (deduplicar por PN+DESC)
+    var vistas = new Set();
+    var partesBOM = [];
+    BOM.forEach(function(r){
+      if (!r.pn) return;
+      var key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+      if (vistas.has(key)) return;
+      vistas.add(key);
+      partesBOM.push(r);
+    });
+
+    // 3. Filtrar las que NO existen en IMS
+    var nuevas = partesBOM.filter(function(r){
+      return !pnsExistentes.has(r.pn.trim().toUpperCase());
+    });
+
+    if (!nuevas.length) {
+      st.innerHTML = '✅ Todas las partes del BOM ya existen en el IMS<br>' +
+        '<span style="font-size:11px;color:var(--text2)">Verificadas: '+partesBOM.length+'</span>';
+      st.style.color = '#00e676';
+      btn.disabled = false;
+      return;
+    }
+
+    st.textContent = '⏳ Creando '+nuevas.length+' partes nuevas en el IMS...';
+
+    // 4. Crear en batch (rápido)
+    var semana = document.getElementById('semanaRef').value || 'BOM';
+    var fechaISO = new Date().toISOString();
+    var batch = db.batch();
+    nuevas.forEach(function(r){
+      var ni = {
+        pn: r.pn,
+        desc: r.desc || '',
+        familia: r.familia || 'OTRO',
+        inicial: 0,
+        precio: 0,
+        estatus: 'Pendiente',
+        ubicacion: 'Almacén',
+        entradas: 0,
+        salidas: 0,
+        actual: 0,
+        historial: [{
+          tipo: 'INI',
+          fecha: fechaISO,
+          qty: 0,
+          loc: 'Almacén',
+          user: 'BOM Simulator',
+          ref: 'Alta desde BOM ' + semana
+        }]
+      };
+      var docId = _getDocIdIMS(ni.pn, ni.desc);
+      batch.set(db.collection('planta4_inventario').doc(docId), ni);
+    });
+    await batch.commit();
+
+    st.innerHTML = '✅ Sincronización completa<br>' +
+      '<span style="font-size:11px;color:var(--text2)">Nuevas creadas: <b style="color:#00e676">'+nuevas.length+'</b> · ' +
+      'Ya existían: <b>'+(partesBOM.length-nuevas.length)+'</b> · ' +
+      'Total BOM: '+partesBOM.length+'</span>';
+    st.style.color = '#00e676';
+
+    // Refrescar sincronización para que el header IMS muestre el nuevo total
+    if (typeof sincIMS === 'function') sincIMS();
+
+  } catch(err) {
+    st.textContent = '❌ Error: ' + err.message;
+    st.style.color = '#ff4444';
+    console.error('crearPartesNuevasIMS:', err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+window.crearPartesNuevasIMS = crearPartesNuevasIMS;
+
 window.addEventListener('DOMContentLoaded', function() {
   cargarTargets(); setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
 });
@@ -1761,6 +1867,15 @@ window.addEventListener('DOMContentLoaded', function() {
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('adminFileInput').value='';document.getElementById('adminFileInput').click()">📁 Seleccionar archivo</button>
       </div>
       <div id="adminUploadStatus" style="margin-top:.75rem;font-size:13px"></div>
+    </div>
+    <div class="card" style="margin-top:1rem;background:rgba(0,230,118,.06);border-color:rgba(0,230,118,.25)">
+      <div class="card-title" style="color:#00e676">🔄 Crear Partes Nuevas en IMS</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
+        Crea en el IMS las partes del BOM activo que aún no existen, con estatus <b style="color:var(--text)">Pendiente</b> y stock 0.<br>
+        Las partes que ya existen en el IMS <b style="color:var(--text)">NO se modifican</b> (se preserva su stock real).
+      </div>
+      <button id="btnCrearIMS" class="btn btn-primary btn-sm" onclick="crearPartesNuevasIMS()" style="background:rgba(0,230,118,.2);border-color:rgba(0,230,118,.4);color:#00e676">🔄 Crear Partes Nuevas</button>
+      <div id="crearIMSStatus" style="margin-top:.75rem;font-size:13px"></div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(26,111,212,.06);border-color:rgba(26,111,212,.2)">
       <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:.5rem">ESTRUCTURA ESPERADA</div>

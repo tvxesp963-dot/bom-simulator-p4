@@ -2003,6 +2003,9 @@ async function guardarAdmEdit() {
     st.style.color = '#00e676';
     cerrarAdmEditModal();
 
+    // Toast visible
+    _admMostrarToast('✅ Cambios guardados · '+oldPN+' → '+newPN, 'success');
+
     // 3. Refrescar UI
     if (typeof sincIMS === 'function') sincIMS();
     renderAdminPartes();
@@ -2066,6 +2069,13 @@ async function eliminarAdmParte(idx) {
     st.innerHTML = '✅ Parte eliminada del BOM' + (puedeBorrarIMS ? ' y del IMS' : '');
     st.style.color = '#00e676';
 
+    // Mostrar toast visible arriba
+    _admMostrarToast('✅ Cambios guardados · Parte "' + r.pn + '" eliminada' + (puedeBorrarIMS ? ' (BOM + IMS)' : ' (solo BOM)'), 'success');
+
+    // Limpiar filtro de búsqueda para evitar confusión visual
+    var searchEl = document.getElementById('admPartSearch');
+    if (searchEl) searchEl.value = '';
+
     // 3. Refrescar
     if (typeof sincIMS === 'function') sincIMS();
     renderAdminPartes();
@@ -2097,6 +2107,39 @@ window.abrirAdmEdit = abrirAdmEdit;
 window.cerrarAdmEditModal = cerrarAdmEditModal;
 window.guardarAdmEdit = guardarAdmEdit;
 window.eliminarAdmParte = eliminarAdmParte;
+
+// Toast visible para confirmar cambios
+function _admMostrarToast(msg, tipo) {
+  var existing = document.getElementById('_admToast');
+  if (existing) existing.remove();
+  var color = tipo==='success'?'#00e676':tipo==='error'?'#ff4444':'#FFBA00';
+  var bg = tipo==='success'?'rgba(0,230,118,.12)':tipo==='error'?'rgba(255,68,68,.12)':'rgba(255,186,0,.12)';
+  var t = document.createElement('div');
+  t.id = '_admToast';
+  t.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:99999;'+
+    'background:'+bg+';color:'+color+';border:1px solid '+color+';border-radius:8px;'+
+    'padding:.8rem 1.4rem;font-size:13px;font-weight:600;'+
+    'box-shadow:0 4px 20px rgba(0,0,0,.4);'+
+    'animation:admToastIn .25s ease-out;backdrop-filter:blur(8px)';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  // Auto-cerrar a los 4 segundos con fade-out
+  setTimeout(function(){
+    t.style.transition = 'opacity .35s ease,transform .35s ease';
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(-10px)';
+    setTimeout(function(){ if (t.parentNode) t.remove(); }, 350);
+  }, 4000);
+}
+// Inyectar animación de entrada
+(function(){
+  if (document.getElementById('_admToastCSS')) return;
+  var s = document.createElement('style');
+  s.id = '_admToastCSS';
+  s.textContent = '@keyframes admToastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+  document.head.appendChild(s);
+})();
+window._admMostrarToast = _admMostrarToast;
 
 // Auto-renderizar al entrar al panel Admin (después de validar contraseña)
 (function(){

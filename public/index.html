@@ -1837,6 +1837,279 @@ async function crearPartesNuevasIMS() {
 }
 window.crearPartesNuevasIMS = crearPartesNuevasIMS;
 
+// ── ADMINISTRAR PARTES DEL BOM ACTIVO ──
+// Edita o elimina partes del BOM activo y replica el cambio en el IMS.
+var _admEditIdx = -1;
+
+function _admGetDocIdIMS(pn, desc) {
+  return (pn + '_' + (desc||'')).replace(/[.#$[\]/\s]/g,'_').substring(0,100);
+}
+
+function _admGetStockIMS(pn, desc) {
+  if (typeof imsInventario === 'undefined' || !imsInventario) return null;
+  var p = (pn||'').trim().toUpperCase();
+  var d = (desc||'').trim().toUpperCase();
+  if (d && imsInventario[p+'||'+d] !== undefined) return imsInventario[p+'||'+d];
+  if (imsInventario[p] !== undefined) return imsInventario[p];
+  return null;
+}
+
+function renderAdminPartes() {
+  var body = document.getElementById('admPartBody');
+  var foot = document.getElementById('admPartFoot');
+  if (!body || !foot) return;
+
+  if (!BOM || !BOM.length) {
+    body.innerHTML = '<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--text2)">No hay BOM activo cargado</td></tr>';
+    foot.textContent = '';
+    return;
+  }
+
+  var q = (document.getElementById('admPartSearch').value||'').trim().toUpperCase();
+  var fam = document.getElementById('admPartFam').value;
+
+  var html = '';
+  var visibles = 0;
+  BOM.forEach(function(r, idx) {
+    if (!r.pn) return;
+    if (fam && r.familia !== fam) return;
+    if (q) {
+      var hay = (r.pn||'').toUpperCase().indexOf(q)>=0 ||
+                (r.desc||'').toUpperCase().indexOf(q)>=0 ||
+                (r.sm||'').toUpperCase().indexOf(q)>=0;
+      if (!hay) return;
+    }
+    visibles++;
+    var stock = _admGetStockIMS(r.pn, r.desc);
+    var stockTxt, stockColor;
+    if (stock === null) { stockTxt = '— Sin IMS'; stockColor = 'var(--text2)'; }
+    else if (stock === 0) { stockTxt = '0'; stockColor = '#FFBA00'; }
+    else { stockTxt = stock.toLocaleString(); stockColor = '#00e676'; }
+
+    var famColor = r.familia==='GH90'?'rgba(168,85,247,.2)':
+                   r.familia==='GH69'?'rgba(0,230,118,.2)':
+                   r.familia==='GH68'?'rgba(26,111,212,.2)':'rgba(150,150,150,.2)';
+    var famText  = r.familia==='GH90'?'#a855f7':
+                   r.familia==='GH69'?'#00e676':
+                   r.familia==='GH68'?'#1A6FD4':'#888';
+
+    html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05)">' +
+      '<td style="padding:.4rem .5rem;color:var(--text2);font-size:10px">'+(r.sm||'')+'</td>' +
+      '<td style="padding:.4rem .5rem;font-family:\'IBM Plex Mono\',monospace;color:var(--text)">'+r.pn+'</td>' +
+      '<td style="padding:.4rem .5rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.desc||'').replace(/"/g,'&quot;')+'">'+(r.desc||'')+'</td>' +
+      '<td style="padding:.4rem .5rem;text-align:center"><span style="background:'+famColor+';color:'+famText+';padding:.15rem .5rem;border-radius:4px;font-size:10px;font-weight:600">'+(r.familia||'—')+'</span></td>' +
+      '<td style="padding:.4rem .5rem;text-align:right;font-family:\'IBM Plex Mono\',monospace;color:'+stockColor+'">'+stockTxt+'</td>' +
+      '<td style="padding:.4rem .5rem;text-align:center;white-space:nowrap">' +
+        '<button onclick="abrirAdmEdit('+idx+')" title="Editar" style="background:rgba(26,111,212,.15);border:1px solid rgba(26,111,212,.4);color:#5BA3FF;border-radius:4px;padding:.2rem .45rem;font-size:11px;cursor:pointer;margin-right:.2rem">✏️</button>' +
+        '<button onclick="eliminarAdmParte('+idx+')" title="Eliminar" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.4);color:#ff6b6b;border-radius:4px;padding:.2rem .45rem;font-size:11px;cursor:pointer">🗑️</button>' +
+      '</td>' +
+    '</tr>';
+  });
+
+  if (!html) html = '<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--text2)">No hay partes que coincidan con el filtro</td></tr>';
+  body.innerHTML = html;
+  foot.textContent = 'Mostrando '+visibles+' de '+BOM.length+' componentes del BOM activo';
+}
+
+function abrirAdmEdit(idx) {
+  var r = BOM[idx];
+  if (!r) return;
+  _admEditIdx = idx;
+  document.getElementById('admEditOriginal').innerHTML =
+    '<b style="color:var(--text)">Original:</b> ' + r.pn + ' · ' + (r.desc||'') + ' · ' + (r.familia||'—') + '<br>' +
+    '<span style="color:var(--text2)">Modelo: '+(r.sm||'')+'</span>';
+  document.getElementById('admEditPN').value = r.pn || '';
+  document.getElementById('admEditDesc').value = r.desc || '';
+  document.getElementById('admEditFam').value = r.familia || 'OTRO';
+  document.getElementById('admEditWarning').style.display = 'none';
+
+  // Avisar si cambia el PN y existe en IMS con stock
+  var stock = _admGetStockIMS(r.pn, r.desc);
+  if (stock !== null && stock > 0) {
+    var w = document.getElementById('admEditWarning');
+    w.innerHTML = '⚠️ Esta parte tiene stock en IMS ('+stock.toLocaleString()+'). ' +
+      'Si cambias el PN, se renombrará el documento en IMS preservando el stock e historial. ' +
+      'Si solo cambias descripción o familia, también se actualiza en IMS.';
+    w.style.display = 'block';
+  }
+
+  document.getElementById('admEditModal').style.display = 'flex';
+}
+
+function cerrarAdmEditModal() {
+  document.getElementById('admEditModal').style.display = 'none';
+  _admEditIdx = -1;
+}
+
+async function guardarAdmEdit() {
+  if (_admEditIdx < 0) return;
+  var r = BOM[_admEditIdx];
+  if (!r) return;
+
+  var newPN = (document.getElementById('admEditPN').value||'').trim();
+  var newDesc = (document.getElementById('admEditDesc').value||'').trim();
+  var newFam = document.getElementById('admEditFam').value;
+  if (!newPN) { alert('El PN no puede estar vacío'); return; }
+
+  var st = document.getElementById('admPartStatus');
+  var btn = document.getElementById('admEditSaveBtn');
+  var oldPN = r.pn, oldDesc = r.desc||'', oldFam = r.familia||'';
+
+  // Si no cambió nada, cerrar
+  if (newPN === oldPN && newDesc === oldDesc && newFam === oldFam) {
+    cerrarAdmEditModal();
+    return;
+  }
+
+  btn.disabled = true;
+  st.textContent = '⏳ Guardando cambios...';
+  st.style.color = '#FFBA00';
+
+  try {
+    // 1. Detectar cambios en IMS
+    var oldDocId = _admGetDocIdIMS(oldPN, oldDesc);
+    var newDocId = _admGetDocIdIMS(newPN, newDesc);
+    var imsRef = db.collection('planta4_inventario').doc(oldDocId);
+    var imsSnap = await imsRef.get();
+
+    if (imsSnap.exists) {
+      var imsData = imsSnap.data();
+      if (oldDocId === newDocId) {
+        // Misma clave: solo actualizar familia
+        await imsRef.update({ familia: newFam });
+      } else {
+        // Cambió PN o desc: crear nuevo doc preservando datos y borrar el viejo
+        var nuevo = Object.assign({}, imsData, { pn: newPN, desc: newDesc, familia: newFam });
+        nuevo.historial = (imsData.historial||[]).concat([{
+          tipo: 'EDIT',
+          fecha: new Date().toISOString(),
+          qty: 0,
+          loc: imsData.ubicacion||'Almacén',
+          user: 'BOM Simulator',
+          ref: 'Editado: '+oldPN+' → '+newPN
+        }]);
+        await db.collection('planta4_inventario').doc(newDocId).set(nuevo);
+        await imsRef.delete();
+      }
+    }
+
+    // 2. Actualizar BOM local y guardar en Firebase
+    BOM[_admEditIdx].pn = newPN;
+    BOM[_admEditIdx].desc = newDesc;
+    BOM[_admEditIdx].familia = newFam;
+    await _admGuardarBomActivo();
+
+    st.innerHTML = '✅ Parte actualizada: <b>'+newPN+'</b>';
+    st.style.color = '#00e676';
+    cerrarAdmEditModal();
+
+    // 3. Refrescar UI
+    if (typeof sincIMS === 'function') sincIMS();
+    renderAdminPartes();
+    if (typeof renderPreview === 'function') renderPreview();
+    if (typeof renderSim === 'function') renderSim();
+    if (typeof renderCons === 'function') renderCons();
+    if (typeof renderProd === 'function') renderProd();
+
+  } catch(err) {
+    st.textContent = '❌ Error: '+err.message;
+    st.style.color = '#ff4444';
+    console.error('guardarAdmEdit:', err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function eliminarAdmParte(idx) {
+  var r = BOM[idx];
+  if (!r) return;
+
+  var stock = _admGetStockIMS(r.pn, r.desc);
+  var docId = _admGetDocIdIMS(r.pn, r.desc);
+  var imsRef = db.collection('planta4_inventario').doc(docId);
+  var imsSnap = await imsRef.get();
+  var imsExiste = imsSnap.exists;
+  var imsEstatus = imsExiste ? (imsSnap.data().estatus||'') : '';
+  var imsStock = imsExiste ? (imsSnap.data().actual||0) : 0;
+
+  // Construir mensaje según condición
+  var puedeBorrarIMS = imsExiste && imsEstatus === 'Pendiente' && imsStock === 0;
+  var msg = 'Eliminar parte del BOM activo:\n\n' +
+    'PN: ' + r.pn + '\n' +
+    'Descripción: ' + (r.desc||'(sin descripción)') + '\n' +
+    'Modelo: ' + (r.sm||'') + '\n\n';
+
+  if (!imsExiste) {
+    msg += '✅ No existe en IMS, solo se borrará del BOM.';
+  } else if (puedeBorrarIMS) {
+    msg += '✅ En IMS: estatus "Pendiente" con stock 0 → se borrará también del IMS.';
+  } else {
+    msg += '⚠️ La parte EXISTE en IMS con estatus "'+imsEstatus+'" y stock '+imsStock.toLocaleString()+'.\n' +
+           'Solo se borrará del BOM activo. NO se borrará del IMS para no perder stock real.';
+  }
+  msg += '\n\n¿Continuar?';
+
+  if (!confirm(msg)) return;
+
+  var st = document.getElementById('admPartStatus');
+  st.textContent = '⏳ Eliminando...';
+  st.style.color = '#FFBA00';
+
+  try {
+    // 1. Borrar de IMS si aplica
+    if (puedeBorrarIMS) await imsRef.delete();
+
+    // 2. Borrar del BOM local
+    BOM.splice(idx, 1);
+    await _admGuardarBomActivo();
+
+    st.innerHTML = '✅ Parte eliminada del BOM' + (puedeBorrarIMS ? ' y del IMS' : '');
+    st.style.color = '#00e676';
+
+    // 3. Refrescar
+    if (typeof sincIMS === 'function') sincIMS();
+    renderAdminPartes();
+    if (typeof renderPreview === 'function') renderPreview();
+    if (typeof renderSim === 'function') renderSim();
+    if (typeof renderCons === 'function') renderCons();
+    if (typeof renderProd === 'function') renderProd();
+
+  } catch(err) {
+    st.textContent = '❌ Error: '+err.message;
+    st.style.color = '#ff4444';
+    console.error('eliminarAdmParte:', err);
+  }
+}
+
+async function _admGuardarBomActivo() {
+  if (!db) throw new Error('Firebase no conectado');
+  var semana = (document.getElementById('semanaRef')||{}).value || '';
+  await db.collection('bom_simulator_p4').doc('bom_activo').set({
+    bom: JSON.stringify(BOM),
+    semana: semana,
+    fecha: new Date().toISOString(),
+    editadoPor: 'Admin BOM'
+  }, { merge: true });
+}
+
+window.renderAdminPartes = renderAdminPartes;
+window.abrirAdmEdit = abrirAdmEdit;
+window.cerrarAdmEditModal = cerrarAdmEditModal;
+window.guardarAdmEdit = guardarAdmEdit;
+window.eliminarAdmParte = eliminarAdmParte;
+
+// Auto-renderizar al entrar al panel Admin (después de validar contraseña)
+(function(){
+  var oldCheck = window.checkAdminKey;
+  if (typeof oldCheck === 'function') {
+    window.checkAdminKey = function() {
+      var r = oldCheck.apply(this, arguments);
+      setTimeout(function(){ try { renderAdminPartes(); } catch(e){} }, 100);
+      return r;
+    };
+  }
+})();
+
 window.addEventListener('DOMContentLoaded', function() {
   cargarTargets(); setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
 });
@@ -1877,6 +2150,74 @@ window.addEventListener('DOMContentLoaded', function() {
       <button id="btnCrearIMS" class="btn btn-primary btn-sm" onclick="crearPartesNuevasIMS()" style="background:rgba(0,230,118,.2);border-color:rgba(0,230,118,.4);color:#00e676">🔄 Crear Partes Nuevas</button>
       <div id="crearIMSStatus" style="margin-top:.75rem;font-size:13px"></div>
     </div>
+    <div class="card" style="margin-top:1rem;background:rgba(212,87,140,.06);border-color:rgba(212,87,140,.25)">
+      <div class="card-title" style="color:#D4578C">🗂️ Administrar Partes del BOM Activo</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
+        Editar o eliminar partes del BOM activo. Si la parte existe en IMS, también se actualiza/elimina ahí.<br>
+        <b style="color:var(--text)">Eliminación segura:</b> solo se borra del IMS si está en estatus "Pendiente" con stock 0.
+      </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap">
+        <input id="admPartSearch" type="text" placeholder="Buscar PN, descripción o modelo..." oninput="renderAdminPartes()" style="flex:1;min-width:180px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.4rem .6rem;color:var(--text);font-size:12px">
+        <select id="admPartFam" onchange="renderAdminPartes()" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.4rem .6rem;color:var(--text);font-size:12px;min-width:120px">
+          <option value="">Todas familias</option>
+          <option value="GH68">GH68</option>
+          <option value="GH69">GH69</option>
+          <option value="GH90">GH90</option>
+          <option value="OTRO">OTRO</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="renderAdminPartes()" style="font-size:11px">🔄 Refrescar</button>
+      </div>
+      <div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <table id="admPartTbl" style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead style="position:sticky;top:0;background:var(--card);z-index:1">
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600">Modelo</th>
+              <th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600">PN</th>
+              <th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600">Descripción</th>
+              <th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600">Familia</th>
+              <th style="text-align:right;padding:.5rem;color:var(--text2);font-weight:600">Stock IMS</th>
+              <th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="admPartBody"></tbody>
+        </table>
+      </div>
+      <div id="admPartFoot" style="margin-top:.5rem;font-size:11px;color:var(--text2);text-align:center"></div>
+      <div id="admPartStatus" style="margin-top:.5rem;font-size:12px"></div>
+    </div>
+
+    <!-- Modal de edición de parte -->
+    <div id="admEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;padding:1rem">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.25rem;max-width:480px;width:100%">
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:.75rem">✏️ Editar parte del BOM</div>
+        <div id="admEditOriginal" style="font-size:11px;color:var(--text2);margin-bottom:1rem;padding:.5rem;background:rgba(255,255,255,.03);border-radius:6px"></div>
+        <div style="display:grid;gap:.6rem">
+          <div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">PN</label>
+            <input id="admEditPN" type="text" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">Descripción</label>
+            <input id="admEditDesc" type="text" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">Familia</label>
+            <select id="admEditFam" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px">
+              <option value="GH68">GH68</option>
+              <option value="GH69">GH69</option>
+              <option value="GH90">GH90</option>
+              <option value="OTRO">OTRO</option>
+            </select>
+          </div>
+          <div id="admEditWarning" style="display:none;font-size:11px;color:#FFBA00;padding:.5rem;background:rgba(255,186,0,.08);border:1px solid rgba(255,186,0,.25);border-radius:6px;line-height:1.5"></div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end">
+          <button class="btn btn-secondary btn-sm" onclick="cerrarAdmEditModal()">Cancelar</button>
+          <button id="admEditSaveBtn" class="btn btn-primary btn-sm" onclick="guardarAdmEdit()">💾 Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card" style="margin-top:1rem;background:rgba(26,111,212,.06);border-color:rgba(26,111,212,.2)">
       <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:.5rem">ESTRUCTURA ESPERADA</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.8">

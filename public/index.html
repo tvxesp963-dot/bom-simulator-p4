@@ -1060,8 +1060,6 @@ function renderCons() {
       const giftBoxCC_inv = giftBoxCC ? (giftBoxCC.inv||0) : 0;
       const lowerBoxCC_inv = lowerBoxCC ? (lowerBoxCC.inv||0) : 0;
 
-      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && r.inv < target && componenteNecesario(r, sm, target));
-
       // GH90 para P3: Bundle (ensamble padre)
       const bundleRows = pl.key === 'P3'
         ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'))
@@ -1072,30 +1070,76 @@ function renderCons() {
       const bundleInvDisp = bundle ? (poolPlanta[(bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase()] ?? (bundle.inv||0)) : 0;
 
       if (pl.key === 'P3' && bundle && bundleInvDisp >= target) {
-        // Descontar del pool aunque no necesite producir
         const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
         poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - target);
         return;
       }
 
-      // Cuánto falta producir según el Bundle disponible en pool
+      // targetReal para cada grupo = target - lo ya producido (header inv)
+      // P3: necesitaProducir = target - bundle inv
       const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundleInvDisp) : target;
+
+      // P1: targetReal por grupo usando header (Gift Box / Lower Box)
+      // Gift Box group targetReal
+      const targetRealTop = Math.max(0, target - giftBoxCC_inv);
+      // Lower Box group targetReal
+      const targetRealBot = Math.max(0, target - lowerBoxCC_inv);
+
       // Descontar Bundle del pool
       if (bundle) {
         const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
         poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - Math.min(bundleInvDisp, target));
       }
 
-      // Componentes P3: calculados contra necesitaProducir (no target completo)
+      // Función para obtener targetReal correcto según descripción del componente
+      const getTargetReal = (r) => {
+        const d = (r.desc||'').toUpperCase();
+        if (d.includes('CHIP BOARD TOP') || d.includes('SHEET TOP') || d.includes('GIFT BOX')) return targetRealTop;
+        if (d.includes('CHIP BOARD BOTTOM') || d.includes('SHEET LOWER') || d.includes('LOWER BOX')) return targetRealBot;
+        if (pl.key === 'P3') return necesitaProducir;
+        return target;
+      };
+
+      // Sheet: inventario real = físico + ya incorporado en header
+      const getInvReal = (r) => {
+        const d = (r.desc||'').toUpperCase();
+        if (d.includes('SHEET TOP')) return (r.inv||0) + giftBoxCC_inv;
+        if (d.includes('SHEET LOWER')) return (r.inv||0) + lowerBoxCC_inv;
+        return r.inv||0;
+      };
+
+      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target))
+        .filter(r => {
+          const tgt = getTargetReal(r);
+          const inv = getInvReal(r);
+          // Virgen: excluir si ranurado del mismo grupo cubre el targetReal
+          const d = (r.desc||'').toUpperCase();
+          if (d.includes('VIRGEN') || d.includes('VIRGIN')) {
+            const esTop = d.includes('CHIP BOARD TOP');
+            const esBot = d.includes('CHIP BOARD BOTTOM');
+            const tgtGrupo = esTop ? targetRealTop : esBot ? targetRealBot : tgt;
+            const ranuradoDesc = esTop ? 'CHIP BOARD TOP' : 'CHIP BOARD BOTTOM';
+            const ranurado = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(ranuradoDesc) && ((b.desc||'').toUpperCase().includes('RANURADO') || (b.desc||'').toUpperCase().includes('GROOVING')));
+            const ranuradoInv = ranurado ? (ranurado.inv||0) : 0;
+            if (ranuradoInv >= tgtGrupo) return false; // ranurado cubre solo, virgen no se pide
+          }
+          return inv < tgt;
+        });
+
       const rowsP3 = pl.key === 'P3'
         ? BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90')
-            .filter(r => r.inv < necesitaProducir)
+            .filter(r => (r.inv||0) < necesitaProducir)
         : [];
       const rowsActual = pl.key === 'P3' ? rowsP3 : rows;
 
       if (!rowsActual.length && !bundleRows.filter(r=>r.inv<target).length) return;
 
-      const rowsCalc = rowsActual.map(r => ({...r, falta: necesitaProducir - r.inv, aPedir: Math.ceil((necesitaProducir - r.inv) * EXTRA)}));
+      const rowsCalc = rowsActual.map(r => {
+        const tgt = getTargetReal(r);
+        const inv = getInvReal(r);
+        const falta = tgt - inv;
+        return {...r, inv: inv, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
+      });
       const bundleCalc = bundleRows.map(r => ({...r, inv: bundleInvDisp, falta: Math.max(0, target - bundleInvDisp), aPedir: bundleInvDisp < target ? Math.ceil((target - bundleInvDisp) * EXTRA) : 0}));
 
       const totalPedir = [...rowsCalc, ...bundleCalc].reduce((s,r) => s + (r.aPedir||0), 0);

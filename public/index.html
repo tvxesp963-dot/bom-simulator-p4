@@ -136,6 +136,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div style="display:flex;gap:.5rem">
     <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
+    <button class="btn btn-sm" id="btnReset" onclick="resetearSimulador()" style="display:none;background:rgba(255,68,68,.12);border:1px solid rgba(255,68,68,.3);color:var(--red)">🗑 Limpiar BOM</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
   </div>
 </div>
@@ -448,7 +449,41 @@ function procesarBOM() {
 
   renderPreview(); renderSim(); renderCons(); renderProd();
   document.getElementById('btnExport').style.display = 'flex';
+  document.getElementById('btnReset').style.display = 'flex';
 }
+
+// RESET
+function resetearSimulador() {
+  if (!confirm('¿Borrar el BOM cargado y empezar de nuevo?')) return;
+  BOM = [];
+  workbook = null;
+  // Ocultar botones de acción
+  document.getElementById('btnExport').style.display = 'none';
+  document.getElementById('btnReset').style.display = 'none';
+  // Resetear file input y chip
+  const fi = document.getElementById('fi');
+  if (fi) fi.value = '';
+  document.getElementById('fileChip').innerHTML = '';
+  document.getElementById('sheetSel').innerHTML = '<option value="master">master</option>';
+  document.getElementById('semanaRef').value = '';
+  // Resetear preview
+  document.getElementById('previewArea').innerHTML =
+    '<div class="empty"><div class="empty-icon">📂</div><div class="empty-title">Sin archivo cargado</div><div class="empty-sub">Sube tu Excel BOM para ver la estructura</div></div>';
+  // Volver a estado vacío en tabs
+  document.getElementById('simEmpty').style.display = '';
+  document.getElementById('simContent').style.display = 'none';
+  const consEmpty = document.getElementById('consEmpty');
+  const consContent = document.getElementById('consContent');
+  if (consEmpty) consEmpty.style.display = '';
+  if (consContent) consContent.style.display = 'none';
+  const prodEmpty = document.getElementById('prodEmpty');
+  const prodContent = document.getElementById('prodContent');
+  if (prodEmpty) prodEmpty.style.display = '';
+  if (prodContent) prodContent.style.display = 'none';
+  // Ir al tab de carga
+  goTab('upload');
+}
+window.resetearSimulador = resetearSimulador;
 
 // PREVIEW
 function renderPreview() {

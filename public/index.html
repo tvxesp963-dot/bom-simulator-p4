@@ -875,8 +875,8 @@ function renderSimTable() {
     const esGrupoChipBot = g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM'));
     const esGrupoConPool = esGrupoChipTop || esGrupoChipBot;
     // Requerido real = target - lo que ya está producido (inventario del header)
-    const headerInvMedioProceso = esGrupoConPool ? (header ? (header.inv || 0) : 0) : 0;
-    const targetReal = esGrupoConPool ? Math.max(0, targetSim2 - headerInvMedioProceso) : targetSim2;
+    const headerInvMedioProceso = header ? (header.inv || 0) : 0;
+    const targetReal = Math.max(0, targetSim2 - headerInvMedioProceso);
     // Pool = suma de inventarios de sub-variantes solamente
     const poolGrupo = esGrupoConPool
       ? g.subs.reduce((sum, s) => sum + (s.inv || 0), 0)
@@ -967,7 +967,8 @@ function renderSimTable() {
     }
     const rows = [];
     if(passFilter(bundleHeader)) rows.push(rowHTML(bundleHeader, false));
-    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true)); });
+    const bundleTargetReal = Math.max(0, targetSim2 - (bundleHeader ? (bundleHeader.inv || 0) : 0));
+    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true, false, null, bundleTargetReal)); });
     if(rows.length > 0) secBUNDLE.push(rows.join(''));
   });
 

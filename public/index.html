@@ -924,14 +924,16 @@ function renderSimTable() {
         if(passFilter(s) || !sheetOK) rows.push(rowHTML(sWithRealInv, true, false, null, targetSim2));
       } else if (esChipBoard) {
         const esRanurado = sDesc.includes('RANURADO') || sDesc.includes('GROOVING');
-        // Virgen: OK si ranurado solo cubre, VC si pool cubre pero ranurado no alcanza solo
-        const virgenOK = esVirgen && ranuradoSoloCubre;
-        const virgenVC = esVirgen && chipPoolCubre && !ranuradoSoloCubre;
-        // Ranurado: OK solo si su inventario cubre targetReal, sino VC (diferencia viene de procesar Virgen)
+        const sInv = s.inv || 0;
+        // Virgen: OK si tiene inventario suficiente (positivo vs targetReal)
+        const virgenOK = esVirgen && sInv >= targetReal;
+        // Virgen con inventario pero no suficiente solo — OK si ranurado cubre el resto
+        const virgenSuficiente = esVirgen && sInv > 0;
+        // Ranurado: OK si cubre targetReal solo, VC si no cubre pero pool (virgen) suple la diferencia
         const ranuradoOK = esRanurado && ranuradoSoloCubre;
         const ranuradoVC = esRanurado && !ranuradoSoloCubre && chipPoolCubre;
-        const subPoolOK = virgenOK || ranuradoOK;
-        const subVcTag = (virgenVC || ranuradoVC) ? vcTagLabel : null;
+        const subPoolOK = virgenOK || virgenSuficiente || ranuradoOK;
+        const subVcTag = ranuradoVC ? vcTagLabel : null;
         if(passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal));
       } else {
         // Otros sub-componentes: evaluación individual con targetReal

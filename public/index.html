@@ -768,9 +768,10 @@ function renderSimTable() {
     </td>
   </tr>`;
 
-  const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null) => {
+  const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null, invOverride=null) => {
     const tgt = targetOverride !== null ? targetOverride : target;
-    const diff = r.familia === 'GH90' ? null : r.inv - tgt;
+    const invForDiff = invOverride !== null ? invOverride : r.inv;
+    const diff = r.familia === 'GH90' ? null : invForDiff - tgt;
     const dc = diff===null?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
     const dtxt = diff===null?'—':poolOK&&diff<0?'Pool OK':(diff>=0?'+':'')+diff.toLocaleString();
     const estado = r.familia==='GH90'
@@ -920,8 +921,8 @@ function renderSimTable() {
         const sheetInvReal = (s.inv || 0) + headerYaProducido;
         const sheetDiff = sheetInvReal - targetSim2; // contra target completo
         const sheetOK = sheetDiff >= 0;
-        const sWithRealInv = Object.assign({}, s, { inv: sheetInvReal });
-        if(passFilter(s) || !sheetOK) rows.push(rowHTML(sWithRealInv, true, false, null, targetSim2));
+        // Mostrar inventario fisico real, no la suma
+        if(passFilter(s) || !sheetOK) rows.push(rowHTML(s, true, false, null, targetSim2, sheetInvReal));
       } else if (esChipBoard) {
         const esRanurado = sDesc.includes('RANURADO') || sDesc.includes('GROOVING');
         const sInv = s.inv || 0;
@@ -1140,12 +1141,14 @@ function renderCons() {
 
       const rowsCalc = rowsActual.map(r => {
         const d2 = (r.desc||'').toUpperCase();
-        // Header (Gift Box / Lower Box) siempre: falta = target - inv_fisico
         const isHeader = d2.includes('GIFT BOX') || d2.includes('LOWER BOX');
         const tgt = isHeader ? target : getTargetReal(r);
-        const inv = isHeader ? (r.inv||0) : getInvReal(r);
-        const falta = tgt - inv;
-        return {...r, inv: inv, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
+        // Para diferencia usar inventario real (fisico + ya producido en header)
+        const invParaDiff = isHeader ? (r.inv||0) : getInvReal(r);
+        // Para mostrar en columna inventario: siempre el fisico del IMS
+        const invDisplay = r.inv || 0;
+        const falta = tgt - invParaDiff;
+        return {...r, inv: invDisplay, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
       });
       const bundleCalc = bundleRows.map(r => ({...r, inv: bundleInvDisp, falta: Math.max(0, target - bundleInvDisp), aPedir: bundleInvDisp < target ? Math.ceil((target - bundleInvDisp) * EXTRA) : 0}));
 

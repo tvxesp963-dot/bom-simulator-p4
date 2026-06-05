@@ -1094,8 +1094,12 @@ function renderCons() {
       // Función para obtener targetReal correcto según descripción del componente
       const getTargetReal = (r) => {
         const d = (r.desc||'').toUpperCase();
-        if (d.includes('CHIP BOARD TOP') || d.includes('SHEET TOP') || d.includes('GIFT BOX')) return targetRealTop;
-        if (d.includes('CHIP BOARD BOTTOM') || d.includes('SHEET LOWER') || d.includes('LOWER BOX')) return targetRealBot;
+        // Header (Gift Box / Lower Box) siempre contra target completo
+        if (d.includes('GIFT BOX') || d.includes('LOWER BOX')) return target;
+        // Sub-componentes TOP usan targetRealTop
+        if (d.includes('CHIP BOARD TOP') || d.includes('SHEET TOP')) return targetRealTop;
+        // Sub-componentes BOT usan targetRealBot
+        if (d.includes('CHIP BOARD BOTTOM') || d.includes('SHEET LOWER')) return targetRealBot;
         if (pl.key === 'P3') return necesitaProducir;
         return target;
       };
@@ -1135,8 +1139,11 @@ function renderCons() {
       if (!rowsActual.length && !bundleRows.filter(r=>r.inv<target).length) return;
 
       const rowsCalc = rowsActual.map(r => {
-        const tgt = getTargetReal(r);
-        const inv = getInvReal(r);
+        const d2 = (r.desc||'').toUpperCase();
+        // Header (Gift Box / Lower Box) siempre: falta = target - inv_fisico
+        const isHeader = d2.includes('GIFT BOX') || d2.includes('LOWER BOX');
+        const tgt = isHeader ? target : getTargetReal(r);
+        const inv = isHeader ? (r.inv||0) : getInvReal(r);
         const falta = tgt - inv;
         return {...r, inv: inv, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
       });

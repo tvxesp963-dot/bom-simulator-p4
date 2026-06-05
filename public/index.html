@@ -870,8 +870,9 @@ function renderSimTable() {
 
     // Calcular pool del grupo (suma de inventarios de todas las sub-variantes + header)
     // El requerido de sub-componentes = target - inventario del header (Gift Box / Lower Box)
-    const esGrupoChipTop = esGrupoTop && g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD TOP'));
-    const esGrupoChipBot = esGrupoBot && g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM'));
+    // Detectar por sub-variantes directamente, no por el header
+    const esGrupoChipTop = g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD TOP'));
+    const esGrupoChipBot = g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM'));
     const esGrupoConPool = esGrupoChipTop || esGrupoChipBot;
     // Requerido real = target - lo que ya está producido (inventario del header)
     const headerInvMedioProceso = esGrupoConPool ? (header ? (header.inv || 0) : 0) : 0;

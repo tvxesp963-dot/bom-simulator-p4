@@ -1109,8 +1109,8 @@ function renderCons() {
       // Sheet: inventario real = físico + ya incorporado en header
       const getInvReal = (r) => {
         const d = (r.desc||'').toUpperCase();
-        if (d.includes('SHEET TOP')) return (r.inv||0) + giftBoxCC_inv;
-        if (d.includes('SHEET LOWER')) return (r.inv||0) + lowerBoxCC_inv;
+        if (d.includes('SHEET TOP')) { console.log('getInvReal SHEET TOP:', r.inv, '+', giftBoxCC_inv, '=', (r.inv||0)+giftBoxCC_inv); return (r.inv||0) + giftBoxCC_inv; }
+        if (d.includes('SHEET LOWER')) { console.log('getInvReal SHEET LOWER:', r.inv, '+', lowerBoxCC_inv, '=', (r.inv||0)+lowerBoxCC_inv); return (r.inv||0) + lowerBoxCC_inv; }
         return r.inv||0;
       };
 

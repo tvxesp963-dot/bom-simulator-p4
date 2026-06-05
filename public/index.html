@@ -136,7 +136,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div style="display:flex;gap:.5rem">
     <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
-    <button class="btn btn-sm" id="btnReset" onclick="resetearSimulador()" style="display:none;background:rgba(255,68,68,.12);border:1px solid rgba(255,68,68,.3);color:var(--red)">🗑 Limpiar BOM</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
   </div>
 </div>
@@ -449,41 +448,7 @@ function procesarBOM() {
 
   renderPreview(); renderSim(); renderCons(); renderProd();
   document.getElementById('btnExport').style.display = 'flex';
-  document.getElementById('btnReset').style.display = 'flex';
 }
-
-// RESET
-function resetearSimulador() {
-  if (!confirm('¿Borrar el BOM cargado y empezar de nuevo?')) return;
-  BOM = [];
-  workbook = null;
-  // Ocultar botones de acción
-  document.getElementById('btnExport').style.display = 'none';
-  document.getElementById('btnReset').style.display = 'none';
-  // Resetear file input y chip
-  const fi = document.getElementById('fi');
-  if (fi) fi.value = '';
-  document.getElementById('fileChip').innerHTML = '';
-  document.getElementById('sheetSel').innerHTML = '<option value="master">master</option>';
-  document.getElementById('semanaRef').value = '';
-  // Resetear preview
-  document.getElementById('previewArea').innerHTML =
-    '<div class="empty"><div class="empty-icon">📂</div><div class="empty-title">Sin archivo cargado</div><div class="empty-sub">Sube tu Excel BOM para ver la estructura</div></div>';
-  // Volver a estado vacío en tabs
-  document.getElementById('simEmpty').style.display = '';
-  document.getElementById('simContent').style.display = 'none';
-  const consEmpty = document.getElementById('consEmpty');
-  const consContent = document.getElementById('consContent');
-  if (consEmpty) consEmpty.style.display = '';
-  if (consContent) consContent.style.display = 'none';
-  const prodEmpty = document.getElementById('prodEmpty');
-  const prodContent = document.getElementById('prodContent');
-  if (prodEmpty) prodEmpty.style.display = '';
-  if (prodContent) prodContent.style.display = 'none';
-  // Ir al tab de carga
-  goTab('upload');
-}
-window.resetearSimulador = resetearSimulador;
 
 // PREVIEW
 function renderPreview() {
@@ -803,11 +768,18 @@ function renderSimTable() {
     </td>
   </tr>`;
 
-  const rowHTML = (r, isSubComponent=false) => {
-    const diff = r.familia === 'GH90' ? null : r.inv - target;
-    const dc = diff===null?'var(--text3)':diff>=0?'var(--green)':'var(--red)';
-    const dtxt = diff===null?'—':(diff>=0?'+':'')+diff.toLocaleString();
-    const estado = r.familia==='GH90'?`<span class="tag tag-info">ASSEMBLY</span>`:diff>=0?`<span class="tag tag-ok">✓ OK</span>`:`<span class="tag tag-err">⚠ ORDER</span>`;
+  const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null) => {
+    const tgt = targetOverride !== null ? targetOverride : target;
+    const diff = r.familia === 'GH90' ? null : r.inv - tgt;
+    const dc = diff===null?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
+    const dtxt = diff===null?'—':poolOK&&diff<0?'Pool OK':(diff>=0?'+':'')+diff.toLocaleString();
+    const estado = r.familia==='GH90'
+      ? `<span class="tag tag-info">ASSEMBLY</span>`
+      : vcTag
+        ? `<span class="tag tag-warn">${vcTag}</span>`
+        : (poolOK || diff>=0)
+          ? `<span class="tag tag-ok">✓ OK</span>`
+          : `<span class="tag tag-err">⚠ ORDER</span>`;
     const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
     const indent = isSubComponent ? 'padding-left:24px;background:rgba(77,166,255,.02)' : 'font-weight:600';
     const prefix = isSubComponent ? '<span style="color:var(--text3);font-size:9px;margin-right:4px">└─</span>' : '';
@@ -828,7 +800,7 @@ function renderSimTable() {
       <td style="width:70px;text-align:center"><span class="fam fam-${r.familia}">${r.familia}</span></td>
       <td style="width:75px;text-align:center">${destSel}</td>
       <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString():'—'}</td>
-      <td style="width:100px;text-align:right;color:var(--text2)">${r.familia==='GH90'?'—':target.toLocaleString()}</td>
+      <td style="width:100px;text-align:right;color:var(--text2)">${r.familia==='GH90'?'—':tgt.toLocaleString()}</td>
       <td style="width:100px;text-align:right;color:${dc};font-weight:600">${dtxt}</td>
       <td style="width:90px;text-align:center">${estado}</td>
     </tr>`;
@@ -896,11 +868,34 @@ function renderSimTable() {
     const ranCubreTop = topRanInv >= targetSim2 && targetSim2 > 0;
     const ranCubreBot = botRanInv >= targetSim2 && targetSim2 > 0;
 
+    // Calcular pool del grupo (suma de inventarios de todas las sub-variantes + header)
+    // El requerido de sub-componentes = target - inventario del header (Gift Box / Lower Box)
+    const esGrupoChipTop = esGrupoTop && g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD TOP'));
+    const esGrupoChipBot = esGrupoBot && g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM'));
+    const esGrupoConPool = esGrupoChipTop || esGrupoChipBot;
+    // Requerido real = target - lo que ya está producido (inventario del header)
+    const headerInvMedioProceso = esGrupoConPool ? (header ? (header.inv || 0) : 0) : 0;
+    const targetReal = esGrupoConPool ? Math.max(0, targetSim2 - headerInvMedioProceso) : targetSim2;
+    // Pool = suma de inventarios de sub-variantes solamente
+    const poolGrupo = esGrupoConPool
+      ? g.subs.reduce((sum, s) => sum + (s.inv || 0), 0)
+      : 0;
+    const poolCubreGrupo = esGrupoConPool && targetReal > 0 && poolGrupo >= targetReal;
+    const vcTagLabel = esGrupoChipTop ? 'VC1' : esGrupoChipBot ? 'VC2' : null;
+
     const rows = [];
-    if(passFilter(header) && componenteNecesario(header, sm, targetSim2)) rows.push(rowHTML(header, false));
+    if(passFilter(header) && componenteNecesario(header, sm, targetSim2)) {
+      // Header (Gift Box / Lower Box) se evalua con target completo
+      rows.push(rowHTML(header, false, false, null, targetSim2));
+    }
     g.subs.forEach(s => {
       if (!componenteNecesario(s, sm, targetSim2)) return;
-      if(passFilter(s)) rows.push(rowHTML(s, true));
+      const sDesc = (s.desc||'').toUpperCase();
+      const esVirgen = sDesc.includes('VIRGEN') || sDesc.includes('VIRGIN');
+      const subPoolOK = poolCubreGrupo && !esVirgen;
+      const subVcTag = poolCubreGrupo && esVirgen ? vcTagLabel : null;
+      // Sub-componentes usan targetReal (target - inventario del header)
+      if(passFilter(s) || poolCubreGrupo) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal));
     });
     if(rows.length === 0) return;
     const block = rows.join('');

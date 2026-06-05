@@ -1142,7 +1142,9 @@ function renderCons() {
 
       const rowsCalc = rowsActual.map(r => {
         const d2 = (r.desc||'').toUpperCase();
-        const isHeader = d2.includes('GIFT BOX') || d2.includes('LOWER BOX');
+        // Solo el header exacto (no Sheet Lower Box que también contiene LOWER BOX)
+        const isHeader = (d2.includes('GIFT BOX') && !d2.includes('SHEET')) || 
+                         (d2.includes('LOWER BOX') && !d2.includes('SHEET'));
         const tgt = isHeader ? target : getTargetReal(r);
         // Para diferencia usar inventario real (fisico + ya producido en header)
         const invParaDiff = isHeader ? (r.inv||0) : getInvReal(r);

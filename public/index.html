@@ -1097,10 +1097,11 @@ function renderCons() {
         const d = (r.desc||'').toUpperCase();
         // Header (Gift Box / Lower Box) siempre contra target completo
         if (d.includes('GIFT BOX') || d.includes('LOWER BOX')) return target;
-        // Sub-componentes TOP usan targetRealTop
-        if (d.includes('CHIP BOARD TOP') || d.includes('SHEET TOP')) return targetRealTop;
-        // Sub-componentes BOT usan targetRealBot
-        if (d.includes('CHIP BOARD BOTTOM') || d.includes('SHEET LOWER')) return targetRealBot;
+        // Chip Board usa targetReal (target - header ya producido)
+        if (d.includes('CHIP BOARD TOP')) return targetRealTop;
+        if (d.includes('CHIP BOARD BOTTOM')) return targetRealBot;
+        // Sheet usa target completo (la diferencia se calcula con inv real = fisico + ya producido)
+        if (d.includes('SHEET TOP') || d.includes('SHEET LOWER')) return target;
         if (pl.key === 'P3') return necesitaProducir;
         return target;
       };

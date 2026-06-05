@@ -1149,6 +1149,7 @@ function renderCons() {
         // Para mostrar en columna inventario: siempre el fisico del IMS
         const invDisplay = r.inv || 0;
         const falta = tgt - invParaDiff;
+        console.log('rowsCalc:', r.desc, 'tgt:', tgt, 'invParaDiff:', invParaDiff, 'falta:', falta);
         return {...r, inv: invDisplay, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
       });
       const bundleCalc = bundleRows.map(r => ({...r, inv: bundleInvDisp, falta: Math.max(0, target - bundleInvDisp), aPedir: bundleInvDisp < target ? Math.ceil((target - bundleInvDisp) * EXTRA) : 0}));

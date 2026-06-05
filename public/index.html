@@ -884,19 +884,31 @@ function renderSimTable() {
     const poolCubreGrupo = esGrupoConPool && targetReal > 0 && poolGrupo >= targetReal;
     const vcTagLabel = esGrupoChipTop ? 'VC1' : esGrupoChipBot ? 'VC2' : null;
 
+    // Calcular inventario de Ranurado disponible en las sub-variantes
+    const ranuradoInvSubs = esGrupoConPool
+      ? g.subs.filter(s => {
+          const sd = (s.desc||'').toUpperCase();
+          return sd.includes('RANURADO') || sd.includes('GROOVING');
+        }).reduce((sum, s) => sum + (s.inv || 0), 0)
+      : 0;
+    // Si el Ranurado solo ya cubre el targetReal, el Virgen no necesita procesarse
+    const ranuradoSoloCubre = esGrupoConPool && targetReal > 0 && ranuradoInvSubs >= targetReal;
+
     const rows = [];
     if(passFilter(header) && componenteNecesario(header, sm, targetSim2)) {
-      // Header (Gift Box / Lower Box) se evalua con target completo
       rows.push(rowHTML(header, false, false, null, targetSim2));
     }
     g.subs.forEach(s => {
       if (!componenteNecesario(s, sm, targetSim2)) return;
       const sDesc = (s.desc||'').toUpperCase();
       const esVirgen = sDesc.includes('VIRGEN') || sDesc.includes('VIRGIN');
+      // Si ranurado solo cubre → virgen es OK (no necesita procesarse)
+      // Si pool cubre pero ranurado no alcanza solo → virgen necesita VC
+      // Si pool no cubre → ORDER
       const subPoolOK = poolCubreGrupo && !esVirgen;
-      const subVcTag = poolCubreGrupo && esVirgen ? vcTagLabel : null;
-      // Sub-componentes usan targetReal (target - inventario del header)
-      if(passFilter(s) || poolCubreGrupo) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal));
+      const virgenOK = esVirgen && ranuradoSoloCubre;
+      const subVcTag = esVirgen && poolCubreGrupo && !ranuradoSoloCubre ? vcTagLabel : null;
+      if(passFilter(s) || poolCubreGrupo || virgenOK) rows.push(rowHTML(s, true, subPoolOK || virgenOK, subVcTag, targetReal));
     });
     if(rows.length === 0) return;
     const block = rows.join('');

@@ -891,8 +891,18 @@ function renderSimTable() {
           return sd.includes('RANURADO') || sd.includes('GROOVING');
         }).reduce((sum, s) => sum + (s.inv || 0), 0)
       : 0;
+    // Pool solo considera Chip Board (Virgen + Ranurado), NO Sheet
+    const chipBoardPool = esGrupoConPool
+      ? g.subs.filter(s => {
+          const sd = (s.desc||'').toUpperCase();
+          return sd.includes('CHIP BOARD');
+        }).reduce((sum, s) => sum + (s.inv || 0), 0)
+      : 0;
+    const chipPoolCubre = esGrupoConPool && targetReal > 0 && chipBoardPool >= targetReal;
     // Si el Ranurado solo ya cubre el targetReal, el Virgen no necesita procesarse
     const ranuradoSoloCubre = esGrupoConPool && targetReal > 0 && ranuradoInvSubs >= targetReal;
+    // Sheet inventario real = físico + ya incorporado en header (Lower Box / Gift Box)
+    const headerYaProducido = headerInvMedioProceso; // = inv del header (Lower Box / Gift Box)
 
     const rows = [];
     if(passFilter(header) && componenteNecesario(header, sm, targetSim2)) {
@@ -902,13 +912,26 @@ function renderSimTable() {
       if (!componenteNecesario(s, sm, targetSim2)) return;
       const sDesc = (s.desc||'').toUpperCase();
       const esVirgen = sDesc.includes('VIRGEN') || sDesc.includes('VIRGIN');
-      // Si ranurado solo cubre → virgen es OK (no necesita procesarse)
-      // Si pool cubre pero ranurado no alcanza solo → virgen necesita VC
-      // Si pool no cubre → ORDER
-      const subPoolOK = poolCubreGrupo && !esVirgen;
-      const virgenOK = esVirgen && ranuradoSoloCubre;
-      const subVcTag = esVirgen && poolCubreGrupo && !ranuradoSoloCubre ? vcTagLabel : null;
-      if(passFilter(s) || poolCubreGrupo || virgenOK) rows.push(rowHTML(s, true, subPoolOK || virgenOK, subVcTag, targetReal));
+      const esSheet = sDesc.includes('SHEET');
+      const esChipBoard = sDesc.includes('CHIP BOARD');
+
+      if (esSheet) {
+        // Sheet: inventario real = físico + ya incorporado en header
+        const sheetInvReal = (s.inv || 0) + headerYaProducido;
+        const sheetDiff = sheetInvReal - targetSim2; // contra target completo
+        const sheetOK = sheetDiff >= 0;
+        const sWithRealInv = Object.assign({}, s, { inv: sheetInvReal });
+        if(passFilter(s) || !sheetOK) rows.push(rowHTML(sWithRealInv, true, false, null, targetSim2));
+      } else if (esChipBoard) {
+        // Chip Board: usa pool y targetReal
+        const subPoolOK = chipPoolCubre && !esVirgen;
+        const virgenOK = esVirgen && ranuradoSoloCubre;
+        const subVcTag = esVirgen && chipPoolCubre && !ranuradoSoloCubre ? vcTagLabel : null;
+        if(passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK || virgenOK, subVcTag, targetReal));
+      } else {
+        // Otros sub-componentes: evaluación individual con targetReal
+        if(passFilter(s)) rows.push(rowHTML(s, true, false, null, targetReal));
+      }
     });
     if(rows.length === 0) return;
     const block = rows.join('');

@@ -613,18 +613,22 @@ function componenteNecesario(r, sm, target) {
   const giftInv   = inv(giftBox);
   const lowerInv  = inv(lowerBox);
 
-  // Virgen TOP innecesario si Ranurado TOP cubre
-  if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= target) return false;
-  // Virgen BOT innecesario si Ranurado BOT cubre
-  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInv >= target) return false;
-  // Sheet Top Box innecesario si Gift Box cubre
+  // targetReal por grupo = target - lo ya producido en el header
+  const targetRealTop = Math.max(0, target - giftInv);
+  const targetRealBot = Math.max(0, target - lowerInv);
+
+  // Virgen TOP innecesario si Ranurado TOP cubre el targetReal del grupo
+  if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= targetRealTop) return false;
+  // Virgen BOT innecesario si Ranurado BOT cubre el targetReal del grupo
+  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInv >= targetRealBot) return false;
+  // Sheet Top Box innecesario si Gift Box cubre el target completo
   if (d.includes('SHEET TOP') && giftInv >= target) return false;
   // Gift Box innecesario si tiene inventario suficiente
   if (d.includes('GIFT BOX') && giftInv >= target) return false;
-  // Sheet Lower Box innecesario si Lower Box cubre
+  // Sheet Lower Box innecesario si Lower Box cubre el target completo
   if ((d.includes('SHEET LOWER') || d.includes('SHEET LOW')) && lowerInv >= target) return false;
-  // Lower Box innecesario si tiene inventario suficiente o Ranurado BOT cubre
-  if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && (lowerInv >= target || botRanInv >= target)) return false;
+  // Lower Box innecesario si tiene inventario suficiente
+  if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && lowerInv >= target) return false;
   // Chip Board Bottom Ranurado innecesario si Lower Box ya cubre
   if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO') && lowerInv >= target) return false;
   // Chip Board Top Ranurado innecesario si Gift Box ya cubre
@@ -661,9 +665,11 @@ function calcSim() {
   comps.forEach(r => { if (r.inv < target && r.inv < maxProd) { maxProd = r.inv; cuello = r; } });
 
   // También considerar medio proceso en maxProd
+  // Gift Box es cuello solo si no hay producción TOP disponible para cubrirlo
   if (giftBoxC && (giftBoxC.inv||0) < target) maxProd = Math.min(maxProd, giftBoxC.inv||0);
-  // Lower Box no es cuello si Ranurado BOT puede producirlo
-  if (lowerBoxC && (lowerBoxC.inv||0) < target && botRanInvC < target) maxProd = Math.min(maxProd, lowerBoxC.inv||0);
+  // Lower Box es cuello solo si no hay producción BOT disponible (Ranurado BOT no cubre targetReal)
+  const targetRealBot_cs = Math.max(0, target - (lowerBoxC ? (lowerBoxC.inv||0) : 0));
+  if (lowerBoxC && (lowerBoxC.inv||0) < target && botRanInvC < targetRealBot_cs) maxProd = Math.min(maxProd, lowerBoxC.inv||0);
   if (stripC && (stripC.inv||0) < target) maxProd = Math.min(maxProd, stripC.inv||0);
   // Bundle: cuello principal — tiene prioridad sobre sub-componentes (INSERT, QSG)
   if (bundleC && (bundleC.inv||0) < target) {
@@ -755,10 +761,21 @@ function renderSimTable() {
     }
   });
 
-  // Filtrar según simFiltro
+  // Filtrar según simFiltro — usar targetReal por grupo igual que la tabla
+  const giftBoxFlt  = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX'));
+  const lowerBoxFlt = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX'));
+  const giftInvFlt  = giftBoxFlt  ? (giftBoxFlt.inv||0)  : 0;
+  const lowerInvFlt = lowerBoxFlt ? (lowerBoxFlt.inv||0) : 0;
+  const getTargetFlt = (r) => {
+    const d = (r.desc||'').toUpperCase();
+    if (d.includes('CHIP BOARD TOP'))    return Math.max(0, target - giftInvFlt);
+    if (d.includes('CHIP BOARD BOTTOM')) return Math.max(0, target - lowerInvFlt);
+    return target;
+  };
   const passFilter = (r) => {
-    if (simFiltro === 'pedir') return r.familia !== 'GH90' && r.inv < target;
-    if (simFiltro === 'ok') return r.familia === 'GH90' || r.inv >= target;
+    const tgt = getTargetFlt(r);
+    if (simFiltro === 'pedir') return r.familia !== 'GH90' && r.inv < tgt;
+    if (simFiltro === 'ok')    return r.familia === 'GH90' || r.inv >= tgt;
     return true;
   };
 
@@ -1109,8 +1126,8 @@ function renderCons() {
       // Sheet: inventario real = físico + ya incorporado en header
       const getInvReal = (r) => {
         const d = (r.desc||'').toUpperCase();
-        if (d.includes('SHEET TOP')) { console.log('getInvReal SHEET TOP:', r.inv, '+', giftBoxCC_inv, '=', (r.inv||0)+giftBoxCC_inv); return (r.inv||0) + giftBoxCC_inv; }
-        if (d.includes('SHEET LOWER')) { console.log('getInvReal SHEET LOWER:', r.inv, '+', lowerBoxCC_inv, '=', (r.inv||0)+lowerBoxCC_inv); return (r.inv||0) + lowerBoxCC_inv; }
+        if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxCC_inv; }
+        if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxCC_inv; }
         return r.inv||0;
       };
 
@@ -1158,7 +1175,6 @@ function renderCons() {
         // Para mostrar en columna inventario: siempre el fisico del IMS
         const invDisplay = r.inv || 0;
         const falta = tgt - invParaDiff;
-        console.log('rowsCalc:', r.desc, 'tgt:', tgt, 'invParaDiff:', invParaDiff, 'falta:', falta);
         return {...r, inv: invDisplay, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
       });
       const bundleCalc = bundleRows.map(r => ({...r, inv: bundleInvDisp, falta: Math.max(0, target - bundleInvDisp), aPedir: bundleInvDisp < target ? Math.ceil((target - bundleInvDisp) * EXTRA) : 0}));

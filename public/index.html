@@ -1412,28 +1412,36 @@ function renderProd() {
 
     // ── S1/S2 + Zhongke — Producir TOP ──
     // Solo necesita producir si Gift Box no cubre el target completo
-    const topMats = [
-      {label:'Chip Board Top (Ranurado)', inv: topRanTotal,    pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Top Box',             inv: sheetTopInvReal, pn: sheetTop?.pn||'—',                  nota: giftBoxInv>0?giftBoxInv.toLocaleString()+' ya en Gift Box':''},
-    ];
+    const topMats = [];
+    if (cbTopRan || cbTopVirgen) topMats.push(
+      {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''});
+    if (sheetTop) topMats.push(
+      {label:'Sheet Top Box', inv: sheetTopInvReal, pn: sheetTop.pn, nota: giftBoxInv>0?giftBoxInv.toLocaleString()+' ya en Gift Box':''});
     // Limitar al targetReal — no puede producir más de lo que falta
     const topPuede = Math.min(topMats.length ? Math.min(...topMats.map(m=>m.inv)) : 0, targetRealTop);
 
     // ── S3 — Producir BOTTOM con etiqueta ──
-    const s3Mats = [
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal,    pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Lower Box (Bottom)',     inv: sheetBotInvReal, pn: sheetBot?.pn||'—',                  nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''},
-      {label:'Set Pad',                      inv: inv(setPad),     pn: setPad?.pn||'—',                     nota:''},
-    ];
-    if (backSticker) s3Mats.push({label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
+    // Solo incluir materiales que existen en el BOM de este modelo
+    const s3Mats = [];
+    if (cbBotRan || cbBotVirgen) s3Mats.push(
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
+    if (sheetBot) s3Mats.push(
+      {label:'Sheet Lower Box (Bottom)', inv: sheetBotInvReal, pn: sheetBot.pn, nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''});
+    if (setPad) s3Mats.push(
+      {label:'Set Pad', inv: inv(setPad), pn: setPad.pn, nota:''});
+    if (backSticker) s3Mats.push(
+      {label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
     const s3Puede = Math.min(s3Mats.length ? Math.min(...s3Mats.map(m=>m.inv)) : 0, targetRealBot);
 
     // ── S4 — Producir BOTTOM sin etiqueta ──
-    const s4Mats = [
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal,    pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Lower Box (Bottom)',     inv: sheetBotInvReal, pn: sheetBot?.pn||'—',                  nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''},
-      {label:'Pulp Tray',                    inv: inv(pulpTray),   pn: pulpTray?.pn||'—',                   nota:''},
-    ];
+    // Solo incluir materiales que existen en el BOM de este modelo
+    const s4Mats = [];
+    if (cbBotRan || cbBotVirgen) s4Mats.push(
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
+    if (sheetBot) s4Mats.push(
+      {label:'Sheet Lower Box (Bottom)', inv: sheetBotInvReal, pn: sheetBot.pn, nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''});
+    if (pulpTray) s4Mats.push(
+      {label:'Pulp Tray', inv: inv(pulpTray), pn: pulpTray.pn, nota:''});
     const s4Puede = pulpTray ? Math.min(Math.min(...s4Mats.map(m=>m.inv)), targetRealBot) : 0;
 
     // ── Capacidad BOTTOM = la mejor entre S3 y S4, limitada a targetRealBot ──

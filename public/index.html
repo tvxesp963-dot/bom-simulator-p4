@@ -1378,7 +1378,8 @@ function renderProd() {
       {label:'Chip Board Top (Ranurado)', inv: topRanTotal,    pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''},
       {label:'Sheet Top Box',             inv: sheetTopInvReal, pn: sheetTop?.pn||'—',                  nota: giftBoxInv>0?giftBoxInv.toLocaleString()+' ya en Gift Box':''},
     ];
-    const topPuede = topMats.length ? Math.min(...topMats.map(m=>m.inv)) : 0;
+    // Limitar al targetReal — no puede producir más de lo que falta
+    const topPuede = Math.min(topMats.length ? Math.min(...topMats.map(m=>m.inv)) : 0, targetRealTop);
 
     // ── S3 — Producir BOTTOM con etiqueta ──
     const s3Mats = [
@@ -1387,7 +1388,7 @@ function renderProd() {
       {label:'Set Pad',                      inv: inv(setPad),     pn: setPad?.pn||'—',                     nota:''},
     ];
     if (backSticker) s3Mats.push({label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
-    const s3Puede = s3Mats.length ? Math.min(...s3Mats.map(m=>m.inv)) : 0;
+    const s3Puede = Math.min(s3Mats.length ? Math.min(...s3Mats.map(m=>m.inv)) : 0, targetRealBot);
 
     // ── S4 — Producir BOTTOM sin etiqueta ──
     const s4Mats = [
@@ -1395,15 +1396,15 @@ function renderProd() {
       {label:'Sheet Lower Box (Bottom)',     inv: sheetBotInvReal, pn: sheetBot?.pn||'—',                  nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''},
       {label:'Pulp Tray',                    inv: inv(pulpTray),   pn: pulpTray?.pn||'—',                   nota:''},
     ];
-    const s4Puede = pulpTray ? Math.min(...s4Mats.map(m=>m.inv)) : 0;
+    const s4Puede = pulpTray ? Math.min(Math.min(...s4Mats.map(m=>m.inv)), targetRealBot) : 0;
 
-    // ── Capacidad BOTTOM = la mejor entre S3 y S4 ──
-    const botPuede = Math.max(s3Puede, s4Puede);
+    // ── Capacidad BOTTOM = la mejor entre S3 y S4, limitada a targetRealBot ──
+    const botPuede = Math.min(Math.max(s3Puede, s4Puede), targetRealBot);
 
     // ── ASSY1 — Ensamble final ──
-    // Gift Box disponible = existente + lo que S1/S2 puede producir
-    const giftBoxDisp  = giftBoxInv >= target ? giftBoxInv : giftBoxInv + topPuede;
-    const lowerBoxDisp = lowerBoxInv >= target ? lowerBoxInv : lowerBoxInv + botPuede;
+    // Gift Box disponible = existente + producción TOP (limitada a lo que falta)
+    const giftBoxDisp  = giftBoxInv >= target ? giftBoxInv : Math.min(giftBoxInv + topPuede, target);
+    const lowerBoxDisp = lowerBoxInv >= target ? lowerBoxInv : Math.min(lowerBoxInv + botPuede, target);
 
     // Descontar del pool para el siguiente modelo
     if (bundle)   takeRend(bundle,   Math.min(bundleInv,   target));

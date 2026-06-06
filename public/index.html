@@ -926,15 +926,15 @@ function renderSimTable() {
       } else if (esChipBoard) {
         const esRanurado = sDesc.includes('RANURADO') || sDesc.includes('GROOVING');
         const sInv = s.inv || 0;
-        // Virgen: OK si tiene inventario suficiente (positivo vs targetReal)
-        const virgenOK = esVirgen && sInv >= targetReal;
-        // Virgen con inventario pero no suficiente solo — OK si ranurado cubre el resto
-        const virgenSuficiente = esVirgen && sInv > 0;
+        // Virgen: OK si ranurado solo cubre (no necesita procesarse) o si virgen solo cubre
+        const virgenOK = esVirgen && (ranuradoSoloCubre || sInv >= targetReal);
+        // Virgen necesita procesarse solo si ranurado NO cubre pero pool sí cubre
+        const virgenVC = esVirgen && !ranuradoSoloCubre && chipPoolCubre && sInv < targetReal;
         // Ranurado: OK si cubre targetReal solo, VC si no cubre pero pool (virgen) suple la diferencia
         const ranuradoOK = esRanurado && ranuradoSoloCubre;
         const ranuradoVC = esRanurado && !ranuradoSoloCubre && chipPoolCubre;
-        const subPoolOK = virgenOK || virgenSuficiente || ranuradoOK;
-        const subVcTag = ranuradoVC ? vcTagLabel : null;
+        const subPoolOK = virgenOK || ranuradoOK;
+        const subVcTag = virgenVC ? vcTagLabel : ranuradoVC ? vcTagLabel : null;
         if(passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal));
       } else {
         // Otros sub-componentes: evaluación individual con targetReal

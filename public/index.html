@@ -118,6 +118,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .dest-p1{background:rgba(26,111,212,.15);color:var(--accent);border-color:rgba(26,111,212,.4)}
 .dest-p3{background:rgba(0,184,90,.1);color:#00B85A;border-color:rgba(0,184,90,.3)}
 .dest-aliber{background:rgba(255,179,0,.1);color:var(--amber);border-color:rgba(255,179,0,.3)}
+.dest-p4{background:rgba(0,188,212,.12);color:#00BCD4;border-color:rgba(0,188,212,.4)}
 .dest-auto{background:var(--bg3);color:var(--text2);border-color:var(--border)}
 @media(max-width:600px){
   .dt th:nth-child(3),.dt td:nth-child(3){display:none}
@@ -722,7 +723,10 @@ function getDestino(r) {
   if (fam === 'GH69') {
     if (d.includes('PULP') || d.includes('TRAY')) return 'ALIBER';
     if (d.includes('INSERT') || d.includes('MANUAL') || d.includes('BUNDLE')) return 'P3';
-    return 'P1'; // Chip Board, Sheet, Gift Box, Lower Box
+    // Gift Box Top y Lower Box Bottom se producen internamente en Planta 4
+    if (d.includes('GIFT BOX') && !d.includes('SHEET')) return 'P4';
+    if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && !d.includes('SHEET')) return 'P4';
+    return 'P1'; // Chip Board, Sheet
   }
   // GH68
   if (fam === 'GH68') {
@@ -816,14 +820,15 @@ function renderSimTable() {
     const prefix = isSubComponent ? '<span style="color:var(--text3);font-size:9px;margin-right:4px">└─</span>' : '';
     // Destino automático o manual
     const dest = getDestino(r);
-    const destClass = dest==='P1'?'dest-p1':dest==='P3'?'dest-p3':dest==='ALIBER'?'dest-aliber':'dest-auto';
+    const destClass = dest==='P1'?'dest-p1':dest==='P3'?'dest-p3':dest==='P4'?'dest-p4':dest==='ALIBER'?'dest-aliber':'dest-auto';
     const pnEsc = r.pn.replace(/'/g,"\'");
     const descEsc = (r.desc||'').replace(/'/g,"\'");
     const destSel = `<select class="dest-sel ${destClass}" onchange="this.className='dest-sel dest-'+this.value.toLowerCase();onDestinoChange('${pnEsc}','${descEsc}',this.value)">
       <option value="P1" ${dest==='P1'?'selected':''}>P1</option>
       <option value="P3" ${dest==='P3'?'selected':''}>P3</option>
+      <option value="P4" ${dest==='P4'?'selected':''}>P4</option>
       <option value="ALIBER" ${dest==='ALIBER'?'selected':''}>ALIBER</option>
-      <option value="auto" ${!['P1','P3','ALIBER'].includes(dest)?'selected':''}>Auto</option>
+      <option value="auto" ${!['P1','P3','P4','ALIBER'].includes(dest)?'selected':''}>Auto</option>
     </select>`;
     return `<tr style="${indent}">
       <td class="pn-cell" style="color:${famColor};width:110px">${prefix}${r.pn}</td>
@@ -1036,9 +1041,10 @@ function renderCons() {
   document.getElementById('consTitle').textContent = `Consolidado Pedidos — ${document.getElementById('semanaRef').value}`;
   const EXTRA = 1.10;
   const plantas = [
-    {key:'P1', label:'P1 — Planta 1', sub:'Chip Boards · Sheets · Strip', color:'rgba(26,111,212,.15)', bc:'rgba(26,111,212,.4)', tc:'var(--accent)'},
-    {key:'P3', label:'P3 — Planta 3', sub:'Bundles · Inserts · QSG', color:'rgba(0,184,90,.1)', bc:'rgba(0,184,90,.3)', tc:'#00B85A'},
-    {key:'ALIBER', label:'ALIBER', sub:'Pulp Tray', color:'rgba(255,179,0,.1)', bc:'rgba(255,179,0,.3)', tc:'var(--amber)'}
+    {key:'P1',    label:'P1 — Planta 1', sub:'Chip Boards · Sheets · Strip',            color:'rgba(26,111,212,.15)', bc:'rgba(26,111,212,.4)',  tc:'var(--accent)'},
+    {key:'P3',    label:'P3 — Planta 3', sub:'Bundles · Inserts · QSG',                 color:'rgba(0,184,90,.1)',    bc:'rgba(0,184,90,.3)',    tc:'#00B85A'},
+    {key:'P4',    label:'P4 — Planta 4', sub:'Gift Box Top · Lower Box Bottom (S1-S4)', color:'rgba(0,188,212,.12)', bc:'rgba(0,188,212,.4)',   tc:'#00BCD4'},
+    {key:'ALIBER',label:'ALIBER',        sub:'Pulp Tray · Data Cable · Ejection Pin',   color:'rgba(255,179,0,.1)',  bc:'rgba(255,179,0,.3)',   tc:'var(--amber)'}
   ];
   // Obtener todos los modelos con su target
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
@@ -1146,6 +1152,7 @@ function renderCons() {
         return r.inv||0;
       };
 
+      // P4: Gift Box y Lower Box producidos internamente — mismo calculo que P1 headers
       const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target))
         .filter(r => {
           const tgt = getTargetReal(r);
@@ -1565,6 +1572,17 @@ function exportarExcel() {
       const stripR  = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
       const stripInv = stripR ? (stripR.inv||0) : 0;
 
+      if (plKey === 'P4') {
+        // Gift Box Top y Lower Box Bottom — producidos en P4 (S1/S2 y S3/S4)
+        BOM.filter(r => r.sm===sm && getDestino(r)==='P4' && r.familia!=='GH90')
+          .forEach(r => {
+            const d=(r.desc||'').toUpperCase();
+            const falta = Math.max(0, target - (r.inv||0));
+            if (falta > 0) result.push({sm, pn:r.pn, desc:r.desc, inv:r.inv||0,
+              falta, aPedir:Math.ceil(falta*EXTRA), tgt:target});
+          });
+        return;
+      }
       if (plKey === 'P3') {
         if (bundleR && bundleInv < target)
           result.push({ sm, pn:bundleR.pn, desc:bundleR.desc, inv:bundleInv,
@@ -1640,9 +1658,10 @@ function exportarExcel() {
 
   const COLS = ['No.','Fecha','Ensamble (Strip Code)','Modelo / Target Semana','Número de Parte','Descripción','Inventario Actual','Cantidad a Pedir','Recibido / Enviado','Notas BOM'];
   const plantasCfg = [
-    {key:'P1', label:'PLANTA 1  (P1)', sub:'Chip Boards · Sheets · Strip', bg:P1_BG, fg:P1_FG},
-    {key:'P3', label:'PLANTA 3  (P3)', sub:'Bundles · Inserts · QSG',      bg:P3_BG, fg:P3_FG},
-    {key:'ALIBER', label:'ALIBER',     sub:'Pulp Tray · Data Cable · Ejection Pin', bg:ALI_BG, fg:ALI_FG},
+    {key:'P1',    label:'PLANTA 1  (P1)', sub:'Chip Boards · Sheets · Strip',            bg:P1_BG,  fg:P1_FG},
+    {key:'P3',    label:'PLANTA 3  (P3)', sub:'Bundles · Inserts · QSG',                 bg:P3_BG,  fg:P3_FG},
+    {key:'P4',    label:'PLANTA 4  (P4)', sub:'Gift Box Top · Lower Box Bottom (S1-S4)', bg:'007A8A', fg:'FFFFFF'},
+    {key:'ALIBER',label:'ALIBER',         sub:'Pulp Tray · Data Cable · Ejection Pin',   bg:ALI_BG, fg:ALI_FG},
   ];
 
   let noGlobal=1, totalGen=0;

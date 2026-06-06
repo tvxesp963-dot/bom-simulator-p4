@@ -857,14 +857,16 @@ function renderSimTable() {
     const headerInv = header ? (header.inv || 0) : 0;
     const headerDesc = (header?.desc || '').toUpperCase();
 
-    // Ocultar sección TOP completa si Gift Box cubre
-    if (sec === 'TOP' && giftBoxSimInv >= targetSim2 && targetSim2 > 0) return;
-    // Ocultar sección BOT completa si Lower Box cubre
-    if (sec === 'BOT' && lowerBoxSimInv >= targetSim2 && targetSim2 > 0) return;
+    // En modo 'Todos': mostrar todo aunque Gift Box / Lower Box cubran
+    // En modo 'pedir'/'ok': ocultar secciones cubiertas
+    if (simFiltro !== 'todos') {
+      if (sec === 'TOP' && giftBoxSimInv >= targetSim2 && targetSim2 > 0) return;
+      if (sec === 'BOT' && lowerBoxSimInv >= targetSim2 && targetSim2 > 0) return;
+    }
 
     // Si es Gift Box Top, Lower Box Bottom o Strip con inventario suficiente → banner OK
     const esMedioProceso = headerDesc.includes('GIFT BOX') || headerDesc.includes('LOWER BOX') || headerDesc.includes('STRIP');
-    if (esMedioProceso && headerInv >= targetSim2 && targetSim2 > 0) {
+    if (simFiltro !== 'todos' && esMedioProceso && headerInv >= targetSim2 && targetSim2 > 0) {
       const label = headerDesc.includes('GIFT BOX') ? 'Gift Box Top OK — No requiere producción TOP'
         : headerDesc.includes('LOWER BOX') ? 'Lower Box Bottom OK — No requiere producción BOTTOM'
         : 'Strip OK — No requiere pedido a P1';
@@ -923,11 +925,14 @@ function renderSimTable() {
     const headerYaProducido = headerInvMedioProceso; // = inv del header (Lower Box / Gift Box)
 
     const rows = [];
-    if(passFilter(header) && componenteNecesario(header, sm, targetSim2)) {
+    // En modo 'Todos': mostrar BOM completo sin filtrar por componenteNecesario
+    // En modo 'pedir'/'ok': aplicar filtro para mostrar solo lo relevante
+    const skipFiltroNecesario = simFiltro === 'todos';
+    if(passFilter(header) && (skipFiltroNecesario || componenteNecesario(header, sm, targetSim2))) {
       rows.push(rowHTML(header, false, false, null, targetSim2));
     }
     g.subs.forEach(s => {
-      if (!componenteNecesario(s, sm, targetSim2)) return;
+      if (!skipFiltroNecesario && !componenteNecesario(s, sm, targetSim2)) return;
       const sDesc = (s.desc||'').toUpperCase();
       const esVirgen = sDesc.includes('VIRGEN') || sDesc.includes('VIRGIN');
       const esSheet = sDesc.includes('SHEET');

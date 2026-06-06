@@ -729,6 +729,10 @@ function getDestino(r) {
     if (d.includes('QSG') || d.includes('HAC') || d.includes('IBG') || d.includes('GUIDE') || d.includes('INSERT')) return 'P3';
     return 'P1'; // Back Sticker, otros
   }
+  // OTRO — Data Cable y Ejection Pin van a ALIBER por default
+  if (fam === 'OTRO') {
+    if (d.includes('DATA CABLE') || d.includes('EJECTION PIN') || d.includes('EJECTOR PIN')) return 'ALIBER';
+  }
   return 'Sin Planta';
 }
 

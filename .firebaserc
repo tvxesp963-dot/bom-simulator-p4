@@ -1,1 +1,22 @@
-{ "projects": { "default": "mes-production-esp" }, "targets": { "mes-production-esp": { "hosting": { "bom": ["bom-simulator-p4-b4e16"] } } } } 
+{
+  "projects": {
+    "default": "mes-production-esp"
+  },
+  "targets": {
+    "mes-production-esp": {
+      "hosting": {
+        "bom": [
+          "bom-simulator-p4-b4e16"
+        ]
+      }
+    },
+    "bom-simulator-p4": {
+      "hosting": {
+        "bom": [
+          "bom-simulator-p4"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

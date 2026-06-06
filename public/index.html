@@ -1245,7 +1245,7 @@ function renderProd() {
   let html = '';
   let hayAlgo = false;
 
-  // Pool compartido — se descuenta entre modelos igual que en publicarPlan
+  // Pool compartido — se descuenta entre modelos
   const poolRend = {};
   BOM.forEach(r => {
     if (!r.pn) return;
@@ -1266,6 +1266,58 @@ function renderProd() {
     return tomar;
   };
 
+  // ── Helper: tarjeta de línea de producción ──
+  // targetLinea = requerido real para esa línea (puede ser targetReal o target completo)
+  const lineaCard = (label, color, icon, mats, puede, targetLinea) => {
+    if (!mats.length) return '';
+    const cuello = mats.reduce((mn,m) => m.inv < mn.inv ? m : mn, mats[0]);
+    const pctLinea = Math.min(100, targetLinea > 0 ? Math.round((puede / targetLinea) * 100) : 0);
+    return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
+        <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+            <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
+          </div>
+          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
+          <span style="font-size:10px;color:var(--text2)">/ ${targetLinea.toLocaleString()}</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="dt" style="width:100%;table-layout:fixed">
+        <thead><tr style="font-size:10px">
+          <th style="width:36%">Material</th>
+          <th style="width:20%">N° Parte</th>
+          <th style="width:14%;text-align:right">Disponible</th>
+          <th style="width:14%;text-align:right">Requerido</th>
+          <th style="width:16%;text-align:center">Estado</th>
+        </tr></thead><tbody>
+        ${mats.map((m,i) => {
+          const ok = m.inv >= targetLinea;
+          const tc = ok ? 'var(--green)' : m.inv > 0 ? 'var(--amber)' : 'var(--red)';
+          const tag = ok ? '<span class="tag tag-ok">OK</span>' : '<span class="tag tag-err">FALTA</span>';
+          const esCuello = m === cuello && !ok;
+          return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
+            <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
+            <td style="font-family:monospace;font-size:12px;color:${color}">${m.pn}</td>
+            <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
+            <td style="text-align:right">${targetLinea.toLocaleString()}</td>
+            <td style="text-align:center">${tag}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+  };
+
+  // ── Banner OK (cuando una línea no necesita producir) ──
+  const bannerOK = (msg, nota) =>
+    `<div style="background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.25);border-radius:10px;padding:.5rem .85rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem">
+      <span style="font-size:12px;font-weight:700;color:var(--green)">✓ ${msg}</span>
+      <span style="font-size:11px;color:var(--text2)">${nota}</span>
+    </div>`;
+
   modelos.forEach(sm => {
     const target = simTargetsPorModelo[sm] || 0;
     if (!target) return;
@@ -1273,7 +1325,7 @@ function renderProd() {
 
     const inv = r => invPool(r);
 
-    // Materiales clave
+    // ── Materiales clave ──
     const cbTopVirgen = getComp(sm, ['CHIP BOARD TOP','VIRGEN']);
     const cbTopRan    = getComp(sm, ['CHIP BOARD TOP','RANURADO']);
     const sheetTop    = getComp(sm, ['SHEET TOP']);
@@ -1288,118 +1340,88 @@ function renderProd() {
     const giftBox     = getComp(sm, ['GIFT BOX']);
     const bundle      = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
 
-    // ── VC: cuánto puede ranurar ──
-    // Si ya hay suficiente Ranurado, VC no necesita procesar Virgen
-    const topRanInvAct = inv(cbTopRan);
-    const botRanInvAct = inv(cbBotRan);
-    const vcTopNecesario = Math.max(0, target - topRanInvAct);
-    const vcBotNecesario = Math.max(0, target - botRanInvAct);
-    const vcTopPuede = Math.min(inv(cbTopVirgen), vcTopNecesario);
-    const vcBotPuede = Math.min(inv(cbBotVirgen), vcBotNecesario);
+    // ── Inventarios de medio proceso (igual que Simulador) ──
+    const giftBoxInv  = inv(giftBox);   // Gift Box Top ya ensamblado
+    const lowerBoxInv = inv(lowerBox);  // Lower Box Bottom ya ensamblado
+    const stripInv    = inv(strip);
+    const bundleInv   = inv(bundle);
 
-    // Stock ranurado total = inventario actual + lo que VC puede ranurar
+    // targetReal por grupo = target - lo ya producido (igual que Simulador/Consolidado)
+    const targetRealTop = Math.max(0, target - giftBoxInv);
+    const targetRealBot = Math.max(0, target - lowerBoxInv);
+
+    // ── VC: ranurar Virgen para cubrir lo que falta de Ranurado ──
+    // Se calcula contra targetReal del grupo, no contra target completo
+    const topRanInvAct  = inv(cbTopRan);
+    const botRanInvAct  = inv(cbBotRan);
+    const virgenTopInv  = inv(cbTopVirgen);
+    const virgenBotInv  = inv(cbBotVirgen);
+
+    // ¿Cuánto falta de Ranurado para cubrir targetReal?
+    const vcTopNecesario = Math.max(0, targetRealTop - topRanInvAct);
+    const vcBotNecesario = Math.max(0, targetRealBot - botRanInvAct);
+    // VC puede ranurar lo que necesita, limitado por Virgen disponible
+    const vcTopPuede = Math.min(virgenTopInv, vcTopNecesario);
+    const vcBotPuede = Math.min(virgenBotInv, vcBotNecesario);
+
+    // Ranurado total disponible tras VC
     const topRanTotal = topRanInvAct + vcTopPuede;
     const botRanTotal = botRanInvAct + vcBotPuede;
 
-    // ── S1/S2 + Zhongke comparten pool TOP ──
-    const topMats = [
-      {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Top Box', inv: inv(sheetTop), pn: sheetTop?.pn||'—', nota:''},
-    ];
-    const topPuede = Math.min(...topMats.map(m=>m.inv));
+    // ── Sheet: inv real = físico + ya incorporado en header (igual que Simulador) ──
+    const sheetTopInvReal = (inv(sheetTop)||0) + giftBoxInv;
+    const sheetBotInvReal = (inv(sheetBot)||0) + lowerBoxInv;
 
-    // ── S3: BOTTOM con etiqueta ──
+    // ── S1/S2 + Zhongke — Producir TOP ──
+    // Solo necesita producir si Gift Box no cubre el target completo
+    const topMats = [
+      {label:'Chip Board Top (Ranurado)', inv: topRanTotal,    pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''},
+      {label:'Sheet Top Box',             inv: sheetTopInvReal, pn: sheetTop?.pn||'—',                  nota: giftBoxInv>0?giftBoxInv.toLocaleString()+' ya en Gift Box':''},
+    ];
+    const topPuede = topMats.length ? Math.min(...topMats.map(m=>m.inv)) : 0;
+
+    // ── S3 — Producir BOTTOM con etiqueta ──
     const s3Mats = [
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Lower Box (Bottom)', inv: inv(sheetBot), pn: sheetBot?.pn||'—', nota:''},
-      {label:'Set Pad', inv: inv(setPad), pn: setPad?.pn||'—', nota:''},
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal,    pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
+      {label:'Sheet Lower Box (Bottom)',     inv: sheetBotInvReal, pn: sheetBot?.pn||'—',                  nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''},
+      {label:'Set Pad',                      inv: inv(setPad),     pn: setPad?.pn||'—',                     nota:''},
     ];
     if (backSticker) s3Mats.push({label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
-    const s3Puede = Math.min(...s3Mats.map(m=>m.inv));
+    const s3Puede = s3Mats.length ? Math.min(...s3Mats.map(m=>m.inv)) : 0;
 
-    // ── S4: BOTTOM sin etiqueta ──
+    // ── S4 — Producir BOTTOM sin etiqueta ──
     const s4Mats = [
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Lower Box (Bottom)', inv: inv(sheetBot), pn: sheetBot?.pn||'—', nota:''},
-      {label:'Pulp Tray', inv: inv(pulpTray), pn: pulpTray?.pn||'—', nota:''},
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal,    pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
+      {label:'Sheet Lower Box (Bottom)',     inv: sheetBotInvReal, pn: sheetBot?.pn||'—',                  nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''},
+      {label:'Pulp Tray',                    inv: inv(pulpTray),   pn: pulpTray?.pn||'—',                   nota:''},
     ];
     const s4Puede = pulpTray ? Math.min(...s4Mats.map(m=>m.inv)) : 0;
 
-    // ── ASSY1 ──
+    // ── Capacidad BOTTOM = la mejor entre S3 y S4 ──
     const botPuede = Math.max(s3Puede, s4Puede);
 
-    // Lógica medio proceso con pool compartido — descuenta entre modelos
-    const stripInv = inv(strip);
-    const giftBoxInv = inv(giftBox);
-    const lowerBoxInv = inv(lowerBox);
-    const bundleInv = inv(bundle);
-
-    // Descontar del pool lo que se usará en este modelo
-    const stripDisp = stripInv;
-    const giftBoxDisp = giftBoxInv >= target ? giftBoxInv : giftBoxInv + topPuede;
+    // ── ASSY1 — Ensamble final ──
+    // Gift Box disponible = existente + lo que S1/S2 puede producir
+    const giftBoxDisp  = giftBoxInv >= target ? giftBoxInv : giftBoxInv + topPuede;
     const lowerBoxDisp = lowerBoxInv >= target ? lowerBoxInv : lowerBoxInv + botPuede;
-    const bundleDisp = bundleInv; // Pool ya descontó al calcular inv()
 
-    // Descontar Bundle del pool para modelos siguientes
-    if (bundle) takeRend(bundle, Math.min(bundleInv, target));
-    if (strip) takeRend(strip, Math.min(stripInv, target));
-    if (giftBox && giftBoxInv >= target) takeRend(giftBox, target);
+    // Descontar del pool para el siguiente modelo
+    if (bundle)   takeRend(bundle,   Math.min(bundleInv,   target));
+    if (strip)    takeRend(strip,    Math.min(stripInv,    target));
+    if (giftBox  && giftBoxInv  >= target) takeRend(giftBox,  target);
     if (lowerBox && lowerBoxInv >= target) takeRend(lowerBox, target);
 
     const assy1Mats = [
-      {label:'Strip (GH90)', inv: stripDisp, pn: strip?.pn||'—', nota: stripInv>=target?'inventario suficiente':''},
+      {label:'Strip (GH90)',               inv: stripInv,    pn: strip?.pn||'—',   nota: stripInv>=target?'inventario suficiente':''},
       {label:'Gift Box Top (S1/S2/Zhongke)', inv: giftBoxDisp, pn: giftBox?.pn||'—', nota: giftBoxInv>=target?'inventario suficiente':'de producción TOP'},
-      {label:'Lower Box Bottom (S3/S4)', inv: lowerBoxDisp, pn: lowerBox?.pn||'—', nota: lowerBoxInv>=target?'inventario suficiente':'de producción BOTTOM'},
-      {label:'Bundle (P3)', inv: bundleDisp, pn: bundle?.pn||'—', nota: bundleInv>=target?'inventario suficiente':'pedir a P3'},
+      {label:'Lower Box Bottom (S3/S4)',   inv: lowerBoxDisp, pn: lowerBox?.pn||'—', nota: lowerBoxInv>=target?'inventario suficiente':'de producción BOTTOM'},
+      {label:'Bundle (P3)',                inv: bundleInv,   pn: bundle?.pn||'—',  nota: bundleInv>=target?'inventario suficiente':'pedir a P3'},
     ];
     const assy1Puede = Math.min(...assy1Mats.map(m=>m.inv), target);
 
-    const pct = Math.min(100, Math.round((assy1Puede/target)*100));
-    const sc = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
+    const pct  = Math.min(100, Math.round((assy1Puede/target)*100));
+    const sc   = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
     const stag = pct>=100?'<span class="tag tag-ok">✓ LISTO</span>':pct>0?'<span class="tag tag-warn">⚠ PARCIAL</span>':'<span class="tag tag-err">✗ BLOQUEADO</span>';
-
-    const lineaCard = (label, color, icon, mats, puede) => {
-      if (!mats.length || mats.every(m=>m.inv===0 && !m.nota)) return '';
-      const cuello = mats.reduce((mn,m)=>m.inv<mn.inv?m:mn, mats[0]);
-      const pctLinea = Math.min(100, Math.round((puede/target)*100));
-      return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
-          <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-              <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
-            </div>
-            <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
-            <span style="font-size:10px;color:var(--text2)">/ ${target.toLocaleString()}</span>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;table-layout:fixed">
-          <thead><tr style="font-size:10px">
-            <th style="width:36%">Material</th>
-            <th style="width:20%">N° Parte</th>
-            <th style="width:14%;text-align:right">Disponible</th>
-            <th style="width:14%;text-align:right">Requerido</th>
-            <th style="width:16%;text-align:center">Estado</th>
-          </tr></thead><tbody>
-          ${mats.map((m,i)=>{
-            const ok=m.inv>=target;
-            const tc=ok?'var(--green)':m.inv>0?'var(--amber)':'var(--red)';
-            const tag=ok?'<span class="tag tag-ok">OK</span>':'<span class="tag tag-err">FALTA</span>';
-            const esCuello = m===cuello && !ok;
-            return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
-              <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
-              <td style="font-family:monospace;font-size:12px;color:${color}">${m.pn}</td>
-              <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
-              <td style="text-align:right">${target.toLocaleString()}</td>
-              <td style="text-align:center">${tag}</td>
-            </tr>`;
-          }).join('')}
-          </tbody>
-        </table>
-        </div>
-      </div>`;
-    };
 
     html += `
     <div style="background:var(--bg2);border:1px solid ${sc}40;border-radius:12px;margin-bottom:1.25rem;overflow:hidden">
@@ -1411,24 +1433,38 @@ function renderProd() {
         </div>
       </div>
       <div style="padding:.75rem">
-        ${vcTopNecesario > 0
-          ? lineaCard('VC1 — Ranurar TOP','var(--amber)','⚙️',
-              [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'}],
-              vcTopPuede)
-          : `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">⚙️ VC1 — No necesita ranurar</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Ranurado TOP disponible cubre el target</span></td></tr>`}
-        ${vcBotNecesario > 0
-          ? lineaCard('VC2 — Ranurar BOT','#00B8A0','⚙️',
-              [{label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
-              vcBotPuede)
-          : `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">⚙️ VC2 — No necesita ranurar</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Ranurado BOT disponible cubre el target</span></td></tr>`}
-        ${giftBoxDisp >= target
-          ? `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">🏭 S1/S2 + Zhongke — No necesita producir</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Gift Box Top ${giftBoxDisp.toLocaleString()} cubre el target</span></td></tr>`
-          : lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
-        ${lowerBoxDisp >= target
-          ? `<tr style="background:rgba(0,230,118,.06)"><td colspan="5" style="padding:.35rem .75rem;border-top:2px solid rgba(0,230,118,.3)"><span style="font-size:12px;font-weight:700;color:var(--green)">🏭 S3 — No necesita producir</span><span style="font-size:11px;color:var(--text2);margin-left:8px">Lower Box Bottom ${lowerBoxDisp.toLocaleString()} cubre el target</span></td></tr>`
-          : lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
-        ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
-        ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
+
+        ${/* ── VC1 ── */ vcTopNecesario > 0
+          ? lineaCard('VC1 — Ranurar TOP', 'var(--amber)', '⚙️',
+              [{label:'Chip Board Top (Virgen)', inv: virgenTopInv, pn: cbTopVirgen?.pn||'—', nota:'→ produce Ranurado'}],
+              vcTopPuede, vcTopNecesario)
+          : bannerOK('VC1 — No necesita ranurar', `Ranurado TOP (${topRanInvAct.toLocaleString()}) cubre el requerido (${targetRealTop.toLocaleString()})`)
+        }
+
+        ${/* ── VC2 ── */ vcBotNecesario > 0
+          ? lineaCard('VC2 — Ranurar BOT', '#00B8A0', '⚙️',
+              [{label:'Chip Board Bottom (Virgen)', inv: virgenBotInv, pn: cbBotVirgen?.pn||'—', nota:'→ produce Ranurado'}],
+              vcBotPuede, vcBotNecesario)
+          : bannerOK('VC2 — No necesita ranurar', `Ranurado BOT (${botRanInvAct.toLocaleString()}) cubre el requerido (${targetRealBot.toLocaleString()})`)
+        }
+
+        ${/* ── S1/S2 ── */ giftBoxDisp >= target
+          ? bannerOK('S1/S2 + Zhongke — No necesita producir', `Gift Box Top (${giftBoxInv.toLocaleString()}) ya cubre el target`)
+          : lineaCard('S1 / S2 + Zhongke — Producir TOP', 'var(--accent)', '🏭', topMats, topPuede, targetRealTop)
+        }
+
+        ${/* ── S3 ── */ lowerBoxDisp >= target
+          ? bannerOK('S3 — No necesita producir', `Lower Box Bottom (${lowerBoxInv.toLocaleString()}) ya cubre el target`)
+          : lineaCard('S3 — Producir BOTTOM (con etiqueta)', '#00B8A0', '🏭', s3Mats, s3Puede, targetRealBot)
+        }
+
+        ${/* ── S4 ── */ (s4Puede > 0 || pulpTray)
+          ? lineaCard('S4 — Producir BOTTOM (sin etiqueta)', '#7C5CBF', '🏭', s4Mats, s4Puede, targetRealBot)
+          : ''
+        }
+
+        ${/* ── ASSY1 ── */ lineaCard('ASSY1 — Ensamble Final', 'var(--green)', '✅', assy1Mats, assy1Puede, target)}
+
       </div>
     </div>`;
   });

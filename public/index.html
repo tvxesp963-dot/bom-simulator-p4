@@ -1514,57 +1514,295 @@ function exportarExcel() {
   if (!BOM.length) { alert('Primero procesa tu BOM'); return; }
   const semana = document.getElementById('semanaRef').value;
   const wb = XLSX.utils.book_new();
+  const EXTRA = 1.10;
+  const fecha = new Date().toLocaleDateString('es-MX');
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
 
-  // Hoja 1: Consolidado Pedidos
-  const h1 = [
-    ['CONSOLIDADO DE MATERIALES A PEDIR — POR PLANTA — P4 BOM'],
-    [`Fecha: ${new Date().toLocaleDateString('es-MX')}   |   Solo materiales visibles en BOM   |   Orden: P1 → P3 → ALIBER`],
-    [],
-    ['No.','Fecha','Ensamble (Strip Code)','Número de Parte','Descripción','Inventario Actual','Cantidad a Pedir','Recibido / Enviado']
-  ];
-  let no=1;
-  ['P1','P3','ALIBER'].forEach(pl => {
-    const rows = BOM.filter(r=>r.planta===pl);
-    if (!rows.length) return;
-    h1.push([`  ▶  PLANTA: ${pl}`,null,null,null,null,null,null,`TOTAL: ${rows.length} materiales`]);
-    h1.push(['No.','Fecha','Ensamble (Strip Code)','Número de Parte','Descripción','Inventario Actual','Cantidad a Pedir','Recibido / Enviado']);
-    rows.forEach(r=>h1.push([no++,null,r.sm,r.pn,r.desc,r.inv||0,r.qtyPlan||0,null]));
-    h1.push([]);
+  // ── Colores ──
+  const C = {
+    tituloFg:  { rgb: 'FFFFFF' }, tituloBg:  { rgb: '1A3A6B' },
+    subtitFg:  { rgb: '444444' }, subtitBg:  { rgb: 'DCE6F1' },
+    p1Bg:      { rgb: '1A4F9C' }, p1Fg:      { rgb: 'FFFFFF' },
+    p3Bg:      { rgb: '1A7A3C' }, p3Fg:      { rgb: 'FFFFFF' },
+    aliBg:     { rgb: 'B85C00' }, aliFg:     { rgb: 'FFFFFF' },
+    hdrBg:     { rgb: '2E4D7B' }, hdrFg:     { rgb: 'FFFFFF' },
+    altBg:     { rgb: 'EEF3FB' },
+    faltaBg:   { rgb: 'FFD7D7' }, faltaFg:   { rgb: 'CC0000' },
+    okBg:      { rgb: 'D7F4E3' }, okFg:      { rgb: '006400' },
+    pedirBg:   { rgb: 'FFF2CC' }, pedirFg:   { rgb: '7B5A00' },
+    totalBg:   { rgb: '1A3A6B' }, totalFg:   { rgb: 'FFFFFF' },
+    bundleBg:  { rgb: '4A2D7A' }, bundleFg:  { rgb: 'FFFFFF' },
+  };
+
+  const font  = (bold, color) => ({ bold: !!bold, color: color || { rgb:'000000' }, name:'Calibri', sz:10 });
+  const fill  = (color) => ({ patternType:'solid', fgColor: color });
+  const align = (h, v, wrap) => ({ horizontal: h||'left', vertical: v||'center', wrapText: !!wrap });
+  const border = () => ({
+    top:    { style:'thin', color:{ rgb:'BBBBBB' } },
+    bottom: { style:'thin', color:{ rgb:'BBBBBB' } },
+    left:   { style:'thin', color:{ rgb:'BBBBBB' } },
+    right:  { style:'thin', color:{ rgb:'BBBBBB' } }
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h1), 'Consolidado Pedidos');
 
-  // Hoja 2: Producir y VC Ranurar
-  const h2 = [
-    [`PRODUCIR Y VC RANURAR — ${semana}`],[],
-    ['No.','Ensamble (Strip Code)','Número de Parte','Descripción','Inventario','Cantidad Plan','Línea / Plan']
-  ];
-  let no2=1;
-  ['S1/S2','S3/S4','VC/Zhongke','ASSY1'].forEach(l=>{
-    const rows=BOM.filter(r=>r.planta===l);
-    if (!rows.length) return;
-    h2.push([`  ▶  ${l}`,null,null,null,null,null,null]);
-    rows.forEach(r=>h2.push([no2++,r.sm,r.pn,r.desc,r.inv||0,r.qtyPlan||0,r.plan]));
-    h2.push([]);
+  const cell = (v, bold, fgColor, bgColor, hAlign, wrap) => ({
+    v: v === null || v === undefined ? '' : v,
+    t: typeof v === 'number' ? 'n' : 's',
+    s: {
+      font:      font(bold, fgColor),
+      fill:      bgColor ? fill(bgColor) : { patternType:'none' },
+      alignment: align(hAlign || 'left', 'center', wrap),
+      border:    border()
+    }
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h2), 'Producir y VC Ranurar');
+  const numCell = (v, bold, fgColor, bgColor) => ({
+    v: v || 0, t: 'n',
+    s: { font: font(bold, fgColor), fill: bgColor ? fill(bgColor) : { patternType:'none' },
+         alignment: align('right','center'), border: border() }
+  });
 
-  // Hoja 3: ASSY1
-  const modelos=[...new Set(BOM.map(r=>r.sm))];
-  const h3=[
-    [`ASSY1 — CAPACIDAD DE PRODUCCIÓN — ${semana}`],
-    ['Regla: solo inventario actual. S1/S4/VC alimenta ASSY1 la semana siguiente.'],
-    [],
-    ['#','Modelo SM','GH90 (Ensamble)','Descripción','Total','Con Inv.','% Disp.','Estado']
+  // ══════════════════════════════════════════════
+  // HOJA 1 — CONSOLIDADO DE PEDIDOS
+  // ══════════════════════════════════════════════
+  const ws1Data = [];
+  const ws1Merges = [];
+  let R = 0; // row index
+
+  const pushRow = (arr) => { ws1Data.push(arr); R++; };
+
+  // Título principal
+  pushRow([
+    cell('CONSOLIDADO DE MATERIALES A PEDIR — POR PLANTA — P4 BOM', true, C.tituloFg, C.tituloBg, 'center'),
+    ...Array(8).fill(cell('',false,null,C.tituloBg))
+  ]);
+  ws1Merges.push({ s:{r:R-1,c:0}, e:{r:R-1,c:8} });
+
+  // Subtítulo
+  pushRow([
+    cell(`Fecha: ${fecha}   |   Semana: ${semana}   |   Solo materiales con faltante   |   Orden: P1 → P3 → ALIBER`, false, C.subtitFg, C.subtitBg, 'center'),
+    ...Array(8).fill(cell('',false,null,C.subtitBg))
+  ]);
+  ws1Merges.push({ s:{r:R-1,c:0}, e:{r:R-1,c:8} });
+  pushRow([cell('')]); // espacio
+
+  // Columnas header global
+  const COL_HDRS = ['No.','Fecha','Ensamble
+(Strip Code)','Modelo / Target
+Semana','Número de Parte','Descripción','Inventario
+Actual','Cantidad
+a Pedir','Recibido /
+Enviado','Notas BOM'];
+
+  // ── Por planta ──
+  const plantasCfg = [
+    { key:'P1', label:'PLANTA 1  (P1)', subLabel:'Chip Boards · Sheets · Strip', bg: C.p1Bg, fg: C.p1Fg },
+    { key:'P3', label:'PLANTA 3  (P3)', subLabel:'Bundles · Inserts · QSG',      bg: C.p3Bg, fg: C.p3Fg },
+    { key:'ALIBER', label:'ALIBER',     subLabel:'Pulp Tray · Data Cable · Ejection Pin', bg: C.aliBg, fg: C.aliFg },
   ];
-  modelos.map(sm=>{
-    const comps=BOM.filter(r=>r.sm===sm&&r.familia!=='GH90');
-    const conInv=comps.filter(r=>r.inv>0).length;
-    const pct=comps.length>0?Math.round((conInv/comps.length)*100):0;
-    const gh90=BOM.find(r=>r.sm===sm&&r.familia==='GH90');
-    return {sm,gh90:gh90?.pn||'',gh90desc:gh90?.desc||'',comps:comps.length,conInv,pct};
-  }).sort((a,b)=>b.pct-a.pct)
-  .forEach((r,i)=>h3.push([i+1,r.sm,r.gh90,r.gh90desc,r.comps,r.conInv,`${r.pct}%`,r.pct===100?'LISTO':'INCOMPLETO']));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h3), 'ASSY1 Capacidad');
+
+  // Recalcular pedidos usando la misma logica del Consolidado en pantalla
+  const getConsolidadoRows = (plKey) => {
+    const result = [];
+    modelos.forEach(sm => {
+      const target = simTargetsPorModelo[sm] || 0;
+      if (!target) return;
+      const giftBoxR   = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
+      const lowerBoxR  = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
+      const giftInv    = giftBoxR  ? (giftBoxR.inv||0)  : 0;
+      const lowerInv   = lowerBoxR ? (lowerBoxR.inv||0) : 0;
+      const targetRTop = Math.max(0, target - giftInv);
+      const targetRBot = Math.max(0, target - lowerInv);
+
+      const stripR  = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
+      const bundleR = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
+      const bundleInv = bundleR ? (bundleR.inv||0) : 0;
+      const necesitaBundle = Math.max(0, target - bundleInv);
+
+      if (plKey === 'P3') {
+        // Bundle header
+        if (bundleR && bundleInv < target) {
+          result.push({ sm, pn: bundleR.pn, desc: bundleR.desc, inv: bundleInv,
+            falta: target - bundleInv, aPedir: Math.ceil((target - bundleInv)*EXTRA),
+            target, nota: 'Bundle — Ensamble Padre', isBundle: true });
+        }
+        // Sub-componentes P3
+        BOM.filter(r => r.sm===sm && getDestino(r)==='P3' && r.familia!=='GH90')
+          .filter(r => (r.inv||0) < necesitaBundle)
+          .forEach(r => {
+            const falta = necesitaBundle - (r.inv||0);
+            result.push({ sm, pn: r.pn, desc: r.desc, inv: r.inv||0,
+              falta, aPedir: Math.ceil(falta*EXTRA), target: necesitaBundle, nota: '' });
+          });
+        return;
+      }
+
+      BOM.filter(r => r.sm===sm && getDestino(r)===plKey && r.familia!=='GH90' && componenteNecesario(r, sm, target))
+        .filter(r => {
+          const d = (r.desc||'').toUpperCase();
+          const esChipBoard = d.includes('CHIP BOARD');
+          const esTop = d.includes('TOP');
+          const tgtG = esTop ? targetRTop : targetRBot;
+          if (esChipBoard) {
+            const grupoKey = esTop ? 'CHIP BOARD TOP' : 'CHIP BOARD BOTTOM';
+            const ran = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(grupoKey) && (b.desc||'').toUpperCase().includes('RANURADO'));
+            const vir = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(grupoKey) && (b.desc||'').toUpperCase().includes('VIRGEN'));
+            const rInv = ran ? (ran.inv||0) : 0;
+            const vInv = vir ? (vir.inv||0) : 0;
+            if (d.includes('VIRGEN') && rInv >= tgtG) return false;
+            if (d.includes('RANURADO') && (rInv + vInv) >= tgtG && rInv < tgtG) return false;
+          }
+          const isHdr = (d.includes('GIFT BOX') && !d.includes('SHEET')) || (d.includes('LOWER BOX') && !d.includes('SHEET'));
+          const tgt2  = isHdr ? target : (d.includes('CHIP BOARD TOP') ? targetRTop : d.includes('CHIP BOARD BOTTOM') ? targetRBot : target);
+          const invR  = isHdr ? (r.inv||0) : (d.includes('SHEET TOP') ? (r.inv||0)+giftInv : d.includes('SHEET LOWER') ? (r.inv||0)+lowerInv : r.inv||0);
+          return invR < tgt2;
+        })
+        .forEach(r => {
+          const d = (r.desc||'').toUpperCase();
+          const isHdr = (d.includes('GIFT BOX') && !d.includes('SHEET')) || (d.includes('LOWER BOX') && !d.includes('SHEET'));
+          const tgt2  = isHdr ? target : (d.includes('CHIP BOARD TOP') ? targetRTop : d.includes('CHIP BOARD BOTTOM') ? targetRBot : target);
+          const invR  = isHdr ? (r.inv||0) : (d.includes('SHEET TOP') ? (r.inv||0)+giftInv : d.includes('SHEET LOWER') ? (r.inv||0)+lowerInv : r.inv||0);
+          const falta = Math.max(0, tgt2 - invR);
+          result.push({ sm, pn: r.pn, desc: r.desc, inv: r.inv||0,
+            falta, aPedir: falta > 0 ? Math.ceil(falta*EXTRA) : 0, target: tgt2, nota: '' });
+        });
+    });
+    return result;
+  };
+
+  let noGlobal = 1;
+  let totalGeneralPedir = 0;
+  const totalesPorPlanta = {};
+
+  plantasCfg.forEach(pl => {
+    const rows = getConsolidadoRows(pl.key);
+    if (!rows.length) return;
+
+    const totalPedir = rows.reduce((s,r) => s + (r.aPedir||0), 0);
+    totalesPorPlanta[pl.key] = totalPedir;
+    totalGeneralPedir += totalPedir;
+
+    // Header de planta
+    pushRow([
+      cell(`${pl.label}`, true, pl.fg, pl.bg, 'left'),
+      cell(pl.subLabel, false, pl.fg, pl.bg),
+      ...Array(6).fill(cell('', false, null, pl.bg)),
+      cell(`TOTAL PLANTA: ${totalPedir.toLocaleString()} pzas`, true, pl.fg, pl.bg, 'right')
+    ]);
+    ws1Merges.push({ s:{r:R-1,c:0}, e:{r:R-1,c:0} });
+    ws1Merges.push({ s:{r:R-1,c:1}, e:{r:R-1,c:7} });
+
+    // Sub-header columnas
+    pushRow(COL_HDRS.map(h => cell(h, true, C.hdrFg, C.hdrBg, 'center', true)));
+
+    // Filas de datos
+    rows.forEach((r, i) => {
+      const alt = i%2===1;
+      const bgRow = alt ? C.altBg : null;
+      const faltaColor = r.falta > 0 ? C.faltaFg : C.okFg;
+      const faltaBg    = r.falta > 0 ? C.faltaBg  : C.okBg;
+      const pedirBg    = r.aPedir > 0 ? C.pedirBg : C.okBg;
+      const pedirFg    = r.aPedir > 0 ? C.pedirFg : C.okFg;
+      const nota = r.aPedir > 0
+        ? `${pl.key} PEDIR ${r.aPedir.toLocaleString()}`
+        : 'OK — Sin faltante';
+      pushRow([
+        numCell(noGlobal++, false, null, bgRow),
+        cell('', false, null, bgRow),
+        cell(r.sm, false, { rgb:'1A4F9C' }, bgRow),
+        cell(`(target:${r.target.toLocaleString()})`, false, { rgb:'555555' }, bgRow),
+        cell(r.pn, false, { rgb: r.isBundle ? '6B2FA0' : '1A4F9C' }, bgRow),
+        cell(r.desc, false, null, bgRow),
+        numCell(r.inv, false, null, bgRow),
+        numCell(r.aPedir, true, pedirFg, pedirBg),
+        cell('', false, null, bgRow),
+        cell(nota, false, pedirFg, pedirBg)
+      ]);
+    });
+
+    // Fila total de planta
+    pushRow([
+      cell('', false, null, pl.bg),
+      cell('', false, null, pl.bg),
+      cell('', false, null, pl.bg),
+      cell('', false, null, pl.bg),
+      cell('', false, null, pl.bg),
+      cell(`TOTAL ${pl.label}`, true, pl.fg, pl.bg, 'right'),
+      cell('', false, null, pl.bg),
+      numCell(totalPedir, true, pl.fg, pl.bg),
+      cell('', false, null, pl.bg),
+      cell('', false, null, pl.bg),
+    ]);
+    ws1Merges.push({ s:{r:R-1,c:0}, e:{r:R-1,c:4} });
+    ws1Merges.push({ s:{r:R-1,c:5}, e:{r:R-1,c:6} });
+    pushRow([cell('')]); // espacio
+  });
+
+  // Fila TOTAL GENERAL
+  pushRow([
+    ...Array(5).fill(cell('', false, null, C.totalBg)),
+    cell('TOTAL GENERAL A PEDIR', true, C.totalFg, C.totalBg, 'right'),
+    cell('', false, null, C.totalBg),
+    numCell(totalGeneralPedir, true, C.totalFg, C.totalBg),
+    cell('', false, null, C.totalBg),
+    cell(
+      Object.entries(totalesPorPlanta).map(([k,v]) => `${k}: ${v.toLocaleString()}`).join('  |  '),
+      true, C.totalFg, C.totalBg, 'center'
+    )
+  ]);
+  ws1Merges.push({ s:{r:R-1,c:0}, e:{r:R-1,c:4} });
+  ws1Merges.push({ s:{r:R-1,c:5}, e:{r:R-1,c:6} });
+
+  // Construir worksheet
+  const ws1 = {};
+  ws1Data.forEach((row, ri) => {
+    row.forEach((cellObj, ci) => {
+      if (!cellObj) return;
+      const addr = XLSX.utils.encode_cell({ r: ri, c: ci });
+      ws1[addr] = cellObj;
+    });
+  });
+  ws1['!ref'] = XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:R,c:9} });
+  ws1['!merges'] = ws1Merges;
+  ws1['!cols'] = [
+    {wch:5},{wch:10},{wch:14},{wch:18},{wch:14},{wch:28},{wch:12},{wch:12},{wch:12},{wch:20}
+  ];
+  ws1['!rows'] = Array(R).fill({ hpt: 20 });
+  XLSX.utils.book_append_sheet(wb, ws1, 'Consolidado Pedidos');
+
+  // ══════════════════════════════════════════════
+  // HOJA 2 — PRODUCIR Y VC RANURAR (simple, limpia)
+  // ══════════════════════════════════════════════
+  const ws2 = {};
+  let R2 = 0;
+  const p2 = (arr) => {
+    arr.forEach((c,ci) => { if(c) ws2[XLSX.utils.encode_cell({r:R2,c:ci})] = c; });
+    R2++;
+  };
+
+  p2([ cell(`PRODUCIR Y VC RANURAR — ${semana}`, true, C.tituloFg, C.tituloBg), ...Array(5).fill(cell('',false,null,C.tituloBg)) ]);
+  p2([cell('')]);
+  p2(['No.','Modelo SM','N° Parte','Descripción','Inventario','Cantidad Plan','Línea'].map(h => cell(h, true, C.hdrFg, C.hdrBg, 'center')));
+
+  let no2 = 1;
+  const lineas = [
+    { key:'S1/S2',      label:'S1 / S2 + Zhongke — Producir TOP',     bg: C.p1Bg },
+    { key:'S3/S4',      label:'S3 / S4 — Producir BOTTOM',             bg: { rgb:'006060' } },
+    { key:'VC/Zhongke', label:'VC / Zhongke — Ranurar',                bg: { rgb:'7B5A00' } },
+    { key:'ASSY1',      label:'ASSY1 — Ensamble Final',                bg: { rgb:'1A6B2A' } },
+  ];
+  lineas.forEach(l => {
+    const rows = BOM.filter(r => r.planta === l.key);
+    if (!rows.length) return;
+    p2([ cell(`  ▶  ${l.label}`, true, { rgb:'FFFFFF' }, l.bg), ...Array(5).fill(cell('',false,null,l.bg)) ]);
+    rows.forEach(r => p2([
+      numCell(no2++), cell(r.sm), cell(r.pn, false, { rgb:'1A4F9C' }),
+      cell(r.desc), numCell(r.inv||0), numCell(r.qtyPlan||0), cell(r.plan||'')
+    ]));
+    p2([cell('')]);
+  });
+
+  ws2['!ref'] = XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:R2,c:6} });
+  ws2['!cols'] = [{wch:5},{wch:16},{wch:14},{wch:28},{wch:12},{wch:14},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Producir y VC Ranurar');
 
   XLSX.writeFile(wb, `BOM_Consolidado_P4_${semana.replace(/[\s—]+/g,'_')}.xlsx`);
 }

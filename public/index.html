@@ -793,28 +793,30 @@ function renderSimTable() {
     </td>
   </tr>`;
 
-  const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null, invOverride=null) => {
+  const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null, invOverride=null, noRequerido=false) => {
     const tgt = targetOverride !== null ? targetOverride : target;
     const invForDiff = invOverride !== null ? invOverride : r.inv;
     // Strip muestra diferencia real; Bundle y otros GH90 muestran —
     const esStripDiff = r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('STRIP');
     const diff = (r.familia === 'GH90' && !esStripDiff) ? null : invForDiff - tgt;
-    const dc = diff===null?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
-    const dtxt = diff===null?'—':(diff>=0?'+':'')+diff.toLocaleString();
+    const dc = diff===null?'var(--text3)':noRequerido?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
+    const dtxt = diff===null?'—':noRequerido?'—':(diff>=0?'+':'')+diff.toLocaleString();
     // Strip (GH90 ENSAMBLE): mostrar OK/ORDER según inventario vs target
     // Bundle (GH90 BUNDLE): mantener ASSEMBLY
     const esStrip = r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP');
-    const estado = esStrip
-      ? (r.inv >= tgt
-          ? `<span class="tag tag-ok">✓ OK</span>`
-          : `<span class="tag tag-err">⚠ ORDER</span>`)
-      : r.familia==='GH90'
-        ? `<span class="tag tag-info">ASSEMBLY</span>`
-        : vcTag
-          ? `<span class="tag tag-warn">${vcTag}</span>`
-          : (poolOK || diff>=0)
+    const estado = noRequerido
+      ? `<span class="tag tag-info" style="background:rgba(122,136,184,.12);color:var(--text2);border-color:rgba(122,136,184,.3)">— N/R</span>`
+      : esStrip
+        ? (r.inv >= tgt
             ? `<span class="tag tag-ok">✓ OK</span>`
-            : `<span class="tag tag-err">⚠ ORDER</span>`;
+            : `<span class="tag tag-err">⚠ ORDER</span>`)
+        : r.familia==='GH90'
+          ? `<span class="tag tag-info">ASSEMBLY</span>`
+          : vcTag
+            ? `<span class="tag tag-warn">${vcTag}</span>`
+            : (poolOK || diff>=0)
+              ? `<span class="tag tag-ok">✓ OK</span>`
+              : `<span class="tag tag-err">⚠ ORDER</span>`;
     const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
     const indent = isSubComponent ? 'padding-left:24px;background:rgba(77,166,255,.02)' : 'font-weight:600';
     const prefix = isSubComponent ? '<span style="color:var(--text3);font-size:9px;margin-right:4px">└─</span>' : '';
@@ -966,13 +968,15 @@ function renderSimTable() {
         const esRanurado = sDesc.includes('RANURADO') || sDesc.includes('GROOVING');
         const sInv = s.inv || 0;
         const virgenOK = esVirgen && (ranuradoSoloCubre || sInv >= targetReal);
+        // Virgen N/R = Ranurado solo cubre, no necesita procesarse
+        const virgenNR = esVirgen && ranuradoSoloCubre;
         const virgenVC = esVirgen && !ranuradoSoloCubre && chipPoolCubre && sInv < targetReal;
         const ranuradoOK = esRanurado && ranuradoSoloCubre;
         const ranuradoVC = esRanurado && !ranuradoSoloCubre && chipPoolCubre;
         const subPoolOK = virgenOK || ranuradoOK;
         const subVcTag = virgenVC ? vcTagLabel : ranuradoVC ? vcTagLabel : null;
         // En modo Todos: mostrar siempre. En otros modos: solo si es relevante
-        if(skipFiltroNecesario || passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal));
+        if(skipFiltroNecesario || passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal, null, virgenNR));
       } else {
         // Otros sub-componentes
         if(skipFiltroNecesario || passFilter(s)) rows.push(rowHTML(s, true, false, null, targetReal));

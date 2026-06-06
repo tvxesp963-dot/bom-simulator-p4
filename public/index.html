@@ -1339,7 +1339,7 @@ function renderProd() {
           <th style="width:36%">Material</th>
           <th style="width:20%">N° Parte</th>
           <th style="width:14%;text-align:right">Disponible</th>
-          <th style="width:14%;text-align:right">Requerido</th>
+          <th style="width:14%;text-align:right">A Producir</th>
           <th style="width:16%;text-align:center">Estado</th>
         </tr></thead><tbody>
         ${mats.map((m,i) => {
@@ -1351,7 +1351,7 @@ function renderProd() {
             <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
             <td style="font-family:monospace;font-size:12px;color:${color}">${m.pn}</td>
             <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
-            <td style="text-align:right">${targetLinea.toLocaleString()}</td>
+            <td style="text-align:right;color:var(--red);font-weight:600">${targetLinea.toLocaleString()}</td>
             <td style="text-align:center">${tag}</td>
           </tr>`;
         }).join('')}
@@ -1423,35 +1423,30 @@ function renderProd() {
     const sheetBotInvReal = (inv(sheetBot)||0) + lowerBoxInv;
 
     // ── S1/S2 + Zhongke — Producir TOP ──
-    // Solo necesita producir si Gift Box no cubre el target completo
+    // Input: Chip Board Top Ranurado → Output: Gift Box Top
+    // Sheet Top Box se pide a P1, no es input de producción S1/S2
     const topMats = [];
     if (cbTopRan || cbTopVirgen) topMats.push(
       {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''});
-    if (sheetTop) topMats.push(
-      {label:'Sheet Top Box', inv: sheetTopInvReal, pn: sheetTop.pn, nota: giftBoxInv>0?giftBoxInv.toLocaleString()+' ya en Gift Box':''});
-    // Limitar al targetReal — no puede producir más de lo que falta
     const topPuede = Math.min(topMats.length ? Math.min(...topMats.map(m=>m.inv)) : 0, targetRealTop);
 
-    // ── S3 — Producir BOTTOM con etiqueta ──
-    // Solo incluir materiales que existen en el BOM de este modelo
+    // ── S3 — Producir Lower Box (S3) ──
+    // Input: Chip Board Bottom Ranurado → Output: Lower Box Bottom
+    // Sheet Lower Box se pide a P1, no es input de producción S3
     const s3Mats = [];
     if (cbBotRan || cbBotVirgen) s3Mats.push(
       {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
-    if (sheetBot) s3Mats.push(
-      {label:'Sheet Lower Box (Bottom)', inv: sheetBotInvReal, pn: sheetBot.pn, nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''});
     if (setPad) s3Mats.push(
       {label:'Set Pad', inv: inv(setPad), pn: setPad.pn, nota:''});
     if (backSticker) s3Mats.push(
       {label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
     const s3Puede = Math.min(s3Mats.length ? Math.min(...s3Mats.map(m=>m.inv)) : 0, targetRealBot);
 
-    // ── S4 — Producir BOTTOM sin etiqueta ──
-    // Solo incluir materiales que existen en el BOM de este modelo
+    // ── S4 — Producir Lower Box (S4) ──
+    // Input: Chip Board Bottom Ranurado + Pulp Tray → Output: Lower Box Bottom
     const s4Mats = [];
     if (cbBotRan || cbBotVirgen) s4Mats.push(
       {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
-    if (sheetBot) s4Mats.push(
-      {label:'Sheet Lower Box (Bottom)', inv: sheetBotInvReal, pn: sheetBot.pn, nota: lowerBoxInv>0?lowerBoxInv.toLocaleString()+' ya en Lower Box':''});
     if (pulpTray) s4Mats.push(
       {label:'Pulp Tray', inv: inv(pulpTray), pn: pulpTray.pn, nota:''});
     const s4Puede = pulpTray ? Math.min(Math.min(...s4Mats.map(m=>m.inv)), targetRealBot) : 0;

@@ -1314,9 +1314,17 @@ function renderProd() {
     if (!mats.length) return '';
     const cuello = mats.reduce((mn,m) => m.inv < mn.inv ? m : mn, mats[0]);
     const pctLinea = Math.min(100, targetLinea > 0 ? Math.round((puede / targetLinea) * 100) : 0);
+    const accion = label.includes('Ranurar') ? 'RANURAR' : label.includes('ASSY1') ? 'ENSAMBLAR' : 'PRODUCIR';
+    const faltaLinea = Math.max(0, targetLinea - puede);
     return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
-        <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
+          <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;background:${color}25;color:${color};border:1px solid ${color}50">
+            ${accion}: ${puede.toLocaleString()} pzas
+          </span>
+          ${faltaLinea > 0 ? `<span style="font-size:10px;color:var(--red);font-weight:600">· faltan ${faltaLinea.toLocaleString()} pzas</span>` : ''}
+        </div>
         <div style="display:flex;align-items:center;gap:.5rem">
           <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
             <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
@@ -1506,11 +1514,11 @@ function renderProd() {
 
         ${/* ── S3 ── */ lowerBoxDisp >= target
           ? bannerOK('S3 — No necesita producir', `Lower Box Bottom (${lowerBoxInv.toLocaleString()}) ya cubre el target`)
-          : lineaCard('S3 — Producir BOTTOM (con etiqueta)', '#00B8A0', '🏭', s3Mats, s3Puede, targetRealBot)
+          : lineaCard('S3 — Producir Lower Box (S3)', '#00B8A0', '🏭', s3Mats, s3Puede, targetRealBot)
         }
 
         ${/* ── S4 ── */ (s4Puede > 0 || pulpTray)
-          ? lineaCard('S4 — Producir BOTTOM (sin etiqueta)', '#7C5CBF', '🏭', s4Mats, s4Puede, targetRealBot)
+          ? lineaCard('S4 — Producir Lower Box (S4)', '#7C5CBF', '🏭', s4Mats, s4Puede, targetRealBot)
           : ''
         }
 

@@ -837,7 +837,7 @@ function renderSimTable() {
       <td>${r.desc}</td>
       <td style="width:70px;text-align:center"><span class="fam fam-${r.familia}">${r.familia}</span></td>
       <td style="width:75px;text-align:center">${destSel}</td>
-      <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString():'—'}</td>
+      <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':noRequerido?'var(--text2)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString():noRequerido?'0':'—'}</td>
       <td style="width:100px;text-align:right;color:var(--text2)">${r.familia==='GH90'?'—':tgt.toLocaleString()}</td>
       <td style="width:100px;text-align:right;color:${dc};font-weight:600">${dtxt}</td>
       <td style="width:90px;text-align:center">${estado}</td>

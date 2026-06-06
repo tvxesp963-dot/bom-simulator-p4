@@ -788,16 +788,25 @@ function renderSimTable() {
   const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null, invOverride=null) => {
     const tgt = targetOverride !== null ? targetOverride : target;
     const invForDiff = invOverride !== null ? invOverride : r.inv;
-    const diff = r.familia === 'GH90' ? null : invForDiff - tgt;
+    // Strip muestra diferencia real; Bundle y otros GH90 muestran —
+    const esStripDiff = r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('STRIP');
+    const diff = (r.familia === 'GH90' && !esStripDiff) ? null : invForDiff - tgt;
     const dc = diff===null?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
     const dtxt = diff===null?'—':(diff>=0?'+':'')+diff.toLocaleString();
-    const estado = r.familia==='GH90'
-      ? `<span class="tag tag-info">ASSEMBLY</span>`
-      : vcTag
-        ? `<span class="tag tag-warn">${vcTag}</span>`
-        : (poolOK || diff>=0)
+    // Strip (GH90 ENSAMBLE): mostrar OK/ORDER según inventario vs target
+    // Bundle (GH90 BUNDLE): mantener ASSEMBLY
+    const esStrip = r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP');
+    const estado = esStrip
+      ? (r.inv >= tgt
           ? `<span class="tag tag-ok">✓ OK</span>`
-          : `<span class="tag tag-err">⚠ ORDER</span>`;
+          : `<span class="tag tag-err">⚠ ORDER</span>`)
+      : r.familia==='GH90'
+        ? `<span class="tag tag-info">ASSEMBLY</span>`
+        : vcTag
+          ? `<span class="tag tag-warn">${vcTag}</span>`
+          : (poolOK || diff>=0)
+            ? `<span class="tag tag-ok">✓ OK</span>`
+            : `<span class="tag tag-err">⚠ ORDER</span>`;
     const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
     const indent = isSubComponent ? 'padding-left:24px;background:rgba(77,166,255,.02)' : 'font-weight:600';
     const prefix = isSubComponent ? '<span style="color:var(--text3);font-size:9px;margin-right:4px">└─</span>' : '';
@@ -941,26 +950,23 @@ function renderSimTable() {
       if (esSheet) {
         // Sheet: inventario real = físico + ya incorporado en header
         const sheetInvReal = (s.inv || 0) + headerYaProducido;
-        const sheetDiff = sheetInvReal - targetSim2; // contra target completo
+        const sheetDiff = sheetInvReal - targetSim2;
         const sheetOK = sheetDiff >= 0;
-        // Mostrar inventario fisico real, no la suma
-        if(passFilter(s) || !sheetOK) rows.push(rowHTML(s, true, false, null, targetSim2, sheetInvReal));
+        if(skipFiltroNecesario || passFilter(s) || !sheetOK) rows.push(rowHTML(s, true, false, null, targetSim2, sheetInvReal));
       } else if (esChipBoard) {
         const esRanurado = sDesc.includes('RANURADO') || sDesc.includes('GROOVING');
         const sInv = s.inv || 0;
-        // Virgen: OK si ranurado solo cubre (no necesita procesarse) o si virgen solo cubre
         const virgenOK = esVirgen && (ranuradoSoloCubre || sInv >= targetReal);
-        // Virgen necesita procesarse solo si ranurado NO cubre pero pool sí cubre
         const virgenVC = esVirgen && !ranuradoSoloCubre && chipPoolCubre && sInv < targetReal;
-        // Ranurado: OK si cubre targetReal solo, VC si no cubre pero pool (virgen) suple la diferencia
         const ranuradoOK = esRanurado && ranuradoSoloCubre;
         const ranuradoVC = esRanurado && !ranuradoSoloCubre && chipPoolCubre;
         const subPoolOK = virgenOK || ranuradoOK;
         const subVcTag = virgenVC ? vcTagLabel : ranuradoVC ? vcTagLabel : null;
-        if(passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal));
+        // En modo Todos: mostrar siempre. En otros modos: solo si es relevante
+        if(skipFiltroNecesario || passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal));
       } else {
-        // Otros sub-componentes: evaluación individual con targetReal
-        if(passFilter(s)) rows.push(rowHTML(s, true, false, null, targetReal));
+        // Otros sub-componentes
+        if(skipFiltroNecesario || passFilter(s)) rows.push(rowHTML(s, true, false, null, targetReal));
       }
     });
     if(rows.length === 0) return;

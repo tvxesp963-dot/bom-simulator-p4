@@ -452,83 +452,78 @@ function procesarBOM() {
 }
 
 // PREVIEW
-function renderPreview(smSeleccionado) {
+function renderPreview() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
   const comps = BOM.filter(r => r.familia !== 'GH90');
   const sinInvTotal = comps.filter(r => r.inv === 0).length;
-
-  // Si no se pasa modelo, usar el primero
-  const smActivo = smSeleccionado || modelos[0];
-
-  const smRows = BOM.filter(r => r.sm === smActivo);
-  const smComps = smRows.filter(r => r.familia !== 'GH90');
-  const sinInv = smComps.filter(r => r.inv === 0).length;
-  const target = smRows[0]?.target || 0;
-
-  // Stats generales
   let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.8rem">
     <div class="stat bl"><div class="stat-l">Modelos SM</div><div class="stat-v" style="color:var(--accent)">${modelos.length}</div></div>
     <div class="stat gr"><div class="stat-l">Componentes</div><div class="stat-v" style="color:var(--green)">${comps.length}</div></div>
     <div class="stat rd"><div class="stat-l">Sin Inventario</div><div class="stat-v" style="color:var(--red)">${sinInvTotal}</div></div>
-  </div>`;
+  </div><div class="scroll">`;
 
-  // Selector de modelo
-  html += `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
-    <label class="label" style="margin:0;white-space:nowrap">Modelo:</label>
-    <select class="select" style="flex:1" onchange="renderPreview(this.value)">
-      ${modelos.map(m => `<option value="${m}" ${m===smActivo?'selected':''}>${m}</option>`).join('')}
-    </select>
-    <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${sinInv>0?'rgba(255,68,68,.1)':'rgba(0,230,118,.1)'};color:${sinInv>0?'var(--red)':'var(--green)'};border:1px solid ${sinInv>0?'rgba(255,68,68,.3)':'rgba(0,230,118,.3)'};white-space:nowrap">
-      ${sinInv>0?'⚠ '+sinInv+' sin inv':'✓ OK'}
-    </span>
-    <span style="font-size:11px;color:var(--text2);white-space:nowrap">Target: ${target.toLocaleString()}</span>
-  </div>`;
+  modelos.forEach((sm, idx) => {
+    const smRows = BOM.filter(r => r.sm === sm);
+    const smComps = smRows.filter(r => r.familia !== 'GH90');
+    const sinInv = smComps.filter(r => r.inv === 0).length;
+    const target = smRows[0]?.target || 0;
 
-  // Árbol del modelo activo
-  const groups = [];
-  let currentGroup = null;
-  smRows.forEach(r => {
-    const isL1 = r.isLevel1 || r.level===1 || (r.groupNo!==null && r.level!==2);
-    if (isL1) {
-      currentGroup = { header: r, subs: [] };
-      groups.push(currentGroup);
-    } else if (currentGroup) {
-      currentGroup.subs.push(r);
-    }
-  });
-
-  html += `<div class="scroll">`;
-  groups.forEach(g => {
-    const r = g.header;
-    const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
-    const invTxt = r.inv > 0 ? r.inv.toLocaleString() : '—';
-    html += `<div style="background:var(--bg3);border-top:1px solid var(--border2);">
-      <div class="comp-row" style="padding:.5rem .9rem;align-items:center;">
-        <span style="font-size:10px;color:var(--text2);width:20px;text-align:center;flex-shrink:0;font-weight:700">${r.groupNo||''}</span>
-        <span style="font-size:9px;background:rgba(77,166,255,.15);color:var(--accent);border:1px solid rgba(77,166,255,.3);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L1</span>
-        <span class="comp-pn" style="color:${famColor};font-weight:700;font-size:12px">${r.pn}</span>
-        <span class="comp-desc" style="font-weight:600;color:var(--text);font-size:11px">${r.desc}</span>
-        <span class="fam fam-${r.familia}">${r.familia}</span>
-        <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${invTxt}</span>
-      </div>`;
-    g.subs.forEach((s,si) => {
-      const sFamColor = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
-      const sInvTxt = s.inv > 0 ? s.inv.toLocaleString() : '—';
-      const isLast = si === g.subs.length-1;
-      html += `<div class="comp-row" style="padding:.4rem .9rem .4rem 2.5rem;background:rgba(77,166,255,.02)">
-        <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${isLast?'└─':'├─'}</span>
-        <span style="font-size:9px;background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.2);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L2</span>
-        <span class="comp-pn" style="color:${sFamColor};font-size:12px">${s.pn}</span>
-        <span class="comp-desc" style="font-size:10px">${s.desc}</span>
-        <span class="fam fam-${s.familia}">${s.familia}</span>
-        <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${sInvTxt}</span>
-      </div>`;
+    // Agrupar por Level: groupNo!=null = Level 1, resto = Level 2 bajo su Level 1
+    const groups = [];
+    let currentGroup = null;
+    smRows.forEach(r => {
+      const isL1 = r.isLevel1 || r.level===1 || (r.groupNo!==null && r.level!==2);
+      if (isL1) {
+        currentGroup = { header: r, subs: [] };
+        groups.push(currentGroup);
+      } else if (currentGroup) {
+        currentGroup.subs.push(r);
+      }
     });
-    html += `</div>`;
-  });
-  html += `</div>`;
 
-  html += `<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.8rem" onclick="goTab('sim')">→ Ir al Simulador</button>`;
+    html += `<div class="tree-sm">
+      <div class="tree-sm-header" onclick="toggleTree(${idx})">
+        <span class="sm-badge">${sm}</span>
+        <span style="margin-left:auto;font-size:9px;color:${sinInv>0?'var(--red)':'var(--green)'}">${sinInv>0?'⚠ '+sinInv+' sin inv':'✓ OK'}</span>
+        <span style="font-size:9px;color:var(--text2);margin-left:.5rem">Target: ${target.toLocaleString()}</span>
+        <span class="sm-toggle" id="tog${idx}">▼</span>
+      </div>
+      <div class="tree-children" id="tree${idx}">`;
+
+    groups.forEach(g => {
+      const r = g.header;
+      const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
+      const invTxt = r.inv > 0 ? r.inv.toLocaleString() : '—';
+      // Level 1 — grupo numerado en negritas
+      html += `<div style="background:var(--bg3);border-top:1px solid var(--border2);">
+        <div class="comp-row" style="padding:.5rem .9rem;align-items:center;">
+          <span style="font-size:10px;color:var(--text2);width:20px;text-align:center;flex-shrink:0;font-weight:700">${r.groupNo||''}</span>
+          <span style="font-size:9px;background:rgba(77,166,255,.15);color:var(--accent);border:1px solid rgba(77,166,255,.3);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L1</span>
+          <span class="comp-pn" style="color:${famColor};font-weight:700;font-size:12px">${r.pn}</span>
+          <span class="comp-desc" style="font-weight:600;color:var(--text);font-size:11px">${r.desc}</span>
+          <span class="fam fam-${r.familia}">${r.familia}</span>
+          <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${invTxt}</span>
+        </div>`;
+      // Level 2 — sub-componentes indentados
+      g.subs.forEach((s,si) => {
+        const sFamColor = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
+        const sInvTxt = s.inv > 0 ? s.inv.toLocaleString() : '—';
+        const isLast = si === g.subs.length-1;
+        html += `<div class="comp-row" style="padding:.4rem .9rem .4rem 2.5rem;background:rgba(77,166,255,.02)">
+          <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${isLast?'└─':'├─'}</span>
+          <span style="font-size:9px;background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.2);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L2</span>
+          <span class="comp-pn" style="color:${sFamColor};font-size:12px">${s.pn}</span>
+          <span class="comp-desc" style="font-size:10px">${s.desc}</span>
+          <span class="fam fam-${s.familia}">${s.familia}</span>
+          <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${sInvTxt}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  html += `</div><button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.8rem" onclick="goTab('sim')">→ Ir al Simulador</button>`;
   document.getElementById('previewArea').innerHTML = html;
 }
 

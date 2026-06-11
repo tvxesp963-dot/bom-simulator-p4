@@ -606,8 +606,12 @@ function onModeloChange() {
   }
   const sm = document.getElementById('simModelo').value;
   document.getElementById('simModelo').dataset.prev = sm;
-  // Cargar target guardado, o 0 si no hay
-  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : 0;
+  // Cargar target del nuevo modelo
+  if (simTargetsPorModelo[sm] !== undefined) {
+    document.getElementById('simTarget').value = simTargetsPorModelo[sm];
+  } else {
+    document.getElementById('simTarget').value = BOM.find(r => r.sm === sm)?.target || 0;
+  }
   calcSim();
 }
 
@@ -655,18 +659,6 @@ function calcSim() {
   const sm = document.getElementById('simModelo').value;
   const target = parseInt(document.getElementById('simTarget').value) || 0;
   const dias = parseInt(document.getElementById('simDias').value) || 5;
-
-  // Si no hay target, limpiar y mostrar mensaje
-  if (!target) {
-    document.getElementById('simStats').innerHTML = `
-      <div class="stat bl"><div class="stat-l">Capacidad real</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">0% del target · 0 meta</div></div>
-      <div class="stat"><div class="stat-l">A pedir</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">de 0 componentes</div></div>
-      <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">piezas en ${dias} días</div></div>
-      <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">unidades bloqueadas</div></div>`;
-    document.getElementById('simCuello').style.display = 'none';
-    document.getElementById('simTable').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text3);font-size:13px">Ingresa un target para ver el análisis de componentes</td></tr>`;
-    return;
-  }
   // Calcular inventario de Ranurado para saber si Virgen es relevante
   const topRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
   const botRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));

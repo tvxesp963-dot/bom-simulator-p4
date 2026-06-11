@@ -457,6 +457,14 @@ function renderPreview(smSeleccionado) {
   const comps = BOM.filter(r => r.familia !== 'GH90');
   const sinInvTotal = comps.filter(r => r.inv === 0).length;
 
+  // Si no se pasa modelo, usar el primero
+  const smActivo = smSeleccionado || modelos[0];
+
+  const smRows = BOM.filter(r => r.sm === smActivo);
+  const smComps = smRows.filter(r => r.familia !== 'GH90');
+  const sinInv = smComps.filter(r => r.inv === 0).length;
+  const target = smRows[0]?.target || 0;
+
   // Stats generales
   let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.8rem">
     <div class="stat bl"><div class="stat-l">Modelos SM</div><div class="stat-v" style="color:var(--accent)">${modelos.length}</div></div>
@@ -464,36 +472,16 @@ function renderPreview(smSeleccionado) {
     <div class="stat rd"><div class="stat-l">Sin Inventario</div><div class="stat-v" style="color:var(--red)">${sinInvTotal}</div></div>
   </div>`;
 
-  // Selector con opción vacía inicial
+  // Selector de modelo
   html += `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
     <label class="label" style="margin:0;white-space:nowrap">Modelo:</label>
     <select class="select" style="flex:1" onchange="renderPreview(this.value)">
-      <option value="">— Seleccionar modelo —</option>
-      ${modelos.map(m => `<option value="${m}" ${m===smSeleccionado?'selected':''}>${m}</option>`).join('')}
+      ${modelos.map(m => `<option value="${m}" ${m===smActivo?'selected':''}>${m}</option>`).join('')}
     </select>
-  </div>`;
-
-  // Si no hay modelo seleccionado, mostrar mensaje y salir
-  if (!smSeleccionado) {
-    html += `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">
-      Selecciona un modelo para ver su BOM
-    </div>`;
-    document.getElementById('previewArea').innerHTML = html;
-    return;
-  }
-
-  const smActivo = smSeleccionado;
-  const smRows = BOM.filter(r => r.sm === smActivo);
-  const smComps = smRows.filter(r => r.familia !== 'GH90');
-  const sinInv = smComps.filter(r => r.inv === 0).length;
-  const target = smRows[0]?.target || 0;
-
-  // Badge de estado del modelo seleccionado
-  html += `<div style="display:flex;gap:.5rem;margin-bottom:.4rem">
-    <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${sinInv>0?'rgba(255,68,68,.1)':'rgba(0,230,118,.1)'};color:${sinInv>0?'var(--red)':'var(--green)'};border:1px solid ${sinInv>0?'rgba(255,68,68,.3)':'rgba(0,230,118,.3)'}">
-      ${sinInv>0?'⚠ '+sinInv+' sin inventario':'✓ Inventario OK'}
+    <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${sinInv>0?'rgba(255,68,68,.1)':'rgba(0,230,118,.1)'};color:${sinInv>0?'var(--red)':'var(--green)'};border:1px solid ${sinInv>0?'rgba(255,68,68,.3)':'rgba(0,230,118,.3)'};white-space:nowrap">
+      ${sinInv>0?'⚠ '+sinInv+' sin inv':'✓ OK'}
     </span>
-    <span style="font-size:11px;color:var(--text2);padding:3px 8px;border-radius:4px;background:var(--bg3);border:1px solid var(--border2)">Target: ${target.toLocaleString()}</span>
+    <span style="font-size:11px;color:var(--text2);white-space:nowrap">Target: ${target.toLocaleString()}</span>
   </div>`;
 
   // Árbol del modelo activo

@@ -2619,7 +2619,8 @@ window._admMostrarToast = _admMostrarToast;
 })();
 
 window.addEventListener('DOMContentLoaded', function() {
-  cargarTargets(); setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
+  // targets siempre arrancan en 0 al cargar la página
+  setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
 });
 </script>
 

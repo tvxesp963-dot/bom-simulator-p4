@@ -222,8 +222,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           <input class="input" id="simFiltroGH90" list="listGH90" placeholder="Código GH90..." oninput="filtrarPorGH90()" style="width:100%;box-sizing:border-box;margin-bottom:.4rem"/>
           <datalist id="listGH90"></datalist>
           <label class="label">Modelo SM</label>
-          <input class="input" id="simModelo" list="listModelos" placeholder="Modelo SM..." oninput="onModeloInput()" style="width:100%;box-sizing:border-box"/>
-          <datalist id="listModelos"></datalist>
+          <select class="select" id="simModelo" onchange="onModeloChange()"></select>
         </div>
         <div class="grid2" style="margin-bottom:.7rem">
           <div><label class="label">Producir</label><input class="input" id="simTarget" type="number" onchange="guardarTarget();calcSim()"></div>
@@ -454,10 +453,6 @@ function procesarBOM() {
 
   if (!BOM.length) { alert('No se detectaron componentes. Verifica la hoja.'); return; }
 
-  // Pre-llenar targets antes de renderizar todos los módulos
-  [...new Set(BOM.map(r=>r.sm))].forEach(sm => {
-    if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r=>r.sm===sm)?.target || 0;
-  });
   renderPreview(); renderSim(); renderCons(); renderProd();
   document.getElementById('btnExport').style.display = 'flex';
 }
@@ -579,30 +574,19 @@ function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
   const gh90s = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))];
 
-  // Pre-llenar targets del BOM si no hay guardados
-  modelos.forEach(sm => {
-    if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r => r.sm === sm)?.target || 0;
-  });
-
   // Poblar datalist GH90
   const dlGH90 = document.getElementById('listGH90');
   if (dlGH90) dlGH90.innerHTML = gh90s.map(p => `<option value="${p}">`).join('');
 
-  // Poblar datalist modelos
-  const dlMod = document.getElementById('listModelos');
-  if (dlMod) dlMod.innerHTML = modelos.map(m => `<option value="${m}">`).join('');
-
-  // Mantener modelo seleccionado si ya había uno
-  const smActual = document.getElementById('simModelo').value;
+  // Poblar select de modelos — mantener selección actual si existe
+  const sel = document.getElementById('simModelo');
+  const smActual = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (smActual && modelos.includes(smActual)) sel.value = smActual;
 
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
-
-  if (smActual && modelos.includes(smActual)) {
-    onModeloChange();
-  } else {
-    calcSim();
-  }
+  calcSim();
 }
 
 function filtrarPorGH90() {
@@ -615,37 +599,28 @@ function filtrarPorGH90() {
     : modelos;
 
   // Actualizar datalist de modelos con los filtrados
-  const dlMod = document.getElementById('listModelos');
-  if (dlMod) dlMod.innerHTML = filtrados.map(m => `<option value="${m}">`).join('');
-
-  // Si hay un solo resultado, seleccionarlo automáticamente
-  if (filtrados.length === 1) {
-    document.getElementById('simModelo').value = filtrados[0];
-    onModeloChange();
-  } else if (!filtrados.includes(document.getElementById('simModelo').value)) {
-    document.getElementById('simModelo').value = '';
+  // Actualizar select de modelos
+  const sel = document.getElementById('simModelo');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + filtrados.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (filtrados.includes(prev)) {
+    sel.value = prev;
+  } else if (filtrados.length >= 1) {
+    sel.value = filtrados[0];
+    sel.dispatchEvent(new Event('change'));
+  } else {
+    sel.value = '';
     calcSim();
   }
 }
 
-function onModeloInput() {
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const val = (document.getElementById('simModelo').value || '').trim();
-  if (modelos.includes(val)) {
-    onModeloChange();
-  }
-}
+
 
 
 function limpiarFiltrosSim() {
   document.getElementById('simFiltroGH90').value = '';
-  document.getElementById('simModelo').value = '';
-  // Restaurar datalist completo
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const dlMod = document.getElementById('listModelos');
-  if (dlMod) dlMod.innerHTML = modelos.map(m => `<option value="${m}">`).join('');
+  filtrarPorGH90();
   if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
-  calcSim();
 }
 
 function guardarTarget() {
@@ -807,6 +782,9 @@ function calcSim() {
     document.getElementById('simCuello').style.display = 'none';
   }
   renderSimTable();
+  // Actualizar Consolidado y Producir con el nuevo target
+  renderCons();
+  renderProd();
 }
 
 function getGrupo(r) {
@@ -1166,11 +1144,7 @@ function renderCons() {
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const modeloTargets = {};
   modelos.forEach(sm => {
-    // Usar target guardado, si no hay usar el target del BOM
-    const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
-    modeloTargets[sm] = simTargetsPorModelo[sm] !== undefined && simTargetsPorModelo[sm] > 0
-      ? simTargetsPorModelo[sm]
-      : bomTarget;
+    modeloTargets[sm] = simTargetsPorModelo[sm] || 0;
   });
 
   let html = '';
@@ -1377,7 +1351,7 @@ function renderCons() {
   });
 
   if (!hayAlgo) {
-    const anyTarget = modelos.some(sm => (simTargetsPorModelo[sm]||0) > 0 || (BOM.find(r=>r.sm===sm)?.target||0) > 0);
+    const anyTarget = modelos.some(sm => (simTargetsPorModelo[sm]||0) > 0);
     html = anyTarget
       ? '<div class="alert alert-success">✅ Inventario suficiente — no hay materiales a pedir</div>'
       : '<div class="alert alert-info">ℹ️ Ingresa el target de producción en el Simulador para ver los pedidos</div>';
@@ -1485,8 +1459,7 @@ function renderProd() {
     </div>`;
 
   modelos.forEach(sm => {
-    const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
-    const target = simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : bomTarget;
+    const target = simTargetsPorModelo[sm] || 0;
     if (!target) return;
     hayAlgo = true;
 
@@ -1690,8 +1663,7 @@ function exportarExcel() {
   const getRows = (plKey) => {
     const result = [];
     modelos.forEach(sm => {
-      const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
-      const target = simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : bomTarget;
+      const target = simTargetsPorModelo[sm] || 0;
       if (!target) return;
       const giftR  = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
       const lowR   = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
@@ -1773,7 +1745,7 @@ function exportarExcel() {
 
   // Fila 3 — Targets de producción diaria
   const dias = parseInt(document.getElementById('simDias')?.value) || 5;
-  const allTargets = modelos.map(sm => simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : (BOM.find(r => r.sm===sm)?.target || 0));
+  const allTargets = modelos.map(sm => (simTargetsPorModelo[sm]||0));
   const totalTarget = allTargets.reduce((a,b)=>a+b,0);
   const tpd = Math.round(totalTarget/dias);
   push([
@@ -1995,7 +1967,7 @@ function sincIMS() {
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
     // Actualizar inventarios en BOM si ya está cargado
-    if (BOM && BOM.length) { actualizarInvBOM(); [...new Set(BOM.map(r=>r.sm))].forEach(sm=>{if(!simTargetsPorModelo[sm])simTargetsPorModelo[sm]=BOM.find(r=>r.sm===sm)?.target||0;}); renderPreview(); renderSim(); renderCons(); renderProd(); }
+    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 
@@ -2028,7 +2000,6 @@ function usarBomActivo() {
     var d = doc.data();
     BOM = JSON.parse(d.bom);
     document.getElementById('semanaRef').value = d.semana||'';
-    [...new Set(BOM.map(r=>r.sm))].forEach(sm=>{if(!simTargetsPorModelo[sm])simTargetsPorModelo[sm]=BOM.find(r=>r.sm===sm)?.target||0;});
     renderPreview(); renderSim(); renderCons(); renderProd();
     goTab('sim');
   });
@@ -2115,10 +2086,6 @@ function autoCargarBOM() {
     var d=doc.data(); BOM=JSON.parse(d.bom);
     document.getElementById('semanaRef').value=d.semana||'';
     actualizarInvBOM();
-    // Pre-llenar targets del BOM para todos los modelos
-    [...new Set(BOM.map(r=>r.sm))].forEach(sm => {
-      if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r=>r.sm===sm)?.target || 0;
-    });
     renderPreview(); renderSim(); renderCons(); renderProd();
   }).catch(function(){});
 }
@@ -2190,8 +2157,7 @@ async function publicarPlan() {
   };
 
   modelosOrdenados.forEach(sm => {
-    const bomTgt = BOM.find(r => r.sm === sm)?.target || 0;
-    const target = simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : bomTgt;
+    const target = simTargetsPorModelo[sm] || 0;
     const cbTopV = getComp(sm,['CHIP BOARD TOP','VIRGEN']);
     const cbTopR = getComp(sm,['CHIP BOARD TOP','RANURADO']);
     const shTop  = getComp(sm,['SHEET TOP']);

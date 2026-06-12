@@ -731,6 +731,8 @@ function calcSim() {
     document.getElementById('simCuello').style.display = 'none';
     return;
   }
+  // Guardar target actual para que Consolidado y Producir lo lean
+  simTargetsPorModelo[sm] = target;
 
   // Si no hay target, limpiar y mostrar mensaje
   if (!target) {

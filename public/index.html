@@ -73,7 +73,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .inv-err{color:var(--red)}
 .inv-none{color:var(--text3)}
 .table-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.8rem}
-.dt{width:100%;border-collapse:collapse;font-size:11px}
+.dt{width:100%;border-collapse:collapse;font-size:11px}.sugg-item{padding:6px 10px;font-size:12px;cursor:pointer;color:var(--text);border-top:1px solid var(--border)}.sugg-item:first-child{border-top:none}.sugg-item:hover{background:rgba(77,166,255,.08);color:var(--accent)}
 .dt th{background:var(--bg3);padding:8px 10px;text-align:left;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--border)}
 .dt td{padding:7px 10px;border-bottom:1px solid rgba(30,42,74,.5);color:var(--text2)}
 .dt tr:last-child td{border-bottom:none}
@@ -219,10 +219,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <label class="label" style="margin:0">Ensamble GH90</label>
             <button class="btn btn-secondary btn-sm" onclick="limpiarFiltrosSim()" style="font-size:10px;padding:2px 8px">↺ Limpiar</button>
           </div>
-          <input class="input" id="simFiltroGH90" list="listGH90" placeholder="Código GH90..." oninput="filtrarPorGH90()" style="width:100%;box-sizing:border-box;margin-bottom:.4rem"/>
-          <datalist id="listGH90"></datalist>
+          <input class="input" id="simFiltroGH90" placeholder="Pega o escribe código GH90..." oninput="filtrarPorGH90()" style="width:100%;box-sizing:border-box;margin-bottom:2px"/>
+          <div id="listaGH90" style="display:none;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:.4rem;max-height:140px;overflow-y:auto"></div>
           <label class="label">Modelo SM</label>
-          <select class="select" id="simModelo" onchange="onModeloChange()"></select>
+          <input class="input" id="simBuscaModelo" placeholder="Pega o escribe modelo..." oninput="filtrarModelos()" style="width:100%;box-sizing:border-box;margin-bottom:2px"/>
+          <div id="listaModelos" style="display:none;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:.4rem;max-height:140px;overflow-y:auto"></div>
+          <select class="select" id="simModelo" onchange="onModeloChange()" style="width:100%;display:none"></select>
         </div>
         <div class="grid2" style="margin-bottom:.7rem">
           <div><label class="label">Producir</label><input class="input" id="simTarget" type="number" onchange="guardarTarget();calcSim()"></div>
@@ -571,17 +573,17 @@ function toggleTree(idx) {
 
 // SIMULADOR
 function renderSim() {
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const gh90s = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))];
+  const modelos = [...new Set(BOM.map(r => r.sm))].sort();
+  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))].sort();
 
-  // Poblar datalist GH90
-  const dlGH90 = document.getElementById('listGH90');
-  if (dlGH90) dlGH90.innerHTML = gh90s.map(p => `<option value="${p}">`).join('');
+  // Guardar listas globales para los typeaheads
+  window._simModelos = modelos;
+  window._simGH90s   = gh90s;
 
-  // Poblar select de modelos — mantener selección actual si existe
+  // Poblar select oculto — mantener selección si existe
   const sel = document.getElementById('simModelo');
   const smActual = sel.value;
-  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  sel.innerHTML = '<option value=""></option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
   if (smActual && modelos.includes(smActual)) sel.value = smActual;
 
   document.getElementById('simEmpty').style.display = 'none';
@@ -590,37 +592,75 @@ function renderSim() {
 }
 
 function filtrarPorGH90() {
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const fGH90 = (document.getElementById('simFiltroGH90').value || '').trim();
+  const val = (document.getElementById('simFiltroGH90').value || '').trim().toUpperCase();
+  const gh90s = window._simGH90s || [];
+  const lista = document.getElementById('listaGH90');
 
-  // Filtrar modelos que tienen ese GH90
-  const filtrados = fGH90
-    ? [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn.trim()===fGH90).map(r => r.sm))]
-    : modelos;
+  if (!val) { lista.style.display = 'none'; lista.innerHTML = ''; _actualizarModelosPorGH90(''); return; }
 
-  // Actualizar datalist de modelos con los filtrados
-  // Actualizar select de modelos
-  const sel = document.getElementById('simModelo');
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + filtrados.map(m => `<option value="${m}">${m}</option>`).join('');
-  if (filtrados.includes(prev)) {
-    sel.value = prev;
-  } else if (filtrados.length >= 1) {
-    sel.value = filtrados[0];
-    sel.dispatchEvent(new Event('change'));
-  } else {
-    sel.value = '';
-    calcSim();
-  }
+  const matches = gh90s.filter(p => p.toUpperCase().includes(val)).sort();
+  if (!matches.length) { lista.style.display = 'none'; lista.innerHTML = ''; return; }
+
+  lista.innerHTML = matches.map(p => `<div class="sugg-item" onclick="seleccionarGH90('${p}')">${p}</div>`).join('');
+  lista.style.display = 'block';
 }
 
+function seleccionarGH90(pn) {
+  document.getElementById('simFiltroGH90').value = pn;
+  document.getElementById('listaGH90').style.display = 'none';
+  _actualizarModelosPorGH90(pn);
+}
 
+function _actualizarModelosPorGH90(pn) {
+  const todosModelos = window._simModelos || [];
+  const filtrados = pn
+    ? [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn.trim()===pn).map(r => r.sm))].sort()
+    : todosModelos;
+  window._simModelosFiltrados = filtrados;
 
+  // Si el modelo actual sigue en la lista, mantenerlo; si no limpiar
+  const sel = document.getElementById('simModelo');
+  const busca = document.getElementById('simBuscaModelo');
+  if (!filtrados.includes(sel.value)) {
+    sel.value = '';
+    if (busca) busca.value = '';
+    calcSim();
+  }
+  // Actualizar lista de sugerencias de modelo si hay texto
+  if (busca && busca.value) filtrarModelos();
+}
+
+function filtrarModelos() {
+  const val = (document.getElementById('simBuscaModelo').value || '').trim().toUpperCase();
+  const modelos = window._simModelosFiltrados || window._simModelos || [];
+  const lista = document.getElementById('listaModelos');
+
+  if (!val) { lista.style.display = 'none'; lista.innerHTML = ''; return; }
+
+  const matches = modelos.filter(m => m.toUpperCase().includes(val)).sort();
+  if (!matches.length) { lista.style.display = 'none'; lista.innerHTML = ''; return; }
+
+  lista.innerHTML = matches.map(m => `<div class="sugg-item" onclick="seleccionarModelo('${m}')">${m}</div>`).join('');
+  lista.style.display = 'block';
+}
+
+function seleccionarModelo(sm) {
+  document.getElementById('simBuscaModelo').value = sm;
+  document.getElementById('listaModelos').style.display = 'none';
+  const sel = document.getElementById('simModelo');
+  sel.value = sm;
+  sel.dispatchEvent(new Event('change'));
+}
 
 function limpiarFiltrosSim() {
   document.getElementById('simFiltroGH90').value = '';
-  filtrarPorGH90();
+  document.getElementById('simBuscaModelo').value = '';
+  document.getElementById('listaGH90').style.display = 'none';
+  document.getElementById('listaModelos').style.display = 'none';
+  document.getElementById('simModelo').value = '';
+  window._simModelosFiltrados = window._simModelos;
   if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
+  calcSim();
 }
 
 function guardarTarget() {

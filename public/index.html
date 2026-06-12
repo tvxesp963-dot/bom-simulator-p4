@@ -2074,7 +2074,12 @@ function adminCargarBOM(file) {
         bomData.push({sm:curSM,target:0,pn:codeVal,desc:descVal,familia:fam,inv:inv,plan:'',planta:'Sin Planta',qtyPlan:0,groupNo:isNaN(levelVal)?null:levelVal,isBold:levelVal===1,level:isNaN(levelVal)?2:levelVal,isLevel1:levelVal===1,isLevel2:levelVal===2});
       }
       if (!bomData.length) { statusEl.textContent='❌ No se detectaron componentes'; statusEl.style.color='var(--red)'; return; }
-      BOM=bomData; renderPreview(); renderSim(); renderCons(); renderProd();
+      BOM=bomData;
+      // Pre-llenar targets del BOM para todos los modelos
+      [...new Set(BOM.map(r=>r.sm))].forEach(sm => {
+        if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r=>r.sm===sm)?.target || 0;
+      });
+      renderPreview(); renderSim(); renderCons(); renderProd();
       var semMatch=file.name.match(/W(\d+)/i);
       var semana=semMatch?'W'+semMatch[1]:'W—';
       var modelos=[...new Set(bomData.map(function(r){return r.sm;}))].length;
@@ -2100,6 +2105,10 @@ function autoCargarBOM() {
     var d=doc.data(); BOM=JSON.parse(d.bom);
     document.getElementById('semanaRef').value=d.semana||'';
     actualizarInvBOM();
+    // Pre-llenar targets del BOM para todos los modelos
+    [...new Set(BOM.map(r=>r.sm))].forEach(sm => {
+      if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r=>r.sm===sm)?.target || 0;
+    });
     renderPreview(); renderSim(); renderCons(); renderProd();
   }).catch(function(){});
 }

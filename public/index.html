@@ -454,6 +454,10 @@ function procesarBOM() {
 
   if (!BOM.length) { alert('No se detectaron componentes. Verifica la hoja.'); return; }
 
+  // Pre-llenar targets antes de renderizar todos los módulos
+  [...new Set(BOM.map(r=>r.sm))].forEach(sm => {
+    if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r=>r.sm===sm)?.target || 0;
+  });
   renderPreview(); renderSim(); renderCons(); renderProd();
   document.getElementById('btnExport').style.display = 'flex';
 }
@@ -1991,7 +1995,7 @@ function sincIMS() {
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
     // Actualizar inventarios en BOM si ya está cargado
-    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
+    if (BOM && BOM.length) { actualizarInvBOM(); [...new Set(BOM.map(r=>r.sm))].forEach(sm=>{if(!simTargetsPorModelo[sm])simTargetsPorModelo[sm]=BOM.find(r=>r.sm===sm)?.target||0;}); renderPreview(); renderSim(); renderCons(); renderProd(); }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 
@@ -2024,6 +2028,7 @@ function usarBomActivo() {
     var d = doc.data();
     BOM = JSON.parse(d.bom);
     document.getElementById('semanaRef').value = d.semana||'';
+    [...new Set(BOM.map(r=>r.sm))].forEach(sm=>{if(!simTargetsPorModelo[sm])simTargetsPorModelo[sm]=BOM.find(r=>r.sm===sm)?.target||0;});
     renderPreview(); renderSim(); renderCons(); renderProd();
     goTab('sim');
   });

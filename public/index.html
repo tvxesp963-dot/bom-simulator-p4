@@ -635,10 +635,15 @@ function limpiarFiltrosSim() {
   const sel = document.getElementById('simModelo');
   const prev = sel.value;
   sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
-  if (prev && modelos.includes(prev)) sel.value = prev;
+  if (prev && modelos.includes(prev)) {
+    sel.value = prev;
+    sel.dispatchEvent(new Event('change'));
+  } else {
+    sel.value = '';
+    calcSim();
+  }
   // Actualizar inventario
   if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
-  calcSim();
 }
 
 function guardarTarget() {

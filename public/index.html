@@ -627,22 +627,11 @@ function filtrarPorGH90() {
 
 
 function limpiarFiltrosSim() {
-  // Limpiar filtro GH90
-  const selGH90 = document.getElementById('simFiltroGH90');
-  if (selGH90) selGH90.value = '';
-  // Restaurar todos los modelos en el selector
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const sel = document.getElementById('simModelo');
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
-  if (prev && modelos.includes(prev)) {
-    sel.value = prev;
-    sel.dispatchEvent(new Event('change'));
-  } else {
-    sel.value = '';
-    calcSim();
-  }
-  // Actualizar inventario
+  // 1. Limpiar dropdown GH90
+  document.getElementById('simFiltroGH90').value = '';
+  // 2. Llamar filtrarPorGH90 que ya sabe reconstruir el select con todos los modelos
+  filtrarPorGH90();
+  // 3. Actualizar inventario
   if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
 }
 

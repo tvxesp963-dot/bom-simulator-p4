@@ -238,19 +238,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="card">
         <div class="card-title">⚙️ Parámetros</div>
         <div class="form-row" style="margin-bottom:.4rem">
-          <label class="label">Buscar</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.4rem">
-            <input class="input" id="simBuscaModelo" placeholder="Modelo SM" oninput="filtrarSimModelos()" style="font-size:12px;padding:5px 8px"/>
-            <input class="input" id="simBuscaPN" placeholder="N° Parte / Desc" oninput="filtrarSimModelos()" style="font-size:12px;padding:5px 8px"/>
-          </div>
-          <select class="select" id="simBuscaGH90" onchange="filtrarSimModelos()" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:.4rem">
+          <label class="label">Modelo SM</label>
+          <input class="input" id="simBuscaModelo" list="simModeloList" placeholder="Escribe o selecciona modelo..."
+            oninput="onBuscaModeloInput()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px;margin-bottom:.4rem"/>
+          <datalist id="simModeloList"></datalist>
+          <input class="input" id="simBuscaPN" placeholder="N° Parte / Descripción (opcional)" oninput="filtrarSimModelos()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px;margin-bottom:.4rem"/>
+          <select class="select" id="simBuscaGH90" onchange="filtrarSimModelos()" style="width:100%;font-size:12px;padding:5px 8px">
             <option value="">— Ensamble GH90 (todos) —</option>
           </select>
         </div>
-        <div class="form-row">
-          <label class="label">Modelo SM</label>
-          <select class="select" id="simModelo" onchange="onModeloChange()"></select>
-        </div>
+        <input type="hidden" id="simModelo" value=""/>
         <div class="grid2" style="margin-bottom:.7rem">
           <div><label class="label">Producir</label><input class="input" id="simTarget" type="number" onchange="guardarTarget();calcSim()"></div>
           <div><label class="label">Días</label><input class="input" id="simDias" type="number" value="5" onchange="calcSim()"></div>
@@ -490,7 +487,7 @@ function renderPreview() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
   const comps   = BOM.filter(r => r.familia !== 'GH90');
   const sinInvTotal = comps.filter(r => r.inv === 0).length;
-  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn))];
+  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90' && r.isLevel1).map(r => r.pn))];
 
   // Mostrar barra de filtros
   const filtrosEl = document.getElementById('prevFiltros');
@@ -629,50 +626,63 @@ function toggleTree(idx) {
 // SIMULADOR
 function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
-  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn))];
+  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90' && r.isLevel1).map(r => r.pn))];
 
-  // Poblar dropdown GH90 del buscador solo la primera vez
+  // Poblar datalist de modelos
+  const dl = document.getElementById('simModeloList');
+  if (dl) { dl.innerHTML = modelos.map(m => `<option value="${m}">`).join(''); }
+
+  // Poblar dropdown GH90 solo la primera vez
   const selGH90 = document.getElementById('simBuscaGH90');
   if (selGH90 && selGH90.options.length <= 1) {
     gh90s.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; selGH90.appendChild(o); });
   }
 
-  // Poblar modelos en el selector
-  document.getElementById('simModelo').innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
   calcSim();
 }
 
 function filtrarSimModelos() {
+  // Solo actualiza el datalist según filtros de PN y GH90
   const modelos = [...new Set(BOM.map(r => r.sm))];
-  const fM   = (document.getElementById('simBuscaModelo')?.value || '').trim().toUpperCase();
-  const fPN  = (document.getElementById('simBuscaPN')?.value    || '').trim().toUpperCase();
-  const fGH90= (document.getElementById('simBuscaGH90')?.value  || '').trim();
+  const fPN  = (document.getElementById('simBuscaPN')?.value   || '').trim().toUpperCase();
+  const fGH90= (document.getElementById('simBuscaGH90')?.value || '').trim();
 
-  // Modelos que pasan filtro GH90
   let modelosGH90 = modelos;
   if (fGH90) modelosGH90 = [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn===fGH90).map(r => r.sm))];
 
-  // Modelos que pasan filtro PN (contienen ese PN o descripción en su BOM)
   let modelosPN = modelos;
   if (fPN) modelosPN = [...new Set(BOM.filter(r =>
     r.pn.toUpperCase().includes(fPN) || (r.desc||'').toUpperCase().includes(fPN)
   ).map(r => r.sm))];
 
-  const filtrados = modelos.filter(sm => {
-    if (fM   && !sm.toUpperCase().includes(fM)) return false;
-    if (!modelosGH90.includes(sm)) return false;
-    if (!modelosPN.includes(sm))   return false;
-    return true;
-  });
+  const filtrados = modelos.filter(sm => modelosGH90.includes(sm) && modelosPN.includes(sm));
 
-  const sel = document.getElementById('simModelo');
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + filtrados.map(m => `<option value="${m}">${m}</option>`).join('');
-  // Mantener selección si sigue en la lista filtrada
-  if (filtrados.includes(prev)) sel.value = prev;
-  else { sel.value = ''; calcSim(); }
+  // Actualizar datalist con modelos filtrados
+  const dl = document.getElementById('simModeloList');
+  if (dl) dl.innerHTML = filtrados.map(m => `<option value="${m}">`).join('');
+
+  // Si el modelo actual ya no está en filtrados, limpiar
+  const smActual = document.getElementById('simModelo').value;
+  if (smActual && !filtrados.includes(smActual)) {
+    document.getElementById('simModelo').value = '';
+    document.getElementById('simBuscaModelo').value = '';
+    calcSim();
+  }
+}
+
+function onBuscaModeloInput() {
+  const modelos = [...new Set(BOM.map(r => r.sm))];
+  const val = (document.getElementById('simBuscaModelo').value || '').trim();
+  // Si el valor escrito coincide exactamente con un modelo, seleccionarlo
+  if (modelos.includes(val)) {
+    document.getElementById('simModelo').value = val;
+    onModeloChange();
+  } else {
+    document.getElementById('simModelo').value = '';
+    calcSim();
+  }
 }
 
 
@@ -709,8 +719,10 @@ function onModeloChange() {
   }
   const sm = document.getElementById('simModelo').value;
   document.getElementById('simModelo').dataset.prev = sm;
-  // Cargar target guardado, o 0 si no hay
-  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : 0;
+  if (!sm) { calcSim(); return; }
+  // Cargar target guardado; si no hay, usar el target del BOM como valor inicial
+  const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
+  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : bomTarget;
   calcSim();
 }
 

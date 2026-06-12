@@ -27,7 +27,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .btn-success{background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);color:var(--green)}
 .btn-secondary{background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
 .btn-sm{padding:4px 10px;font-size:11px}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;margin-bottom:.7rem}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;margin-bottom:.7rem;min-width:0}
 .card-title{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:.7rem;display:flex;align-items:center;gap:6px}
 .label{font-size:11px;color:var(--text2);margin-bottom:4px;display:block}
 .input,.select{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border .2s}
@@ -73,7 +73,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .inv-err{color:var(--red)}
 .inv-none{color:var(--text3)}
 .table-wrap{border:1px solid var(--border);border-radius:10px;overflow-x:auto;overflow-y:hidden;margin-bottom:.8rem}
-.dt{width:100%;min-width:750px;border-collapse:collapse;font-size:11px}
+.dt{width:100%;min-width:900px;border-collapse:collapse;font-size:11px}
 .dt th{background:var(--bg3);padding:8px 10px;text-align:left;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--border)}
 .dt td{padding:7px 10px;border-bottom:1px solid rgba(30,42,74,.5);color:var(--text2)}
 .dt tr:last-child td{border-bottom:none}
@@ -233,7 +233,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn btn-primary" style="margin-top:1rem" onclick="goTab('upload')">📥 Cargar BOM</button>
   </div>
   <div id="simContent" style="display:none">
-    <div style="display:grid;grid-template-columns:300px 1fr;gap:1rem;margin-bottom:1rem">
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:1rem;margin-bottom:1rem;min-width:0">
       <div class="card">
         <div class="card-title">⚙️ Parámetros</div>
         <div class="form-row" style="margin-bottom:.5rem">
@@ -268,7 +268,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </div>
       </div>
     </div>
-    <div class="card">
+    <div class="card" style="overflow-x:auto">
       <div class="card-title">📋 Detalle de componentes</div>
       <div class="table-wrap">
         <table class="dt">

@@ -73,7 +73,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .inv-err{color:var(--red)}
 .inv-none{color:var(--text3)}
 .table-wrap{border:1px solid var(--border);border-radius:10px;overflow-x:auto;overflow-y:hidden;margin-bottom:.8rem}
-.dt{width:100%;border-collapse:collapse;font-size:11px}
+.dt{width:100%;min-width:750px;border-collapse:collapse;font-size:11px}
 .dt th{background:var(--bg3);padding:8px 10px;text-align:left;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--border)}
 .dt td{padding:7px 10px;border-bottom:1px solid rgba(30,42,74,.5);color:var(--text2)}
 .dt tr:last-child td{border-bottom:none}
@@ -121,8 +121,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .dest-p4{background:rgba(0,188,212,.12);color:#00BCD4;border-color:rgba(0,188,212,.4)}
 .dest-auto{background:var(--bg3);color:var(--text2);border-color:var(--border)}
 @media(max-width:600px){
-  .dt th:nth-child(3),.dt td:nth-child(3){display:none}
-  .dt th:nth-child(6),.dt td:nth-child(6){display:none}
+  /* columnas siempre visibles con scroll horizontal */
   .pn-cell{max-width:80px;font-size:12px}
 }
 </style>

@@ -215,6 +215,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="card">
         <div class="card-title">⚙️ Parámetros</div>
         <div class="form-row">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+            <label class="label" style="margin:0">Ensamble GH90</label>
+            <button class="btn btn-secondary btn-sm" onclick="limpiarFiltrosSim()" style="font-size:10px;padding:2px 8px">↺ Limpiar</button>
+          </div>
+          <select class="select" id="simFiltroGH90" onchange="filtrarPorGH90()" style="margin-bottom:.4rem">
+            <option value="">— Todos los modelos —</option>
+          </select>
           <label class="label">Modelo SM</label>
           <select class="select" id="simModelo" onchange="onModeloChange()"></select>
         </div>
@@ -566,12 +573,55 @@ function toggleTree(idx) {
 // SIMULADOR
 function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
-  document.getElementById('simModelo').innerHTML = modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  const gh90s = [...new Set(BOM.filter(r => r.familia === 'GH90' && r.isLevel1).map(r => r.pn))];
+
+  // Poblar GH90 solo la primera vez
+  const selGH90 = document.getElementById('simFiltroGH90');
+  if (selGH90 && selGH90.options.length <= 1) {
+    gh90s.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; selGH90.appendChild(o); });
+  }
+
+  // Mantener modelo seleccionado si ya había uno (ej. después de Sync IMS)
+  const smActual = document.getElementById('simModelo').value;
+  document.getElementById('simModelo').innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (smActual && modelos.includes(smActual)) {
+    document.getElementById('simModelo').value = smActual;
+  }
+
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
-  onModeloChange();
+  calcSim();
 }
 
+function filtrarPorGH90() {
+  const modelos = [...new Set(BOM.map(r => r.sm))];
+  const fGH90 = document.getElementById('simFiltroGH90').value;
+  let filtrados = modelos;
+  if (fGH90) {
+    filtrados = [...new Set(BOM.filter(r => r.familia==='GH90' && r.isLevel1 && r.pn===fGH90).map(r => r.sm))];
+  }
+  const sel = document.getElementById('simModelo');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + filtrados.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (filtrados.includes(prev)) sel.value = prev;
+  else { sel.value = ''; calcSim(); }
+}
+
+
+function limpiarFiltrosSim() {
+  // Limpiar filtro GH90
+  const selGH90 = document.getElementById('simFiltroGH90');
+  if (selGH90) selGH90.value = '';
+  // Restaurar todos los modelos en el selector
+  const modelos = [...new Set(BOM.map(r => r.sm))];
+  const sel = document.getElementById('simModelo');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (prev && modelos.includes(prev)) sel.value = prev;
+  // Actualizar inventario
+  if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
+  calcSim();
+}
 
 function guardarTarget() {
   var sm = document.getElementById('simModelo').value;
@@ -708,7 +758,7 @@ function calcSim() {
   const aPedir = comps.filter(r => r.inv < target).length;
 
   document.getElementById('simStats').innerHTML = `
-    <div class="stat bl"><div class="stat-l">Capacidad real</div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString()}</div><div class="stat-s">${pct}% del target · ${target.toLocaleString()} meta</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
+    <div class="stat bl"><div class="stat-l">Capacidad real · <span style="color:var(--accent);font-weight:700">${sm}</span></div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString()}</div><div class="stat-s">${pct}% del target · ${target.toLocaleString()} meta</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
     <div class="stat ${aPedir>0?'rd':'gr'}"><div class="stat-l">A pedir</div><div class="stat-v" style="color:${aPedir>0?'var(--red)':'var(--green)'}">${aPedir}</div><div class="stat-s">de ${comps.length} componentes</div></div>
     <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--amber)">${Math.round(maxProd/dias).toLocaleString()}</div><div class="stat-s">piezas en ${dias} días</div></div>
     <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--red)">${Math.max(0,target-maxProd).toLocaleString()}</div><div class="stat-s">unidades bloqueadas</div></div>`;

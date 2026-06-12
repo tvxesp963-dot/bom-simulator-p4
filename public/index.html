@@ -1157,7 +1157,11 @@ function renderCons() {
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const modeloTargets = {};
   modelos.forEach(sm => {
-    modeloTargets[sm] = simTargetsPorModelo[sm] || 0;
+    // Usar target guardado, si no hay usar el target del BOM
+    const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
+    modeloTargets[sm] = simTargetsPorModelo[sm] !== undefined && simTargetsPorModelo[sm] > 0
+      ? simTargetsPorModelo[sm]
+      : bomTarget;
   });
 
   let html = '';
@@ -1364,7 +1368,7 @@ function renderCons() {
   });
 
   if (!hayAlgo) {
-    const anyTarget = modelos.some(sm => (simTargetsPorModelo[sm]||0) > 0);
+    const anyTarget = modelos.some(sm => (simTargetsPorModelo[sm]||0) > 0 || (BOM.find(r=>r.sm===sm)?.target||0) > 0);
     html = anyTarget
       ? '<div class="alert alert-success">✅ Inventario suficiente — no hay materiales a pedir</div>'
       : '<div class="alert alert-info">ℹ️ Ingresa el target de producción en el Simulador para ver los pedidos</div>';
@@ -1472,7 +1476,8 @@ function renderProd() {
     </div>`;
 
   modelos.forEach(sm => {
-    const target = simTargetsPorModelo[sm] || 0;
+    const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
+    const target = simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : bomTarget;
     if (!target) return;
     hayAlgo = true;
 
@@ -1676,7 +1681,8 @@ function exportarExcel() {
   const getRows = (plKey) => {
     const result = [];
     modelos.forEach(sm => {
-      const target = simTargetsPorModelo[sm] || 0;
+      const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
+      const target = simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : bomTarget;
       if (!target) return;
       const giftR  = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
       const lowR   = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
@@ -1758,7 +1764,7 @@ function exportarExcel() {
 
   // Fila 3 — Targets de producción diaria
   const dias = parseInt(document.getElementById('simDias')?.value) || 5;
-  const allTargets = modelos.map(sm => (simTargetsPorModelo[sm]||0));
+  const allTargets = modelos.map(sm => simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : (BOM.find(r => r.sm===sm)?.target || 0));
   const totalTarget = allTargets.reduce((a,b)=>a+b,0);
   const tpd = Math.round(totalTarget/dias);
   push([
@@ -2165,7 +2171,8 @@ async function publicarPlan() {
   };
 
   modelosOrdenados.forEach(sm => {
-    const target = simTargetsPorModelo[sm] || 0;
+    const bomTgt = BOM.find(r => r.sm === sm)?.target || 0;
+    const target = simTargetsPorModelo[sm] > 0 ? simTargetsPorModelo[sm] : bomTgt;
     const cbTopV = getComp(sm,['CHIP BOARD TOP','VIRGEN']);
     const cbTopR = getComp(sm,['CHIP BOARD TOP','RANURADO']);
     const shTop  = getComp(sm,['SHEET TOP']);

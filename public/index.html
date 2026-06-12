@@ -720,9 +720,17 @@ function componenteNecesario(r, sm, target) {
 }
 
 function calcSim() {
-  const sm = document.getElementById('simModelo').value;
+  const sm = (document.getElementById('simModelo').value || '').trim();
   const target = parseInt(document.getElementById('simTarget').value) || 0;
   const dias = parseInt(document.getElementById('simDias').value) || 5;
+
+  // Validar que sm existe en el BOM
+  const modelos = BOM && BOM.length ? [...new Set(BOM.map(r => r.sm))] : [];
+  if (!sm || !modelos.includes(sm)) {
+    document.getElementById('simTable').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text3);font-size:13px">Selecciona un modelo para comenzar</td></tr>`;
+    document.getElementById('simCuello').style.display = 'none';
+    return;
+  }
 
   // Si no hay target, limpiar y mostrar mensaje
   if (!target) {

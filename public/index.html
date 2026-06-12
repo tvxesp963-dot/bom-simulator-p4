@@ -575,6 +575,11 @@ function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
   const gh90s = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))];
 
+  // Pre-llenar targets del BOM si no hay guardados
+  modelos.forEach(sm => {
+    if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r => r.sm === sm)?.target || 0;
+  });
+
   // Poblar datalist GH90
   const dlGH90 = document.getElementById('listGH90');
   if (dlGH90) dlGH90.innerHTML = gh90s.map(p => `<option value="${p}">`).join('');

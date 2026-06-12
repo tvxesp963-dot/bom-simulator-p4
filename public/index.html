@@ -573,7 +573,7 @@ function toggleTree(idx) {
 // SIMULADOR
 function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
-  const gh90s = [...new Set(BOM.filter(r => r.familia === 'GH90' && r.isLevel1).map(r => r.pn))];
+  const gh90s = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))];
 
   // Poblar GH90 solo la primera vez
   const selGH90 = document.getElementById('simFiltroGH90');
@@ -590,21 +590,39 @@ function renderSim() {
 
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
-  calcSim();
+
+  if (smActual && modelos.includes(smActual)) {
+    onModeloChange();
+  } else {
+    calcSim();
+  }
 }
 
 function filtrarPorGH90() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
   const fGH90 = document.getElementById('simFiltroGH90').value;
-  let filtrados = modelos;
-  if (fGH90) {
-    filtrados = [...new Set(BOM.filter(r => r.familia==='GH90' && r.isLevel1 && r.pn===fGH90).map(r => r.sm))];
-  }
   const sel = document.getElementById('simModelo');
   const prev = sel.value;
+
+  // Filtrar modelos que tienen ese GH90
+  let filtrados = fGH90
+    ? [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn.trim()===fGH90.trim()).map(r => r.sm))]
+    : modelos;
+
+  // Reconstruir el select con los modelos filtrados
   sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + filtrados.map(m => `<option value="${m}">${m}</option>`).join('');
-  if (filtrados.includes(prev)) sel.value = prev;
-  else { sel.value = ''; calcSim(); }
+
+  if (filtrados.includes(prev)) {
+    // El modelo anterior sigue disponible — mantenerlo
+    sel.value = prev;
+  } else if (filtrados.length >= 1) {
+    // Seleccionar el primero disponible y disparar la misma lógica que el selector
+    sel.value = filtrados[0];
+    sel.dispatchEvent(new Event('change'));
+  } else {
+    sel.value = '';
+    calcSim();
+  }
 }
 
 
@@ -656,8 +674,9 @@ function onModeloChange() {
   }
   const sm = document.getElementById('simModelo').value;
   document.getElementById('simModelo').dataset.prev = sm;
-  // Cargar target guardado, o 0 si no hay
-  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : 0;
+  // Cargar target guardado, o el target del BOM si no hay
+  const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
+  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : bomTarget;
   calcSim();
 }
 

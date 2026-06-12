@@ -27,7 +27,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .btn-success{background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);color:var(--green)}
 .btn-secondary{background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
 .btn-sm{padding:4px 10px;font-size:11px}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;margin-bottom:.7rem;min-width:0}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;margin-bottom:.7rem}
 .card-title{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:.7rem;display:flex;align-items:center;gap:6px}
 .label{font-size:11px;color:var(--text2);margin-bottom:4px;display:block}
 .input,.select{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border .2s}
@@ -72,8 +72,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .inv-warn{color:var(--amber)}
 .inv-err{color:var(--red)}
 .inv-none{color:var(--text3)}
-.table-wrap{border:1px solid var(--border);border-radius:10px;overflow-x:auto;overflow-y:hidden;margin-bottom:.8rem}
-.dt{width:100%;min-width:900px;border-collapse:collapse;font-size:11px}
+.table-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.8rem}
+.dt{width:100%;border-collapse:collapse;font-size:11px}
 .dt th{background:var(--bg3);padding:8px 10px;text-align:left;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--border)}
 .dt td{padding:7px 10px;border-bottom:1px solid rgba(30,42,74,.5);color:var(--text2)}
 .dt tr:last-child td{border-bottom:none}
@@ -121,7 +121,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .dest-p4{background:rgba(0,188,212,.12);color:#00BCD4;border-color:rgba(0,188,212,.4)}
 .dest-auto{background:var(--bg3);color:var(--text2);border-color:var(--border)}
 @media(max-width:600px){
-  /* columnas siempre visibles con scroll horizontal */
+  .dt th:nth-child(3),.dt td:nth-child(3){display:none}
+  .dt th:nth-child(6),.dt td:nth-child(6){display:none}
   .pn-cell{max-width:80px;font-size:12px}
 }
 </style>
@@ -190,29 +191,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div>
       <div class="card" style="height:fit-content">
         <div class="card-title">🌳 Vista previa del BOM</div>
-        <!-- Filtros fijos (siempre visibles cuando hay BOM) -->
-        <div id="prevFiltros" style="display:none;margin-bottom:.7rem">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.5rem">
-            <div>
-              <div class="label" style="margin-bottom:3px;font-size:10px">Modelo SM</div>
-              <input id="prevFiltroSM" class="input" placeholder="Ej. S911 CRN"
-                oninput="filtrarPreview()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px"/>
-            </div>
-            <div>
-              <div class="label" style="margin-bottom:3px;font-size:10px">N° Parte / Descripción</div>
-              <input id="prevFiltroPN" class="input" placeholder="Ej. GH69-43853A"
-                oninput="filtrarPreview()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px"/>
-            </div>
-            <div>
-              <div class="label" style="margin-bottom:3px;font-size:10px">Ensamble GH90</div>
-              <select id="prevFiltroGH90" class="select" onchange="filtrarPreview()" style="width:100%;font-size:12px;padding:5px 8px">
-                <option value="">— Todos —</option>
-              </select>
-            </div>
-          </div>
-          <div id="prevStats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem"></div>
-        </div>
-        <!-- Resultados dinámicos -->
         <div id="previewArea">
           <div class="empty">
             <div class="empty-icon">📂</div>
@@ -233,18 +211,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn btn-primary" style="margin-top:1rem" onclick="goTab('upload')">📥 Cargar BOM</button>
   </div>
   <div id="simContent" style="display:none">
-    <div style="display:grid;grid-template-columns:300px 1fr;gap:1rem;margin-bottom:1rem;min-width:0">
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:1rem;margin-bottom:1rem">
       <div class="card">
         <div class="card-title">⚙️ Parámetros</div>
-        <div class="form-row" style="margin-bottom:.5rem">
-          <label class="label" style="margin-bottom:3px">Buscar modelo</label>
-          <input class="input" id="simBuscaModelo" placeholder="Filtrar por nombre..." oninput="filtrarSimModelos()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px;margin-bottom:.4rem"/>
-          <input class="input" id="simBuscaPN" placeholder="N° Parte / Descripción..." oninput="filtrarSimModelos()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px;margin-bottom:.4rem"/>
-          <select class="select" id="simBuscaGH90" onchange="filtrarSimModelos()" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:.4rem">
-            <option value="">— Ensamble GH90 (todos) —</option>
-          </select>
-          <label class="label" style="margin-bottom:3px">Modelo SM</label>
-          <select class="select" id="simModelo" onchange="onModeloChange()" style="width:100%"></select>
+        <div class="form-row">
+          <label class="label">Modelo SM</label>
+          <select class="select" id="simModelo" onchange="onModeloChange()"></select>
         </div>
         <div class="grid2" style="margin-bottom:.7rem">
           <div><label class="label">Producir</label><input class="input" id="simTarget" type="number" onchange="guardarTarget();calcSim()"></div>
@@ -268,7 +240,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </div>
       </div>
     </div>
-    <div class="card" style="overflow-x:auto">
+    <div class="card">
       <div class="card-title">📋 Detalle de componentes</div>
       <div class="table-wrap">
         <table class="dt">
@@ -480,126 +452,96 @@ function procesarBOM() {
 }
 
 // PREVIEW
-function renderPreview() {
-  if (!BOM || !BOM.length) return;
+function renderPreview(smSeleccionado) {
   const modelos = [...new Set(BOM.map(r => r.sm))];
-  const comps   = BOM.filter(r => r.familia !== 'GH90');
+  const comps = BOM.filter(r => r.familia !== 'GH90');
   const sinInvTotal = comps.filter(r => r.inv === 0).length;
-  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90' && r.isLevel1).map(r => r.pn))];
 
-  // Mostrar barra de filtros
-  const filtrosEl = document.getElementById('prevFiltros');
-  if (filtrosEl) filtrosEl.style.display = 'block';
-
-  // Actualizar stats
-  const statsEl = document.getElementById('prevStats');
-  if (statsEl) statsEl.innerHTML = `
+  // Stats generales
+  let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.8rem">
     <div class="stat bl"><div class="stat-l">Modelos SM</div><div class="stat-v" style="color:var(--accent)">${modelos.length}</div></div>
     <div class="stat gr"><div class="stat-l">Componentes</div><div class="stat-v" style="color:var(--green)">${comps.length}</div></div>
-    <div class="stat rd"><div class="stat-l">Sin Inventario</div><div class="stat-v" style="color:var(--red)">${sinInvTotal}</div></div>`;
+    <div class="stat rd"><div class="stat-l">Sin Inventario</div><div class="stat-v" style="color:var(--red)">${sinInvTotal}</div></div>
+  </div>`;
 
-  // Poblar dropdown GH90 solo si está vacío
-  const selGH90 = document.getElementById('prevFiltroGH90');
-  if (selGH90 && selGH90.options.length <= 1) {
-    gh90s.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; selGH90.appendChild(o); });
-  }
+  // Selector con opción vacía inicial
+  html += `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+    <label class="label" style="margin:0;white-space:nowrap">Modelo:</label>
+    <select class="select" style="flex:1" onchange="renderPreview(this.value)">
+      <option value="">— Seleccionar modelo —</option>
+      ${modelos.map(m => `<option value="${m}" ${m===smSeleccionado?'selected':''}>${m}</option>`).join('')}
+    </select>
+  </div>`;
 
-  filtrarPreview();
-}
-
-function filtrarPreview() {
-  if (!BOM || !BOM.length) return;
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-
-  const fModelo = (document.getElementById('prevFiltroSM')?.value  || '').trim().toUpperCase();
-  const fPN     = (document.getElementById('prevFiltroPN')?.value   || '').trim().toUpperCase();
-  const fGH90   = (document.getElementById('prevFiltroGH90')?.value || '').trim();
-
-  const hayFiltros = fModelo || fPN || fGH90;
-  const area = document.getElementById('previewArea');
-
-  if (!hayFiltros) {
-    area.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">Usa los filtros para buscar en el BOM</div>`;
+  // Si no hay modelo seleccionado, mostrar mensaje y salir
+  if (!smSeleccionado) {
+    html += `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">
+      Selecciona un modelo para ver su BOM
+    </div>`;
+    document.getElementById('previewArea').innerHTML = html;
     return;
   }
 
-  // Modelos que pasan filtro GH90
-  let modelosGH90 = modelos;
-  if (fGH90) modelosGH90 = [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn===fGH90).map(r => r.sm))];
+  const smActivo = smSeleccionado;
+  const smRows = BOM.filter(r => r.sm === smActivo);
+  const smComps = smRows.filter(r => r.familia !== 'GH90');
+  const sinInv = smComps.filter(r => r.inv === 0).length;
+  const target = smRows[0]?.target || 0;
 
-  const modelosFiltrados = modelos.filter(sm => {
-    if (fModelo && !sm.toUpperCase().includes(fModelo)) return false;
-    if (!modelosGH90.includes(sm)) return false;
-    return true;
+  // Badge de estado del modelo seleccionado
+  html += `<div style="display:flex;gap:.5rem;margin-bottom:.4rem">
+    <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${sinInv>0?'rgba(255,68,68,.1)':'rgba(0,230,118,.1)'};color:${sinInv>0?'var(--red)':'var(--green)'};border:1px solid ${sinInv>0?'rgba(255,68,68,.3)':'rgba(0,230,118,.3)'}">
+      ${sinInv>0?'⚠ '+sinInv+' sin inventario':'✓ Inventario OK'}
+    </span>
+    <span style="font-size:11px;color:var(--text2);padding:3px 8px;border-radius:4px;background:var(--bg3);border:1px solid var(--border2)">Target: ${target.toLocaleString()}</span>
+  </div>`;
+
+  // Árbol del modelo activo
+  const groups = [];
+  let currentGroup = null;
+  smRows.forEach(r => {
+    const isL1 = r.isLevel1 || r.level===1 || (r.groupNo!==null && r.level!==2);
+    if (isL1) {
+      currentGroup = { header: r, subs: [] };
+      groups.push(currentGroup);
+    } else if (currentGroup) {
+      currentGroup.subs.push(r);
+    }
   });
 
-  if (!modelosFiltrados.length) {
-    area.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--red);font-size:13px">Sin resultados</div>`;
-    return;
-  }
-
-  let totalGrupos = 0;
-  let html = `<div class="scroll">`;
-
-  modelosFiltrados.forEach(sm => {
-    const smRows = BOM.filter(r => r.sm === sm);
-    const target = smRows[0]?.target || 0;
-    const groups = [];
-    let cur = null;
-    smRows.forEach(r => {
-      const isL1 = r.isLevel1 || r.level===1 || (r.groupNo!==null && r.level!==2);
-      if (isL1) { cur = { header:r, subs:[] }; groups.push(cur); }
-      else if (cur) cur.subs.push(r);
-    });
-
-    const groupsFilt = fPN ? groups.filter(g =>
-      g.header.pn.toUpperCase().includes(fPN) ||
-      (g.header.desc||'').toUpperCase().includes(fPN) ||
-      g.subs.some(s => s.pn.toUpperCase().includes(fPN)||(s.desc||'').toUpperCase().includes(fPN))
-    ) : groups;
-
-    if (!groupsFilt.length) return;
-    totalGrupos += groupsFilt.length;
-
-    html += `<div style="border:1px solid var(--border2);border-radius:6px;margin-bottom:.5rem;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .8rem;background:var(--bg3);border-bottom:1px solid var(--border2)">
-        <span style="font-size:11px;font-weight:700;color:var(--accent)">${sm}</span>
-        <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()}</span>
+  html += `<div class="scroll">`;
+  groups.forEach(g => {
+    const r = g.header;
+    const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
+    const invTxt = r.inv > 0 ? r.inv.toLocaleString() : '—';
+    html += `<div style="background:var(--bg3);border-top:1px solid var(--border2);">
+      <div class="comp-row" style="padding:.5rem .9rem;align-items:center;">
+        <span style="font-size:10px;color:var(--text2);width:20px;text-align:center;flex-shrink:0;font-weight:700">${r.groupNo||''}</span>
+        <span style="font-size:9px;background:rgba(77,166,255,.15);color:var(--accent);border:1px solid rgba(77,166,255,.3);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L1</span>
+        <span class="comp-pn" style="color:${famColor};font-weight:700;font-size:12px">${r.pn}</span>
+        <span class="comp-desc" style="font-weight:600;color:var(--text);font-size:11px">${r.desc}</span>
+        <span class="fam fam-${r.familia}">${r.familia}</span>
+        <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${invTxt}</span>
       </div>`;
-
-    groupsFilt.forEach(g => {
-      const r = g.header;
-      const fc = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
-      const hl = fPN && (r.pn.toUpperCase().includes(fPN)||(r.desc||'').toUpperCase().includes(fPN));
-      html += `<div style="background:${hl?'rgba(77,166,255,.07)':'var(--bg3)'};border-top:1px solid var(--border)">
-        <div class="comp-row" style="padding:.45rem .8rem">
-          <span style="font-size:9px;background:rgba(77,166,255,.15);color:var(--accent);border:1px solid rgba(77,166,255,.3);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L1</span>
-          <span class="comp-pn" style="color:${fc};font-weight:700;font-size:12px">${r.pn}</span>
-          <span class="comp-desc" style="font-weight:600;color:var(--text);font-size:11px">${r.desc}</span>
-          <span class="fam fam-${r.familia}">${r.familia}</span>
-          <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${r.inv>0?r.inv.toLocaleString():'—'}</span>
-        </div>`;
-      g.subs.forEach((s,si) => {
-        const sc = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
-        const hs = fPN && (s.pn.toUpperCase().includes(fPN)||(s.desc||'').toUpperCase().includes(fPN));
-        html += `<div class="comp-row" style="padding:.35rem .8rem .35rem 2.2rem;background:${hs?'rgba(77,166,255,.07)':'rgba(77,166,255,.02)'}">
-          <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${si===g.subs.length-1?'└─':'├─'}</span>
-          <span style="font-size:9px;background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.2);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L2</span>
-          <span class="comp-pn" style="color:${sc};font-size:12px">${s.pn}</span>
-          <span class="comp-desc" style="font-size:10px">${s.desc}</span>
-          <span class="fam fam-${s.familia}">${s.familia}</span>
-          <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${s.inv>0?s.inv.toLocaleString():'—'}</span>
-        </div>`;
-      });
-      html += `</div>`;
+    g.subs.forEach((s,si) => {
+      const sFamColor = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
+      const sInvTxt = s.inv > 0 ? s.inv.toLocaleString() : '—';
+      const isLast = si === g.subs.length-1;
+      html += `<div class="comp-row" style="padding:.4rem .9rem .4rem 2.5rem;background:rgba(77,166,255,.02)">
+        <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${isLast?'└─':'├─'}</span>
+        <span style="font-size:9px;background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.2);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L2</span>
+        <span class="comp-pn" style="color:${sFamColor};font-size:12px">${s.pn}</span>
+        <span class="comp-desc" style="font-size:10px">${s.desc}</span>
+        <span class="fam fam-${s.familia}">${s.familia}</span>
+        <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${sInvTxt}</span>
+      </div>`;
     });
     html += `</div>`;
   });
-
   html += `</div>`;
-  html += `<div style="font-size:11px;color:var(--text2);margin-top:.4rem">${totalGrupos} grupos · ${modelosFiltrados.length} modelo(s)</div>`;
-  html += `<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.6rem" onclick="goTab('sim')">→ Ir al Simulador</button>`;
-  area.innerHTML = html;
+
+  html += `<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.8rem" onclick="goTab('sim')">→ Ir al Simulador</button>`;
+  document.getElementById('previewArea').innerHTML = html;
 }
 
 function toggleSinSubs(mode) {
@@ -624,59 +566,10 @@ function toggleTree(idx) {
 // SIMULADOR
 function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))];
-  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90' && r.isLevel1).map(r => r.pn))];
-
-  // Poblar select de modelos
-  const sel = document.getElementById('simModelo');
-  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
-
-  // Poblar dropdown GH90 solo la primera vez
-  const selGH90 = document.getElementById('simBuscaGH90');
-  if (selGH90 && selGH90.options.length <= 1) {
-    gh90s.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; selGH90.appendChild(o); });
-  }
-
+  document.getElementById('simModelo').innerHTML = modelos.map(m => `<option value="${m}">${m}</option>`).join('');
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
-  calcSim();
-}
-
-function filtrarSimModelos() {
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const fM   = (document.getElementById('simBuscaModelo')?.value || '').trim().toUpperCase();
-  const fPN  = (document.getElementById('simBuscaPN')?.value    || '').trim().toUpperCase();
-  const fGH90= (document.getElementById('simBuscaGH90')?.value  || '').trim();
-
-  let modelosGH90 = modelos;
-  if (fGH90) modelosGH90 = [...new Set(BOM.filter(r => r.familia==='GH90' && r.isLevel1 && r.pn===fGH90).map(r => r.sm))];
-
-  let modelosPN = modelos;
-  if (fPN) modelosPN = [...new Set(BOM.filter(r =>
-    r.pn.toUpperCase().includes(fPN) || (r.desc||'').toUpperCase().includes(fPN)
-  ).map(r => r.sm))];
-
-  const filtrados = modelos.filter(sm => {
-    if (fM && !sm.toUpperCase().includes(fM)) return false;
-    if (!modelosGH90.includes(sm)) return false;
-    if (!modelosPN.includes(sm))   return false;
-    return true;
-  });
-
-  const sel = document.getElementById('simModelo');
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + filtrados.map(m => `<option value="${m}">${m}</option>`).join('');
-
-  if (filtrados.includes(prev)) {
-    sel.value = prev;
-    // No es necesario recalcular, el modelo no cambió
-  } else if (filtrados.length === 1) {
-    // Si queda un solo resultado, seleccionarlo automáticamente
-    sel.value = filtrados[0];
-    onModeloChange();
-  } else {
-    sel.value = '';
-    calcSim();
-  }
+  onModeloChange();
 }
 
 
@@ -713,10 +606,8 @@ function onModeloChange() {
   }
   const sm = document.getElementById('simModelo').value;
   document.getElementById('simModelo').dataset.prev = sm;
-  if (!sm) { calcSim(); return; }
-  // Cargar target guardado; si no hay, usar el target del BOM como valor inicial
-  const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
-  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : bomTarget;
+  // Cargar target guardado, o 0 si no hay
+  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : 0;
   calcSim();
 }
 
@@ -765,15 +656,15 @@ function calcSim() {
   const target = parseInt(document.getElementById('simTarget').value) || 0;
   const dias = parseInt(document.getElementById('simDias').value) || 5;
 
-  // Si no hay modelo o target, mostrar mensaje
-  if (!sm || !target) {
+  // Si no hay target, limpiar y mostrar mensaje
+  if (!target) {
     document.getElementById('simStats').innerHTML = `
       <div class="stat bl"><div class="stat-l">Capacidad real</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">0% del target · 0 meta</div></div>
       <div class="stat"><div class="stat-l">A pedir</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">de 0 componentes</div></div>
       <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">piezas en ${dias} días</div></div>
       <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">unidades bloqueadas</div></div>`;
     document.getElementById('simCuello').style.display = 'none';
-    document.getElementById('simTable').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text3);font-size:13px">${!sm ? 'Selecciona un modelo para comenzar' : 'Ingresa un target para ver el análisis de componentes'}</td></tr>`;
+    document.getElementById('simTable').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text3);font-size:13px">Ingresa un target para ver el análisis de componentes</td></tr>`;
     return;
   }
   // Calcular inventario de Ranurado para saber si Virgen es relevante
@@ -983,11 +874,10 @@ function renderSimTable() {
   const targetSim2 = parseInt(document.getElementById('simTarget')?.value) || 0;
 
   // Pre-calcular inventario de Ranurado por modelo para saber si VC es necesario
-  const smSim = document.getElementById('simModelo')?.value || '';
   const getRanuradoInv = (desc) => {
     const match = BOM.find(r => {
       const d = (r.desc||'').toUpperCase();
-      return r.sm === smSim && d.includes('RANURADO') && d.includes(desc.toUpperCase());
+      return d.includes('RANURADO') && d.includes(desc.toUpperCase());
     });
     return match ? (match.inv || 0) : 0;
   };
@@ -995,6 +885,7 @@ function renderSimTable() {
   const botRanInv = getRanuradoInv('BOTTOM');
 
   // Calcular inventarios de medio proceso UNA VEZ antes del forEach
+  const smSim = document.getElementById('simModelo')?.value || '';
   // Gift Box Top: buscar por desc
   const giftBoxSim = BOM.find(r => r.sm === smSim && (r.desc||'').toUpperCase().includes('GIFT BOX'));
   const giftBoxSimInv = giftBoxSim ? (giftBoxSim.inv||0) : 0;

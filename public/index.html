@@ -191,6 +191,29 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div>
       <div class="card" style="height:fit-content">
         <div class="card-title">🌳 Vista previa del BOM</div>
+        <!-- Filtros fijos (siempre visibles cuando hay BOM) -->
+        <div id="prevFiltros" style="display:none;margin-bottom:.7rem">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+            <div>
+              <div class="label" style="margin-bottom:3px;font-size:10px">Modelo SM</div>
+              <input id="prevFiltroSM" class="input" placeholder="Ej. S911 CRN"
+                oninput="filtrarPreview()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px"/>
+            </div>
+            <div>
+              <div class="label" style="margin-bottom:3px;font-size:10px">N° Parte / Descripción</div>
+              <input id="prevFiltroPN" class="input" placeholder="Ej. GH69-43853A"
+                oninput="filtrarPreview()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px"/>
+            </div>
+            <div>
+              <div class="label" style="margin-bottom:3px;font-size:10px">Ensamble GH90</div>
+              <select id="prevFiltroGH90" class="select" onchange="filtrarPreview()" style="width:100%;font-size:12px;padding:5px 8px">
+                <option value="">— Todos —</option>
+              </select>
+            </div>
+          </div>
+          <div id="prevStats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem"></div>
+        </div>
+        <!-- Resultados dinámicos -->
         <div id="previewArea">
           <div class="empty">
             <div class="empty-icon">📂</div>
@@ -452,109 +475,88 @@ function procesarBOM() {
 }
 
 // PREVIEW
-function renderPreview(params) {
-  // Leer estado actual de filtros si existen en el DOM
+function renderPreview() {
+  if (!BOM || !BOM.length) return;
   const modelos = [...new Set(BOM.map(r => r.sm))];
-  const comps = BOM.filter(r => r.familia !== 'GH90');
+  const comps   = BOM.filter(r => r.familia !== 'GH90');
   const sinInvTotal = comps.filter(r => r.inv === 0).length;
-  const gh90s = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn))];
+  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn))];
 
-  // Obtener valores de filtros del DOM si ya existen, o del parámetro
-  const fModelo = (document.getElementById('prevFiltroSM') ? document.getElementById('prevFiltroSM').value : (typeof params==='string'?params:'')) || '';
-  const fPN     = document.getElementById('prevFiltroPN')  ? document.getElementById('prevFiltroPN').value  : '';
-  const fGH90   = document.getElementById('prevFiltroGH90')? document.getElementById('prevFiltroGH90').value : '';
+  // Mostrar barra de filtros
+  const filtrosEl = document.getElementById('prevFiltros');
+  if (filtrosEl) filtrosEl.style.display = 'block';
 
-  // Stats generales
-  let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.8rem">
+  // Actualizar stats
+  const statsEl = document.getElementById('prevStats');
+  if (statsEl) statsEl.innerHTML = `
     <div class="stat bl"><div class="stat-l">Modelos SM</div><div class="stat-v" style="color:var(--accent)">${modelos.length}</div></div>
     <div class="stat gr"><div class="stat-l">Componentes</div><div class="stat-v" style="color:var(--green)">${comps.length}</div></div>
-    <div class="stat rd"><div class="stat-l">Sin Inventario</div><div class="stat-v" style="color:var(--red)">${sinInvTotal}</div></div>
-  </div>`;
+    <div class="stat rd"><div class="stat-l">Sin Inventario</div><div class="stat-v" style="color:var(--red)">${sinInvTotal}</div></div>`;
 
-  // Barra de 3 filtros
-  html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.7rem">
-    <div>
-      <div class="label" style="margin-bottom:3px;font-size:10px">Modelo SM</div>
-      <input id="prevFiltroSM" class="input" placeholder="Ej. S911 CRN" value="${fModelo}"
-        oninput="filtrarPreview()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px"/>
-    </div>
-    <div>
-      <div class="label" style="margin-bottom:3px;font-size:10px">N° Parte / Descripción</div>
-      <input id="prevFiltroPN" class="input" placeholder="Ej. GH69-43853A" value="${fPN}"
-        oninput="filtrarPreview()" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px"/>
-    </div>
-    <div>
-      <div class="label" style="margin-bottom:3px;font-size:10px">Ensamble GH90</div>
-      <select id="prevFiltroGH90" class="select" onchange="filtrarPreview()" style="width:100%;font-size:12px;padding:5px 8px">
-        <option value="">— Todos —</option>
-        ${gh90s.map(p => `<option value="${p}" ${p===fGH90?'selected':''}>${p}</option>`).join('')}
-      </select>
-    </div>
-  </div>`;
-
-  // Filtrar filas según los 3 criterios combinados
-  const smFilt   = fModelo.trim().toUpperCase();
-  const pnFilt   = fPN.trim().toUpperCase();
-  const gh90Filt = fGH90.trim();
-
-  // Determinar qué modelos pasan el filtro de GH90
-  let modelosGH90 = modelos;
-  if (gh90Filt) {
-    modelosGH90 = [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn===gh90Filt).map(r => r.sm))];
+  // Poblar dropdown GH90 solo si está vacío
+  const selGH90 = document.getElementById('prevFiltroGH90');
+  if (selGH90 && selGH90.options.length <= 1) {
+    gh90s.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; selGH90.appendChild(o); });
   }
 
-  // Modelos que pasan todos los filtros
+  filtrarPreview();
+}
+
+function filtrarPreview() {
+  if (!BOM || !BOM.length) return;
+  const modelos = [...new Set(BOM.map(r => r.sm))];
+
+  const fModelo = (document.getElementById('prevFiltroSM')?.value  || '').trim().toUpperCase();
+  const fPN     = (document.getElementById('prevFiltroPN')?.value   || '').trim().toUpperCase();
+  const fGH90   = (document.getElementById('prevFiltroGH90')?.value || '').trim();
+
+  const hayFiltros = fModelo || fPN || fGH90;
+  const area = document.getElementById('previewArea');
+
+  if (!hayFiltros) {
+    area.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">Usa los filtros para buscar en el BOM</div>`;
+    return;
+  }
+
+  // Modelos que pasan filtro GH90
+  let modelosGH90 = modelos;
+  if (fGH90) modelosGH90 = [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn===fGH90).map(r => r.sm))];
+
   const modelosFiltrados = modelos.filter(sm => {
-    if (smFilt && !sm.toUpperCase().includes(smFilt)) return false;
+    if (fModelo && !sm.toUpperCase().includes(fModelo)) return false;
     if (!modelosGH90.includes(sm)) return false;
     return true;
   });
 
-  // Si hay filtro de PN, filtrar también a nivel de componente
-  // Mostrar resultados
-  const hayFiltros = smFilt || pnFilt || gh90Filt;
-
-  if (!hayFiltros) {
-    html += `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">
-      Usa los filtros para buscar en el BOM
-    </div>`;
-    document.getElementById('previewArea').innerHTML = html;
+  if (!modelosFiltrados.length) {
+    area.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--red);font-size:13px">Sin resultados</div>`;
     return;
   }
 
-  if (modelosFiltrados.length === 0) {
-    html += `<div style="text-align:center;padding:2rem;color:var(--red);font-size:13px">Sin resultados</div>`;
-    document.getElementById('previewArea').innerHTML = html;
-    return;
-  }
-
-  // Renderizar árbol por cada modelo filtrado
-  let totalResultados = 0;
-  html += `<div class="scroll">`;
+  let totalGrupos = 0;
+  let html = `<div class="scroll">`;
 
   modelosFiltrados.forEach(sm => {
     const smRows = BOM.filter(r => r.sm === sm);
     const target = smRows[0]?.target || 0;
-
     const groups = [];
-    let currentGroup = null;
+    let cur = null;
     smRows.forEach(r => {
       const isL1 = r.isLevel1 || r.level===1 || (r.groupNo!==null && r.level!==2);
-      if (isL1) { currentGroup = { header: r, subs: [] }; groups.push(currentGroup); }
-      else if (currentGroup) { currentGroup.subs.push(r); }
+      if (isL1) { cur = { header:r, subs:[] }; groups.push(cur); }
+      else if (cur) cur.subs.push(r);
     });
 
-    // Filtrar grupos por PN si aplica
-    const groupsFilt = pnFilt ? groups.filter(g =>
-      g.header.pn.toUpperCase().includes(pnFilt) ||
-      (g.header.desc||'').toUpperCase().includes(pnFilt) ||
-      g.subs.some(s => s.pn.toUpperCase().includes(pnFilt) || (s.desc||'').toUpperCase().includes(pnFilt))
+    const groupsFilt = fPN ? groups.filter(g =>
+      g.header.pn.toUpperCase().includes(fPN) ||
+      (g.header.desc||'').toUpperCase().includes(fPN) ||
+      g.subs.some(s => s.pn.toUpperCase().includes(fPN)||(s.desc||'').toUpperCase().includes(fPN))
     ) : groups;
 
-    if (groupsFilt.length === 0) return;
-    totalResultados += groupsFilt.length;
+    if (!groupsFilt.length) return;
+    totalGrupos += groupsFilt.length;
 
-    html += `<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:6px;margin-bottom:.5rem;overflow:hidden">
+    html += `<div style="border:1px solid var(--border2);border-radius:6px;margin-bottom:.5rem;overflow:hidden">
       <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .8rem;background:var(--bg3);border-bottom:1px solid var(--border2)">
         <span style="font-size:11px;font-weight:700;color:var(--accent)">${sm}</span>
         <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()}</span>
@@ -562,29 +564,26 @@ function renderPreview(params) {
 
     groupsFilt.forEach(g => {
       const r = g.header;
-      const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
-      const invTxt = r.inv > 0 ? r.inv.toLocaleString() : '—';
-      const hlPN = pnFilt && r.pn.toUpperCase().includes(pnFilt);
-      html += `<div style="background:${hlPN?'rgba(77,166,255,.06)':'var(--bg3)'};border-top:1px solid var(--border);">
+      const fc = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
+      const hl = fPN && (r.pn.toUpperCase().includes(fPN)||(r.desc||'').toUpperCase().includes(fPN));
+      html += `<div style="background:${hl?'rgba(77,166,255,.07)':'var(--bg3)'};border-top:1px solid var(--border)">
         <div class="comp-row" style="padding:.45rem .8rem">
           <span style="font-size:9px;background:rgba(77,166,255,.15);color:var(--accent);border:1px solid rgba(77,166,255,.3);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L1</span>
-          <span class="comp-pn" style="color:${famColor};font-weight:700;font-size:12px">${r.pn}</span>
+          <span class="comp-pn" style="color:${fc};font-weight:700;font-size:12px">${r.pn}</span>
           <span class="comp-desc" style="font-weight:600;color:var(--text);font-size:11px">${r.desc}</span>
           <span class="fam fam-${r.familia}">${r.familia}</span>
-          <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${invTxt}</span>
+          <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${r.inv>0?r.inv.toLocaleString():'—'}</span>
         </div>`;
       g.subs.forEach((s,si) => {
-        const sFamColor = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
-        const sInvTxt = s.inv > 0 ? s.inv.toLocaleString() : '—';
-        const isLast = si === g.subs.length-1;
-        const hlS = pnFilt && (s.pn.toUpperCase().includes(pnFilt)||(s.desc||'').toUpperCase().includes(pnFilt));
-        html += `<div class="comp-row" style="padding:.35rem .8rem .35rem 2.2rem;background:${hlS?'rgba(77,166,255,.06)':'rgba(77,166,255,.02)'}">
-          <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${isLast?'└─':'├─'}</span>
+        const sc = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
+        const hs = fPN && (s.pn.toUpperCase().includes(fPN)||(s.desc||'').toUpperCase().includes(fPN));
+        html += `<div class="comp-row" style="padding:.35rem .8rem .35rem 2.2rem;background:${hs?'rgba(77,166,255,.07)':'rgba(77,166,255,.02)'}">
+          <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${si===g.subs.length-1?'└─':'├─'}</span>
           <span style="font-size:9px;background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.2);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L2</span>
-          <span class="comp-pn" style="color:${sFamColor};font-size:12px">${s.pn}</span>
+          <span class="comp-pn" style="color:${sc};font-size:12px">${s.pn}</span>
           <span class="comp-desc" style="font-size:10px">${s.desc}</span>
           <span class="fam fam-${s.familia}">${s.familia}</span>
-          <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${sInvTxt}</span>
+          <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${s.inv>0?s.inv.toLocaleString():'—'}</span>
         </div>`;
       });
       html += `</div>`;
@@ -593,13 +592,9 @@ function renderPreview(params) {
   });
 
   html += `</div>`;
-  html += `<div style="font-size:11px;color:var(--text2);margin-top:.4rem">${totalResultados} grupos · ${modelosFiltrados.length} modelo(s)</div>`;
+  html += `<div style="font-size:11px;color:var(--text2);margin-top:.4rem">${totalGrupos} grupos · ${modelosFiltrados.length} modelo(s)</div>`;
   html += `<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.6rem" onclick="goTab('sim')">→ Ir al Simulador</button>`;
-  document.getElementById('previewArea').innerHTML = html;
-}
-
-function filtrarPreview() {
-  renderPreview();
+  area.innerHTML = html;
 }
 
 function toggleSinSubs(mode) {

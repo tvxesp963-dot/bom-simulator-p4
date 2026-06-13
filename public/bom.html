@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BOM Simulator · Planta 4</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
 <style>
@@ -60,7 +60,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .comp-row{display:flex;align-items:center;gap:.5rem;padding:.4rem .9rem .4rem 1.5rem;border-bottom:1px solid rgba(30,42,74,.5);font-size:11px}
 .comp-row:last-child{border-bottom:none}
 .comp-pn{font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;width:105px;flex-shrink:0}
-.comp-desc{flex:1;color:var(--text2);font-size:10px}
+.comp-desc{flex:1;color:var(--text2);font-size:12px}
 .fam{font-size:8px;padding:1px 5px;border-radius:3px;font-weight:700;flex-shrink:0}
 .fam-GH90{background:rgba(179,136,255,.15);color:var(--purple);border:1px solid rgba(179,136,255,.3)}
 .fam-GH69{background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.25)}
@@ -73,7 +73,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .inv-err{color:var(--red)}
 .inv-none{color:var(--text3)}
 .table-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.8rem}
-.dt{width:100%;border-collapse:collapse;font-size:11px}
+.dt{width:100%;border-collapse:collapse;font-size:11px}.sugg-item{padding:6px 10px;font-size:12px;cursor:pointer;color:var(--text);border-top:1px solid var(--border)}.sugg-item:first-child{border-top:none}.sugg-item:hover{background:rgba(77,166,255,.08);color:var(--accent)}
 .dt th{background:var(--bg3);padding:8px 10px;text-align:left;font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--border)}
 .dt td{padding:7px 10px;border-bottom:1px solid rgba(30,42,74,.5);color:var(--text2)}
 .dt tr:last-child td{border-bottom:none}
@@ -118,11 +118,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .dest-p1{background:rgba(26,111,212,.15);color:var(--accent);border-color:rgba(26,111,212,.4)}
 .dest-p3{background:rgba(0,184,90,.1);color:#00B85A;border-color:rgba(0,184,90,.3)}
 .dest-aliber{background:rgba(255,179,0,.1);color:var(--amber);border-color:rgba(255,179,0,.3)}
+.dest-p4{background:rgba(0,188,212,.12);color:#00BCD4;border-color:rgba(0,188,212,.4)}
 .dest-auto{background:var(--bg3);color:var(--text2);border-color:var(--border)}
 @media(max-width:600px){
   .dt th:nth-child(3),.dt td:nth-child(3){display:none}
   .dt th:nth-child(6),.dt td:nth-child(6){display:none}
-  .pn-cell{max-width:80px;font-size:10px}
+  .pn-cell{max-width:80px;font-size:12px}
 }
 </style>
 </head>
@@ -144,7 +145,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="tab" id="tab-sim" onclick="goTab('sim')" class="tab active">⚡ Simulador</div>
   <div class="tab" id="tab-cons" onclick="goTab('cons')">📦 Consolidado Pedidos</div>
   <div class="tab" id="tab-prod" onclick="goTab('prod')">🔧 Producir / Ranurar</div>
-  <div class="tab" id="tab-assy" onclick="goTab('assy')">🏭 ASSY1 Capacidad</div>
+  
   <div class="tab" id="tab-admin" onclick="goTab('admin')" style="color:#FFBA00">⚙️ Admin BOM</div>
 </div>
 
@@ -214,6 +215,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="card">
         <div class="card-title">⚙️ Parámetros</div>
         <div class="form-row">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+            <label class="label" style="margin:0">Ensamble GH90</label>
+            <button class="btn btn-secondary btn-sm" onclick="limpiarFiltrosSim()" style="font-size:10px;padding:2px 8px">↺ Limpiar</button>
+          </div>
+          <select class="select" id="simFiltroGH90" onchange="filtrarPorGH90()" style="margin-bottom:.4rem">
+            <option value="">— Todos los modelos —</option>
+          </select>
           <label class="label">Modelo SM</label>
           <select class="select" id="simModelo" onchange="onModeloChange()"></select>
         </div>
@@ -294,11 +302,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </div>
 
 <!-- ASSY1 -->
-<div class="page" id="page-assy">
-  <div id="assyEmpty" class="empty" style="padding:4rem">
-    <div class="empty-icon">🏭</div><div class="empty-title">Sin datos</div>
-    <button class="btn btn-primary" style="margin-top:1rem" onclick="goTab('upload')">📥 Cargar BOM</button>
-  </div>
   <div id="assyContent" style="display:none">
     <div class="sh">Capacidad ASSY1 — ranking por % de sub-componentes con inventario &gt; 0</div>
     <div class="alert alert-warn">⚠️ Regla: solo inventario actual. Lo que producen S1/S4/VC alimenta ASSY1 la semana <strong>siguiente</strong>.</div>
@@ -451,83 +454,100 @@ function procesarBOM() {
 
   if (!BOM.length) { alert('No se detectaron componentes. Verifica la hoja.'); return; }
 
-  renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+  renderPreview(); renderSim(); renderCons(); renderProd();
   document.getElementById('btnExport').style.display = 'flex';
 }
 
 // PREVIEW
-function renderPreview() {
+function renderPreview(smSeleccionado) {
   const modelos = [...new Set(BOM.map(r => r.sm))];
   const comps = BOM.filter(r => r.familia !== 'GH90');
   const sinInvTotal = comps.filter(r => r.inv === 0).length;
+
+  // Stats generales
   let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.8rem">
     <div class="stat bl"><div class="stat-l">Modelos SM</div><div class="stat-v" style="color:var(--accent)">${modelos.length}</div></div>
     <div class="stat gr"><div class="stat-l">Componentes</div><div class="stat-v" style="color:var(--green)">${comps.length}</div></div>
     <div class="stat rd"><div class="stat-l">Sin Inventario</div><div class="stat-v" style="color:var(--red)">${sinInvTotal}</div></div>
-  </div><div class="scroll">`;
+  </div>`;
 
-  modelos.forEach((sm, idx) => {
-    const smRows = BOM.filter(r => r.sm === sm);
-    const smComps = smRows.filter(r => r.familia !== 'GH90');
-    const sinInv = smComps.filter(r => r.inv === 0).length;
-    const target = smRows[0]?.target || 0;
+  // Selector con opción vacía inicial
+  html += `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+    <label class="label" style="margin:0;white-space:nowrap">Modelo:</label>
+    <select class="select" style="flex:1" onchange="renderPreview(this.value)">
+      <option value="">— Seleccionar modelo —</option>
+      ${modelos.map(m => `<option value="${m}" ${m===smSeleccionado?'selected':''}>${m}</option>`).join('')}
+    </select>
+  </div>`;
 
-    // Agrupar por Level: groupNo!=null = Level 1, resto = Level 2 bajo su Level 1
-    const groups = [];
-    let currentGroup = null;
-    smRows.forEach(r => {
-      const isL1 = r.isLevel1 || r.level===1 || (r.groupNo!==null && r.level!==2);
-      if (isL1) {
-        currentGroup = { header: r, subs: [] };
-        groups.push(currentGroup);
-      } else if (currentGroup) {
-        currentGroup.subs.push(r);
-      }
-    });
+  // Si no hay modelo seleccionado, mostrar mensaje y salir
+  if (!smSeleccionado) {
+    html += `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">
+      Selecciona un modelo para ver su BOM
+    </div>`;
+    document.getElementById('previewArea').innerHTML = html;
+    return;
+  }
 
-    html += `<div class="tree-sm">
-      <div class="tree-sm-header" onclick="toggleTree(${idx})">
-        <span class="sm-badge">${sm}</span>
-        <span style="margin-left:auto;font-size:9px;color:${sinInv>0?'var(--red)':'var(--green)'}">${sinInv>0?'⚠ '+sinInv+' sin inv':'✓ OK'}</span>
-        <span style="font-size:9px;color:var(--text2);margin-left:.5rem">Target: ${target.toLocaleString()}</span>
-        <span class="sm-toggle" id="tog${idx}">▼</span>
-      </div>
-      <div class="tree-children" id="tree${idx}">`;
+  const smActivo = smSeleccionado;
+  const smRows = BOM.filter(r => r.sm === smActivo);
+  const smComps = smRows.filter(r => r.familia !== 'GH90');
+  const sinInv = smComps.filter(r => r.inv === 0).length;
+  const target = smRows[0]?.target || 0;
 
-    groups.forEach(g => {
-      const r = g.header;
-      const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
-      const invTxt = r.inv > 0 ? r.inv.toLocaleString() : '—';
-      // Level 1 — grupo numerado en negritas
-      html += `<div style="background:var(--bg3);border-top:1px solid var(--border2);">
-        <div class="comp-row" style="padding:.5rem .9rem;align-items:center;">
-          <span style="font-size:10px;color:var(--text2);width:20px;text-align:center;flex-shrink:0;font-weight:700">${r.groupNo||''}</span>
-          <span style="font-size:9px;background:rgba(77,166,255,.15);color:var(--accent);border:1px solid rgba(77,166,255,.3);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L1</span>
-          <span class="comp-pn" style="color:${famColor};font-weight:700;font-size:12px">${r.pn}</span>
-          <span class="comp-desc" style="font-weight:600;color:var(--text);font-size:11px">${r.desc}</span>
-          <span class="fam fam-${r.familia}">${r.familia}</span>
-          <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${invTxt}</span>
-        </div>`;
-      // Level 2 — sub-componentes indentados
-      g.subs.forEach((s,si) => {
-        const sFamColor = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
-        const sInvTxt = s.inv > 0 ? s.inv.toLocaleString() : '—';
-        const isLast = si === g.subs.length-1;
-        html += `<div class="comp-row" style="padding:.4rem .9rem .4rem 2.5rem;background:rgba(77,166,255,.02)">
-          <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${isLast?'└─':'├─'}</span>
-          <span style="font-size:9px;background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.2);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L2</span>
-          <span class="comp-pn" style="color:${sFamColor};font-size:11px">${s.pn}</span>
-          <span class="comp-desc" style="font-size:10px">${s.desc}</span>
-          <span class="fam fam-${s.familia}">${s.familia}</span>
-          <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${sInvTxt}</span>
-        </div>`;
-      });
-      html += `</div>`;
-    });
-    html += `</div></div>`;
+  // Badge de estado del modelo seleccionado
+  html += `<div style="display:flex;gap:.5rem;margin-bottom:.4rem">
+    <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${sinInv>0?'rgba(255,68,68,.1)':'rgba(0,230,118,.1)'};color:${sinInv>0?'var(--red)':'var(--green)'};border:1px solid ${sinInv>0?'rgba(255,68,68,.3)':'rgba(0,230,118,.3)'}">
+      ${sinInv>0?'⚠ '+sinInv+' sin inventario':'✓ Inventario OK'}
+    </span>
+    <span style="font-size:11px;color:var(--text2);padding:3px 8px;border-radius:4px;background:var(--bg3);border:1px solid var(--border2)">Target: ${target.toLocaleString()}</span>
+  </div>`;
+
+  // Árbol del modelo activo
+  const groups = [];
+  let currentGroup = null;
+  smRows.forEach(r => {
+    const isL1 = r.isLevel1 || r.level===1 || (r.groupNo!==null && r.level!==2);
+    if (isL1) {
+      currentGroup = { header: r, subs: [] };
+      groups.push(currentGroup);
+    } else if (currentGroup) {
+      currentGroup.subs.push(r);
+    }
   });
 
-  html += `</div><button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.8rem" onclick="goTab('sim')">→ Ir al Simulador</button>`;
+  html += `<div class="scroll">`;
+  groups.forEach(g => {
+    const r = g.header;
+    const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
+    const invTxt = r.inv > 0 ? r.inv.toLocaleString() : '—';
+    html += `<div style="background:var(--bg3);border-top:1px solid var(--border2);">
+      <div class="comp-row" style="padding:.5rem .9rem;align-items:center;">
+        <span style="font-size:10px;color:var(--text2);width:20px;text-align:center;flex-shrink:0;font-weight:700">${r.groupNo||''}</span>
+        <span style="font-size:9px;background:rgba(77,166,255,.15);color:var(--accent);border:1px solid rgba(77,166,255,.3);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L1</span>
+        <span class="comp-pn" style="color:${famColor};font-weight:700;font-size:12px">${r.pn}</span>
+        <span class="comp-desc" style="font-weight:600;color:var(--text);font-size:11px">${r.desc}</span>
+        <span class="fam fam-${r.familia}">${r.familia}</span>
+        <span class="comp-inv ${r.inv>0?'inv-ok':'inv-err'}">${invTxt}</span>
+      </div>`;
+    g.subs.forEach((s,si) => {
+      const sFamColor = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
+      const sInvTxt = s.inv > 0 ? s.inv.toLocaleString() : '—';
+      const isLast = si === g.subs.length-1;
+      html += `<div class="comp-row" style="padding:.4rem .9rem .4rem 2.5rem;background:rgba(77,166,255,.02)">
+        <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${isLast?'└─':'├─'}</span>
+        <span style="font-size:9px;background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.2);border-radius:3px;padding:1px 5px;flex-shrink:0;margin-right:4px">L2</span>
+        <span class="comp-pn" style="color:${sFamColor};font-size:12px">${s.pn}</span>
+        <span class="comp-desc" style="font-size:10px">${s.desc}</span>
+        <span class="fam fam-${s.familia}">${s.familia}</span>
+        <span class="comp-inv ${s.inv>0?'inv-ok':'inv-err'}">${sInvTxt}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  html += `</div>`;
+
+  html += `<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.8rem" onclick="goTab('sim')">→ Ir al Simulador</button>`;
   document.getElementById('previewArea').innerHTML = html;
 }
 
@@ -552,11 +572,51 @@ function toggleTree(idx) {
 
 // SIMULADOR
 function renderSim() {
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  document.getElementById('simModelo').innerHTML = modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  const modelos = [...new Set(BOM.map(r => r.sm))].sort();
+  const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))].sort();
+
+  // Poblar dropdown GH90 solo la primera vez
+  const selGH90 = document.getElementById('simFiltroGH90');
+  if (selGH90 && selGH90.options.length <= 1) {
+    gh90s.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; selGH90.appendChild(o); });
+  }
+
+  // Poblar select de modelos — mantener selección actual si existe
+  const sel = document.getElementById('simModelo');
+  const smActual = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (smActual && modelos.includes(smActual)) sel.value = smActual;
+
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
-  onModeloChange();
+  calcSim();
+}
+
+function filtrarPorGH90() {
+  const modelos = [...new Set(BOM.map(r => r.sm))].sort();
+  const fGH90 = document.getElementById('simFiltroGH90').value;
+  const filtrados = fGH90
+    ? [...new Set(BOM.filter(r => r.familia==='GH90' && r.pn.trim()===fGH90).map(r => r.sm))].sort()
+    : modelos;
+
+  const sel = document.getElementById('simModelo');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + filtrados.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (filtrados.includes(prev)) {
+    sel.value = prev;
+  } else if (filtrados.length >= 1) {
+    sel.value = filtrados[0];
+    sel.dispatchEvent(new Event('change'));
+  } else {
+    sel.value = '';
+    calcSim();
+  }
+}
+
+function limpiarFiltrosSim() {
+  document.getElementById('simFiltroGH90').value = '';
+  filtrarPorGH90();
+  if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
 }
 
 
@@ -591,32 +651,123 @@ function onModeloChange() {
   if (prevSM) {
     simTargetsPorModelo[prevSM] = parseInt(document.getElementById('simTarget').value) || 0;
   }
-  const sm = document.getElementById('simModelo').value;
+  const sm = (document.getElementById('simModelo').value || '').trim();
   document.getElementById('simModelo').dataset.prev = sm;
-  // Cargar target del nuevo modelo
-  if (simTargetsPorModelo[sm] !== undefined) {
-    document.getElementById('simTarget').value = simTargetsPorModelo[sm];
-  } else {
-    document.getElementById('simTarget').value = BOM.find(r => r.sm === sm)?.target || 0;
-  }
+  if (!sm) { calcSim(); return; }
+  // Cargar target guardado, o el target del BOM si no hay
+  const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
+  document.getElementById('simTarget').value = simTargetsPorModelo[sm] !== undefined ? simTargetsPorModelo[sm] : bomTarget;
   calcSim();
 }
 
+
+// ── FUNCIÓN CENTRALIZADA: decide si un componente es relevante dado el inventario de medio proceso ──
+function componenteNecesario(r, sm, target) {
+  const d = (r.desc||'').toUpperCase();
+  const inv = n => n ? (n.inv||0) : 0;
+
+  // Buscar inventarios de medio proceso y ranurado
+  const topRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (x.desc||'').toUpperCase().includes('RANURADO'));
+  const botRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (x.desc||'').toUpperCase().includes('RANURADO'));
+  const giftBox   = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('GIFT BOX'));
+  const lowerBox  = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('LOWER BOX'));
+  const topRanInv = inv(topRan);
+  const botRanInv = inv(botRan);
+  const giftInv   = inv(giftBox);
+  const lowerInv  = inv(lowerBox);
+
+  // targetReal por grupo = target - lo ya producido en el header
+  const targetRealTop = Math.max(0, target - giftInv);
+  const targetRealBot = Math.max(0, target - lowerInv);
+
+  // Virgen TOP innecesario si Ranurado TOP cubre el targetReal del grupo
+  if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= targetRealTop) return false;
+  // Virgen BOT innecesario si Ranurado BOT cubre el targetReal del grupo
+  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInv >= targetRealBot) return false;
+  // Sheet Top Box innecesario si Gift Box cubre el target completo
+  if (d.includes('SHEET TOP') && giftInv >= target) return false;
+  // Gift Box innecesario si tiene inventario suficiente
+  if (d.includes('GIFT BOX') && giftInv >= target) return false;
+  // Sheet Lower Box innecesario si Lower Box cubre el target completo
+  if ((d.includes('SHEET LOWER') || d.includes('SHEET LOW')) && lowerInv >= target) return false;
+  // Lower Box innecesario si tiene inventario suficiente
+  if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && lowerInv >= target) return false;
+  // Chip Board Bottom Ranurado innecesario si Lower Box ya cubre
+  if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO') && lowerInv >= target) return false;
+  // Chip Board Top Ranurado innecesario si Gift Box ya cubre
+  if (d.includes('CHIP BOARD TOP') && d.includes('RANURADO') && giftInv >= target) return false;
+
+  return true;
+}
+
 function calcSim() {
-  const sm = document.getElementById('simModelo').value;
+  const sm = (document.getElementById('simModelo').value || '').trim();
   const target = parseInt(document.getElementById('simTarget').value) || 0;
   const dias = parseInt(document.getElementById('simDias').value) || 5;
-  const comps = BOM.filter(r => r.sm === sm && r.familia !== 'GH90');
+
+  // Validar que sm existe en el BOM
+  const modelos = BOM && BOM.length ? [...new Set(BOM.map(r => r.sm))] : [];
+  if (!sm || !modelos.includes(sm)) {
+    document.getElementById('simTable').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text3);font-size:13px">Selecciona un modelo para comenzar</td></tr>`;
+    document.getElementById('simCuello').style.display = 'none';
+    return;
+  }
+  // Guardar target actual para que Consolidado y Producir lo lean
+  simTargetsPorModelo[sm] = target;
+
+  // Si no hay target, limpiar y mostrar mensaje
+  if (!target) {
+    document.getElementById('simStats').innerHTML = `
+      <div class="stat bl"><div class="stat-l">Capacidad real</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">0% del target · 0 meta</div></div>
+      <div class="stat"><div class="stat-l">A pedir</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">de 0 componentes</div></div>
+      <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">piezas en ${dias} días</div></div>
+      <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">unidades bloqueadas</div></div>`;
+    document.getElementById('simCuello').style.display = 'none';
+    document.getElementById('simTable').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--text3);font-size:13px">Ingresa un target para ver el análisis de componentes</td></tr>`;
+    return;
+  }
+  // Calcular inventario de Ranurado para saber si Virgen es relevante
+  const topRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
+  const botRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
+  const topRanInvC = topRan ? (topRan.inv||0) : 0;
+  const botRanInvC = botRan ? (botRan.inv||0) : 0;
+
+  // Calcular inventario de medio proceso (Gift Box, Lower Box, Strip, Bundle)
+  const giftBoxC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX'));
+  const lowerBoxC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX'));
+  const stripC = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
+  const bundleC = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
+
+  const comps = BOM.filter(r => r.sm === sm && r.familia !== 'GH90' && componenteNecesario(r, sm, target));
+
+  // Para el cálculo de capacidad, considerar inventario de medio proceso
+  const giftBoxDisp = giftBoxC ? Math.max(giftBoxC.inv||0, 0) : 0;
+  const lowerBoxDisp = lowerBoxC ? Math.max(lowerBoxC.inv||0, 0) : 0;
+  const stripDisp = stripC ? (stripC.inv||0) : 0;
+  const bundleDisp = bundleC ? (bundleC.inv||0) : 0;
 
   let maxProd = target, cuello = null;
   comps.forEach(r => { if (r.inv < target && r.inv < maxProd) { maxProd = r.inv; cuello = r; } });
+
+  // También considerar medio proceso en maxProd
+  // Gift Box es cuello solo si no hay producción TOP disponible para cubrirlo
+  if (giftBoxC && (giftBoxC.inv||0) < target) maxProd = Math.min(maxProd, giftBoxC.inv||0);
+  // Lower Box es cuello solo si no hay producción BOT disponible (Ranurado BOT no cubre targetReal)
+  const targetRealBot_cs = Math.max(0, target - (lowerBoxC ? (lowerBoxC.inv||0) : 0));
+  if (lowerBoxC && (lowerBoxC.inv||0) < target && botRanInvC < targetRealBot_cs) maxProd = Math.min(maxProd, lowerBoxC.inv||0);
+  if (stripC && (stripC.inv||0) < target) maxProd = Math.min(maxProd, stripC.inv||0);
+  // Bundle: cuello principal — tiene prioridad sobre sub-componentes (INSERT, QSG)
+  if (bundleC && (bundleC.inv||0) < target) {
+    maxProd = Math.min(maxProd, bundleC.inv||0);
+    cuello = bundleC;
+  }
 
   const pct = target > 0 ? Math.min(100, Math.round((maxProd/target)*100)) : 0;
   const color = pct>=100?'var(--green)':pct>=70?'var(--amber)':'var(--red)';
   const aPedir = comps.filter(r => r.inv < target).length;
 
   document.getElementById('simStats').innerHTML = `
-    <div class="stat bl"><div class="stat-l">Capacidad real</div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString()}</div><div class="stat-s">${pct}% del target · ${target.toLocaleString()} meta</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
+    <div class="stat bl"><div class="stat-l">Capacidad real · <span style="color:var(--accent);font-weight:700">${sm}</span></div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString()}</div><div class="stat-s">${pct}% del target · ${target.toLocaleString()} meta</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
     <div class="stat ${aPedir>0?'rd':'gr'}"><div class="stat-l">A pedir</div><div class="stat-v" style="color:${aPedir>0?'var(--red)':'var(--green)'}">${aPedir}</div><div class="stat-s">de ${comps.length} componentes</div></div>
     <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--amber)">${Math.round(maxProd/dias).toLocaleString()}</div><div class="stat-s">piezas en ${dias} días</div></div>
     <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--red)">${Math.max(0,target-maxProd).toLocaleString()}</div><div class="stat-s">unidades bloqueadas</div></div>`;
@@ -628,6 +779,9 @@ function calcSim() {
     document.getElementById('simCuello').style.display = 'none';
   }
   renderSimTable();
+  // Actualizar Consolidado y Producir con el nuevo target
+  renderCons();
+  renderProd();
 }
 
 function getGrupo(r) {
@@ -647,6 +801,9 @@ function getDestino(r) {
   if (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'OK') return r.planta;
   var d = (r.desc||'').toUpperCase();
   var fam = r.familia || '';
+  var pn = (r.pn||'').toUpperCase();
+  // GH39 — siempre ALIBER
+  if (pn.startsWith('GH39') || fam === 'GH39') return 'ALIBER';
   // GH90
   if (fam === 'GH90') {
     if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) return 'P3';
@@ -656,12 +813,18 @@ function getDestino(r) {
   if (fam === 'GH69') {
     if (d.includes('PULP') || d.includes('TRAY')) return 'ALIBER';
     if (d.includes('INSERT') || d.includes('MANUAL') || d.includes('BUNDLE')) return 'P3';
-    return 'P1'; // Chip Board, Sheet, Gift Box, Lower Box
+    if (d.includes('GIFT BOX') && !d.includes('SHEET')) return 'P4';
+    if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && !d.includes('SHEET')) return 'P4';
+    return 'P1'; // Chip Board, Sheet
   }
   // GH68
   if (fam === 'GH68') {
     if (d.includes('QSG') || d.includes('HAC') || d.includes('IBG') || d.includes('GUIDE') || d.includes('INSERT')) return 'P3';
     return 'P1'; // Back Sticker, otros
+  }
+  // OTRO — Data Cable y Ejection Pin van a ALIBER por default
+  if (fam === 'OTRO') {
+    if (d.includes('DATA CABLE') || d.includes('EJECTION PIN') || d.includes('EJECTOR PIN')) return 'ALIBER';
   }
   return 'Sin Planta';
 }
@@ -695,10 +858,21 @@ function renderSimTable() {
     }
   });
 
-  // Filtrar según simFiltro
+  // Filtrar según simFiltro — usar targetReal por grupo igual que la tabla
+  const giftBoxFlt  = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX'));
+  const lowerBoxFlt = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX'));
+  const giftInvFlt  = giftBoxFlt  ? (giftBoxFlt.inv||0)  : 0;
+  const lowerInvFlt = lowerBoxFlt ? (lowerBoxFlt.inv||0) : 0;
+  const getTargetFlt = (r) => {
+    const d = (r.desc||'').toUpperCase();
+    if (d.includes('CHIP BOARD TOP'))    return Math.max(0, target - giftInvFlt);
+    if (d.includes('CHIP BOARD BOTTOM')) return Math.max(0, target - lowerInvFlt);
+    return target;
+  };
   const passFilter = (r) => {
-    if (simFiltro === 'pedir') return r.familia !== 'GH90' && r.inv < target;
-    if (simFiltro === 'ok') return r.familia === 'GH90' || r.inv >= target;
+    const tgt = getTargetFlt(r);
+    if (simFiltro === 'pedir') return r.familia !== 'GH90' && r.inv < tgt;
+    if (simFiltro === 'ok')    return r.familia === 'GH90' || r.inv >= tgt;
     return true;
   };
 
@@ -708,32 +882,52 @@ function renderSimTable() {
     </td>
   </tr>`;
 
-  const rowHTML = (r, isSubComponent=false) => {
-    const diff = r.familia === 'GH90' ? null : r.inv - target;
-    const dc = diff===null?'var(--text3)':diff>=0?'var(--green)':'var(--red)';
-    const dtxt = diff===null?'—':(diff>=0?'+':'')+diff.toLocaleString();
-    const estado = r.familia==='GH90'?`<span class="tag tag-info">ASSEMBLY</span>`:diff>=0?`<span class="tag tag-ok">✓ OK</span>`:`<span class="tag tag-err">⚠ ORDER</span>`;
+  const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null, invOverride=null, noRequerido=false) => {
+    const tgt = targetOverride !== null ? targetOverride : target;
+    const invForDiff = invOverride !== null ? invOverride : r.inv;
+    // Strip muestra diferencia real; Bundle y otros GH90 muestran —
+    const esStripDiff = r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('STRIP');
+    const diff = (r.familia === 'GH90' && !esStripDiff) ? null : invForDiff - tgt;
+    const dc = diff===null?'var(--text3)':noRequerido?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
+    const dtxt = diff===null?'—':noRequerido?'—':(diff>=0?'+':'')+diff.toLocaleString();
+    // Strip (GH90 ENSAMBLE): mostrar OK/ORDER según inventario vs target
+    // Bundle (GH90 BUNDLE): mantener ASSEMBLY
+    const esStrip = r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP');
+    const estado = noRequerido
+      ? `<span class="tag tag-info" style="background:rgba(122,136,184,.12);color:var(--text2);border-color:rgba(122,136,184,.3)">— N/R</span>`
+      : esStrip
+        ? (r.inv >= tgt
+            ? `<span class="tag tag-ok">✓ OK</span>`
+            : `<span class="tag tag-err">⚠ ORDER</span>`)
+        : r.familia==='GH90'
+          ? `<span class="tag tag-info">ASSEMBLY</span>`
+          : vcTag
+            ? `<span class="tag tag-warn">${vcTag}</span>`
+            : (poolOK || diff>=0)
+              ? `<span class="tag tag-ok">✓ OK</span>`
+              : `<span class="tag tag-err">⚠ ORDER</span>`;
     const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
     const indent = isSubComponent ? 'padding-left:24px;background:rgba(77,166,255,.02)' : 'font-weight:600';
     const prefix = isSubComponent ? '<span style="color:var(--text3);font-size:9px;margin-right:4px">└─</span>' : '';
     // Destino automático o manual
     const dest = getDestino(r);
-    const destClass = dest==='P1'?'dest-p1':dest==='P3'?'dest-p3':dest==='ALIBER'?'dest-aliber':'dest-auto';
+    const destClass = dest==='P1'?'dest-p1':dest==='P3'?'dest-p3':dest==='P4'?'dest-p4':dest==='ALIBER'?'dest-aliber':'dest-auto';
     const pnEsc = r.pn.replace(/'/g,"\'");
     const descEsc = (r.desc||'').replace(/'/g,"\'");
     const destSel = `<select class="dest-sel ${destClass}" onchange="this.className='dest-sel dest-'+this.value.toLowerCase();onDestinoChange('${pnEsc}','${descEsc}',this.value)">
       <option value="P1" ${dest==='P1'?'selected':''}>P1</option>
       <option value="P3" ${dest==='P3'?'selected':''}>P3</option>
+      <option value="P4" ${dest==='P4'?'selected':''}>P4</option>
       <option value="ALIBER" ${dest==='ALIBER'?'selected':''}>ALIBER</option>
-      <option value="auto" ${!['P1','P3','ALIBER'].includes(dest)?'selected':''}>Auto</option>
+      <option value="auto" ${!['P1','P3','P4','ALIBER'].includes(dest)?'selected':''}>Auto</option>
     </select>`;
     return `<tr style="${indent}">
       <td class="pn-cell" style="color:${famColor};width:110px">${prefix}${r.pn}</td>
       <td>${r.desc}</td>
       <td style="width:70px;text-align:center"><span class="fam fam-${r.familia}">${r.familia}</span></td>
       <td style="width:75px;text-align:center">${destSel}</td>
-      <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString():'—'}</td>
-      <td style="width:100px;text-align:right;color:var(--text2)">${r.familia==='GH90'?'—':target.toLocaleString()}</td>
+      <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':noRequerido?'var(--text2)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString():noRequerido?'0':'—'}</td>
+      <td style="width:100px;text-align:right;color:var(--text2)">${r.familia==='GH90'?'—':tgt.toLocaleString()}</td>
       <td style="width:100px;text-align:right;color:${dc};font-weight:600">${dtxt}</td>
       <td style="width:90px;text-align:center">${estado}</td>
     </tr>`;
@@ -741,12 +935,142 @@ function renderSimTable() {
 
   // Separar en secciones respetando el orden del BOM
   const secENSAMBLE = [], secTOP = [], secBOT = [];
+  const targetSim2 = parseInt(document.getElementById('simTarget')?.value) || 0;
+
+  // Pre-calcular inventario de Ranurado por modelo para saber si VC es necesario
+  const getRanuradoInv = (desc) => {
+    const match = BOM.find(r => {
+      const d = (r.desc||'').toUpperCase();
+      return d.includes('RANURADO') && d.includes(desc.toUpperCase());
+    });
+    return match ? (match.inv || 0) : 0;
+  };
+  const topRanInv = getRanuradoInv('TOP');
+  const botRanInv = getRanuradoInv('BOTTOM');
+
+  // Calcular inventarios de medio proceso UNA VEZ antes del forEach
+  const smSim = document.getElementById('simModelo')?.value || '';
+  // Gift Box Top: buscar por desc
+  const giftBoxSim = BOM.find(r => r.sm === smSim && (r.desc||'').toUpperCase().includes('GIFT BOX'));
+  const giftBoxSimInv = giftBoxSim ? (giftBoxSim.inv||0) : 0;
+  // Lower Box Bottom: inv=0 en BOM (se produce en S3), usar Ranurado BOT como indicador
+  const botRanSim = BOM.find(r => r.sm === smSim && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
+  const botRanSimInv = botRanSim ? (botRanSim.inv||0) : 0;
+  // S3 puede producir Lower Box si Ranurado BOT cubre el target
+  const lowerBoxSimInv = botRanSimInv >= targetSim2 ? botRanSimInv : 0;
+
   bomGroups.forEach(g => {
     const sec = g.section;
-    if(sec === 'BUNDLE') return; // Se procesa por separado al final
+    if(sec === 'BUNDLE') return;
+    const header = g.header;
+    const headerInv = header ? (header.inv || 0) : 0;
+    const headerDesc = (header?.desc || '').toUpperCase();
+
+    // En modo 'Todos': mostrar todo aunque Gift Box / Lower Box cubran
+    // En modo 'pedir'/'ok': ocultar secciones cubiertas
+    if (simFiltro !== 'todos') {
+      if (sec === 'TOP' && giftBoxSimInv >= targetSim2 && targetSim2 > 0) return;
+      if (sec === 'BOT' && lowerBoxSimInv >= targetSim2 && targetSim2 > 0) return;
+    }
+
+    // Si es Gift Box Top, Lower Box Bottom o Strip con inventario suficiente → banner OK
+    const esMedioProceso = headerDesc.includes('GIFT BOX') || headerDesc.includes('LOWER BOX') || headerDesc.includes('STRIP');
+    if (simFiltro !== 'todos' && esMedioProceso && headerInv >= targetSim2 && targetSim2 > 0) {
+      const label = headerDesc.includes('GIFT BOX') ? 'Gift Box Top OK — No requiere producción TOP'
+        : headerDesc.includes('LOWER BOX') ? 'Lower Box Bottom OK — No requiere producción BOTTOM'
+        : 'Strip OK — No requiere pedido a P1';
+      const bannerRow = `<tr>
+        <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
+          <span style="color:var(--green);font-weight:700;font-size:12px">✓ ${label}</span>
+          <span style="color:var(--text2);font-size:11px;margin-left:8px">${header.pn} · ${headerInv.toLocaleString()} en inventario ≥ target ${targetSim2.toLocaleString()}</span>
+        </td>
+      </tr>`;
+      if(sec === 'TOP') secTOP.push(bannerRow);
+      else if(sec === 'BOT') secBOT.push(bannerRow);
+      else secENSAMBLE.push(bannerRow);
+      return;
+    }
+
+    // Si el Ranurado cubre el target, el Virgen no es necesario → ocultar sub-items Virgen
+    const esGrupoTop = headerDesc.includes('TOP') && !headerDesc.includes('GIFT');
+    const esGrupoBot = (headerDesc.includes('BOTTOM') || headerDesc.includes('BOT')) && !headerDesc.includes('LOWER BOX');
+    const ranCubreTop = topRanInv >= targetSim2 && targetSim2 > 0;
+    const ranCubreBot = botRanInv >= targetSim2 && targetSim2 > 0;
+
+    // Calcular pool del grupo (suma de inventarios de todas las sub-variantes + header)
+    // El requerido de sub-componentes = target - inventario del header (Gift Box / Lower Box)
+    // Detectar por sub-variantes directamente, no por el header
+    const esGrupoChipTop = g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD TOP'));
+    const esGrupoChipBot = g.subs.some(s => (s.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM'));
+    const esGrupoConPool = esGrupoChipTop || esGrupoChipBot;
+    // Requerido real = target - lo que ya está producido (inventario del header)
+    const headerInvMedioProceso = header ? (header.inv || 0) : 0;
+    const targetReal = Math.max(0, targetSim2 - headerInvMedioProceso);
+    // Pool = suma de inventarios de sub-variantes solamente
+    const poolGrupo = esGrupoConPool
+      ? g.subs.reduce((sum, s) => sum + (s.inv || 0), 0)
+      : 0;
+    const poolCubreGrupo = esGrupoConPool && targetReal > 0 && poolGrupo >= targetReal;
+    const vcTagLabel = esGrupoChipTop ? 'VC1' : esGrupoChipBot ? 'VC2' : null;
+
+    // Calcular inventario de Ranurado disponible en las sub-variantes
+    const ranuradoInvSubs = esGrupoConPool
+      ? g.subs.filter(s => {
+          const sd = (s.desc||'').toUpperCase();
+          return sd.includes('RANURADO') || sd.includes('GROOVING');
+        }).reduce((sum, s) => sum + (s.inv || 0), 0)
+      : 0;
+    // Pool solo considera Chip Board (Virgen + Ranurado), NO Sheet
+    const chipBoardPool = esGrupoConPool
+      ? g.subs.filter(s => {
+          const sd = (s.desc||'').toUpperCase();
+          return sd.includes('CHIP BOARD');
+        }).reduce((sum, s) => sum + (s.inv || 0), 0)
+      : 0;
+    const chipPoolCubre = esGrupoConPool && targetReal > 0 && chipBoardPool >= targetReal;
+    // Si el Ranurado solo ya cubre el targetReal, el Virgen no necesita procesarse
+    const ranuradoSoloCubre = esGrupoConPool && targetReal > 0 && ranuradoInvSubs >= targetReal;
+    // Sheet inventario real = físico + ya incorporado en header (Lower Box / Gift Box)
+    const headerYaProducido = headerInvMedioProceso; // = inv del header (Lower Box / Gift Box)
+
     const rows = [];
-    if(passFilter(g.header)) rows.push(rowHTML(g.header, false));
-    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true)); });
+    // En modo 'Todos': mostrar BOM completo sin filtrar por componenteNecesario
+    // En modo 'pedir'/'ok': aplicar filtro para mostrar solo lo relevante
+    const skipFiltroNecesario = simFiltro === 'todos';
+    if(passFilter(header) && (skipFiltroNecesario || componenteNecesario(header, sm, targetSim2))) {
+      rows.push(rowHTML(header, false, false, null, targetSim2));
+    }
+    g.subs.forEach(s => {
+      if (!skipFiltroNecesario && !componenteNecesario(s, sm, targetSim2)) return;
+      const sDesc = (s.desc||'').toUpperCase();
+      const esVirgen = sDesc.includes('VIRGEN') || sDesc.includes('VIRGIN');
+      const esSheet = sDesc.includes('SHEET');
+      const esChipBoard = sDesc.includes('CHIP BOARD');
+
+      if (esSheet) {
+        // Sheet: inventario real = físico + ya incorporado en header
+        const sheetInvReal = (s.inv || 0) + headerYaProducido;
+        const sheetDiff = sheetInvReal - targetSim2;
+        const sheetOK = sheetDiff >= 0;
+        if(skipFiltroNecesario || passFilter(s) || !sheetOK) rows.push(rowHTML(s, true, false, null, targetSim2, sheetInvReal));
+      } else if (esChipBoard) {
+        const esRanurado = sDesc.includes('RANURADO') || sDesc.includes('GROOVING');
+        const sInv = s.inv || 0;
+        const virgenOK = esVirgen && (ranuradoSoloCubre || sInv >= targetReal);
+        // Virgen N/R = Ranurado solo cubre, no necesita procesarse
+        const virgenNR = esVirgen && ranuradoSoloCubre;
+        const virgenVC = esVirgen && !ranuradoSoloCubre && chipPoolCubre && sInv < targetReal;
+        const ranuradoOK = esRanurado && ranuradoSoloCubre;
+        const ranuradoVC = esRanurado && !ranuradoSoloCubre && chipPoolCubre;
+        const subPoolOK = virgenOK || ranuradoOK;
+        const subVcTag = virgenVC ? vcTagLabel : ranuradoVC ? vcTagLabel : null;
+        // En modo Todos: mostrar siempre. En otros modos: solo si es relevante
+        if(skipFiltroNecesario || passFilter(s) || chipPoolCubre || virgenOK) rows.push(rowHTML(s, true, subPoolOK, subVcTag, targetReal, null, virgenNR));
+      } else {
+        // Otros sub-componentes
+        if(skipFiltroNecesario || passFilter(s)) rows.push(rowHTML(s, true, false, null, targetReal));
+      }
+    });
     if(rows.length === 0) return;
     const block = rows.join('');
     if(sec === 'ENSAMBLE') secENSAMBLE.push(block);
@@ -755,11 +1079,27 @@ function renderSimTable() {
   });
 
   const secBUNDLE = [];
+  let bundleOK = false;
   bomGroups.forEach(g => {
     if(g.section !== 'BUNDLE') return;
+    const bundleHeader = g.header;
+    const bundleInv = bundleHeader ? (bundleHeader.inv || 0) : 0;
+    const targetSim = parseInt(document.getElementById('simTarget')?.value) || 0;
+    // Si Bundle >= target, marcar como OK y no mostrar componentes
+    if (bundleHeader && bundleInv >= targetSim && targetSim > 0) {
+      bundleOK = true;
+      secBUNDLE.push(`<tr>
+        <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
+          <span style="color:var(--green);font-weight:700;font-size:12px">✓ Bundle OK — No requiere producción P3</span>
+          <span style="color:var(--text2);font-size:11px;margin-left:8px">${bundleHeader.pn} · ${bundleInv.toLocaleString()} en inventario ≥ target ${targetSim.toLocaleString()}</span>
+        </td>
+      </tr>`);
+      return;
+    }
     const rows = [];
-    if(passFilter(g.header)) rows.push(rowHTML(g.header, false));
-    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true)); });
+    if(passFilter(bundleHeader)) rows.push(rowHTML(bundleHeader, false));
+    const bundleTargetReal = Math.max(0, targetSim2 - (bundleHeader ? (bundleHeader.inv || 0) : 0));
+    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true, false, null, bundleTargetReal)); });
     if(rows.length > 0) secBUNDLE.push(rows.join(''));
   });
 
@@ -794,9 +1134,10 @@ function renderCons() {
   document.getElementById('consTitle').textContent = `Consolidado Pedidos — ${document.getElementById('semanaRef').value}`;
   const EXTRA = 1.10;
   const plantas = [
-    {key:'P1', label:'P1 — Planta 1', sub:'Chip Boards · Sheets · Strip', color:'rgba(26,111,212,.15)', bc:'rgba(26,111,212,.4)', tc:'var(--accent)'},
-    {key:'P3', label:'P3 — Planta 3', sub:'Bundles · Inserts · QSG', color:'rgba(0,184,90,.1)', bc:'rgba(0,184,90,.3)', tc:'#00B85A'},
-    {key:'ALIBER', label:'ALIBER', sub:'Pulp Tray', color:'rgba(255,179,0,.1)', bc:'rgba(255,179,0,.3)', tc:'var(--amber)'}
+    {key:'P1',    label:'P1 — Planta 1', sub:'Chip Boards · Sheets · Strip',            color:'rgba(26,111,212,.15)', bc:'rgba(26,111,212,.4)',  tc:'var(--accent)'},
+    {key:'P3',    label:'P3 — Planta 3', sub:'Bundles · Inserts · QSG',                 color:'rgba(0,184,90,.1)',    bc:'rgba(0,184,90,.3)',    tc:'#00B85A'},
+    {key:'P4',    label:'P4 — Planta 4', sub:'Gift Box Top · Lower Box Bottom (S1-S4)', color:'rgba(0,188,212,.12)', bc:'rgba(0,188,212,.4)',   tc:'#00BCD4'},
+    {key:'ALIBER',label:'ALIBER',        sub:'Pulp Tray · Data Cable · Ejection Pin',   color:'rgba(255,179,0,.1)',  bc:'rgba(255,179,0,.3)',   tc:'var(--amber)'}
   ];
   // Obtener todos los modelos con su target
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
@@ -808,40 +1149,189 @@ function renderCons() {
   let html = '';
   let hayAlgo = false;
 
+  // Pool compartido de inventario — se descuenta conforme se asigna a modelos
+  const poolCompartido = {};
+  BOM.forEach(r => {
+    if (!r.pn) return;
+    const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    if (poolCompartido[key] === undefined) poolCompartido[key] = r.inv || 0;
+  });
+  // Helper para obtener y descontar del pool
+  const tomarPool = (pn, desc, cantidad) => {
+    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    const disponible = poolCompartido[key] || 0;
+    const tomar = Math.min(disponible, cantidad);
+    poolCompartido[key] = disponible - tomar;
+    return tomar;
+  };
+  const verPool = (pn, desc) => {
+    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    return poolCompartido[key] || 0;
+  };
+
   plantas.forEach(pl => {
+    // Resetear pool al inicio de cada planta para calcular independiente por planta
+    const poolPlanta = {};
+    BOM.forEach(r => {
+      if (!r.pn) return;
+      const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+      if (poolPlanta[key] === undefined) poolPlanta[key] = r.inv || 0;
+    });
+
     let plantaHtml = '';
     modelos.forEach(sm => {
       const target = modeloTargets[sm] || 0;
       if (!target) return;
-      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && r.inv < target);
-      if (!rows.length) return;
-      const rowsCalc = rows.map(r => ({...r, falta: target - r.inv, aPedir: Math.ceil((target - r.inv) * EXTRA)}));
-      const totalPedir = rowsCalc.reduce((s,r) => s + r.aPedir, 0);
+      // Pre-calcular inventario de Ranurado y medio proceso para excluir lo innecesario
+      const topRanC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
+      const botRanC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
+      const giftBoxCC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX'));
+      const lowerBoxCC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX'));
+      const topRanCC = topRanC ? (topRanC.inv||0) : 0;
+      const botRanCC = botRanC ? (botRanC.inv||0) : 0;
+      const giftBoxCC_inv = giftBoxCC ? (giftBoxCC.inv||0) : 0;
+      const lowerBoxCC_inv = lowerBoxCC ? (lowerBoxCC.inv||0) : 0;
+
+      // GH90 para P3: Bundle (ensamble padre)
+      const bundleRows = pl.key === 'P3'
+        ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'))
+        : [];
+
+      // Usar pool compartido para Bundle — descuenta entre modelos
+      const bundle = bundleRows[0];
+      const bundleInvDisp = bundle ? (poolPlanta[(bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase()] ?? (bundle.inv||0)) : 0;
+
+      if (pl.key === 'P3' && bundle && bundleInvDisp >= target) {
+        const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
+        poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - target);
+        return;
+      }
+
+      // targetReal para cada grupo = target - lo ya producido (header inv)
+      // P3: necesitaProducir = target - bundle inv
+      const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundleInvDisp) : target;
+
+      // P1: targetReal por grupo usando header (Gift Box / Lower Box)
+      // Gift Box group targetReal
+      const targetRealTop = Math.max(0, target - giftBoxCC_inv);
+      // Lower Box group targetReal
+      const targetRealBot = Math.max(0, target - lowerBoxCC_inv);
+
+      // Descontar Bundle del pool
+      if (bundle) {
+        const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
+        poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - Math.min(bundleInvDisp, target));
+      }
+
+      // Función para obtener targetReal correcto según descripción del componente
+      const getTargetReal = (r) => {
+        const d = (r.desc||'').toUpperCase();
+        // Header (Gift Box / Lower Box) siempre contra target completo
+        if (d.includes('GIFT BOX') || d.includes('LOWER BOX')) return target;
+        // Chip Board usa targetReal (target - header ya producido)
+        if (d.includes('CHIP BOARD TOP')) return targetRealTop;
+        if (d.includes('CHIP BOARD BOTTOM')) return targetRealBot;
+        // Sheet usa target completo (la diferencia se calcula con inv real = fisico + ya producido)
+        if (d.includes('SHEET TOP') || d.includes('SHEET LOWER')) return target;
+        if (pl.key === 'P3') return necesitaProducir;
+        return target;
+      };
+
+      // Sheet: inventario real = físico + ya incorporado en header
+      const getInvReal = (r) => {
+        const d = (r.desc||'').toUpperCase();
+        if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxCC_inv; }
+        if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxCC_inv; }
+        return r.inv||0;
+      };
+
+      // P4: Gift Box y Lower Box producidos internamente — mismo calculo que P1 headers
+      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target))
+        .filter(r => {
+          const tgt = getTargetReal(r);
+          const inv = getInvReal(r);
+          const d = (r.desc||'').toUpperCase();
+          const esChipBoard = d.includes('CHIP BOARD');
+          const esVirgen = d.includes('VIRGEN') || d.includes('VIRGIN');
+          const esRanurado = d.includes('RANURADO') || d.includes('GROOVING');
+          if (esChipBoard) {
+            const esTop = d.includes('TOP');
+            const tgtGrupo = esTop ? targetRealTop : targetRealBot;
+            const grupoKey = esTop ? 'CHIP BOARD TOP' : 'CHIP BOARD BOTTOM';
+            const ranurado = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(grupoKey) && ((b.desc||'').toUpperCase().includes('RANURADO') || (b.desc||'').toUpperCase().includes('GROOVING')));
+            const virgen = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(grupoKey) && ((b.desc||'').toUpperCase().includes('VIRGEN') || (b.desc||'').toUpperCase().includes('VIRGIN')));
+            const ranuradoInv = ranurado ? (ranurado.inv||0) : 0;
+            const virgenInv = virgen ? (virgen.inv||0) : 0;
+            const poolTotal = ranuradoInv + virgenInv;
+            // Virgen: excluir si ranurado solo cubre (no se necesita procesar)
+            if (esVirgen && ranuradoInv >= tgtGrupo) return false;
+            // Ranurado: excluir si el pool total cubre pero ranurado solo no cubre (se procesará Virgen)
+            if (esRanurado && poolTotal >= tgtGrupo && ranuradoInv < tgtGrupo) return false;
+          }
+          return inv < tgt;
+        });
+
+      const rowsP3 = pl.key === 'P3'
+        ? BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90')
+            .filter(r => (r.inv||0) < necesitaProducir)
+        : [];
+      const rowsActual = pl.key === 'P3' ? rowsP3 : rows;
+
+      if (!rowsActual.length && !bundleRows.filter(r=>r.inv<target).length) return;
+
+      const rowsCalc = rowsActual.map(r => {
+        const d2 = (r.desc||'').toUpperCase();
+        // Solo el header exacto (no Sheet Lower Box que también contiene LOWER BOX)
+        const isHeader = (d2.includes('GIFT BOX') && !d2.includes('SHEET')) || 
+                         (d2.includes('LOWER BOX') && !d2.includes('SHEET'));
+        const tgt = isHeader ? target : getTargetReal(r);
+        // Para diferencia usar inventario real (fisico + ya producido en header)
+        const invParaDiff = isHeader ? (r.inv||0) : getInvReal(r);
+        // Para mostrar en columna inventario: siempre el fisico del IMS
+        const invDisplay = r.inv || 0;
+        const falta = tgt - invParaDiff;
+        return {...r, inv: invDisplay, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
+      });
+      const bundleCalc = bundleRows.map(r => ({...r, inv: bundleInvDisp, falta: Math.max(0, target - bundleInvDisp), aPedir: bundleInvDisp < target ? Math.ceil((target - bundleInvDisp) * EXTRA) : 0}));
+
+      const totalPedir = [...rowsCalc, ...bundleCalc].reduce((s,r) => s + (r.aPedir||0), 0);
+      const totalFaltantes = rowsActual.length + bundleRows.filter(r=>r.inv<target).length;
       hayAlgo = true;
+
+      const renderRow = (r, i, color) => `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
+        <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${r.pn}</td>
+        <td style="font-size:12px">${r.desc}</td>
+        <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
+        <td style="text-align:right;color:${r.falta>0?'var(--red)':'var(--green)'};font-weight:600">${r.falta>0?'-'+r.falta.toLocaleString():'+'+Math.abs(r.falta).toLocaleString()}</td>
+        <td style="text-align:right;color:${r.aPedir>0?'var(--amber)':'var(--text)'};font-weight:700">${r.aPedir>0?r.aPedir.toLocaleString():'—'}</td>
+      </tr>`;
+
+      const sectionHeader = (label, bg, tc) => `<tr style="background:${bg}">
+        <td colspan="5" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
+      </tr>`;
+
       plantaHtml += `
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
           <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">${sm}</span>
           <div style="display:flex;align-items:center;gap:.5rem">
-            <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()} · ${rowsCalc.length} faltantes · ${totalPedir.toLocaleString()} pzas</span>
+            <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()} · ${totalFaltantes} faltantes · ${totalPedir.toLocaleString()} pzas</span>
             <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.key}</span>
           </div>
         </div>
         <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;min-width:500px">
+        <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
+          <colgroup><col style="width:18%"><col style="width:34%"><col style="width:14%"><col style="width:14%"><col style="width:20%"></colgroup>
           <thead><tr style="font-size:10px">
             <th>N° Parte</th><th>Descripción</th>
             <th style="text-align:right">Inv. Actual</th>
             <th style="text-align:right">Diferencia</th>
             <th style="text-align:right;color:var(--amber)">A Pedir +10%</th>
           </tr></thead><tbody>
-          ${rowsCalc.map((r,i)=>`<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
-            <td class="pn-cell" style="color:${pl.tc}">${r.pn}</td>
-            <td>${r.desc}</td>
-            <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
-            <td style="text-align:right;color:var(--red);font-weight:600">-${r.falta.toLocaleString()}</td>
-            <td style="text-align:right;color:var(--amber);font-weight:700">${r.aPedir.toLocaleString()}</td>
-          </tr>`).join('')}
+          ${bundleCalc.length ? sectionHeader('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
+          ${bundleCalc.map((r,i)=>renderRow(r,i,'#a78bfa')).join('')}
+          ${rowsCalc.length ? sectionHeader(pl.key==='P3'?'Componentes P3':'Componentes P1','rgba(255,255,255,.03)','var(--text2)') : ''}
+          ${rowsCalc.map((r,i)=>renderRow(r,i,null)).join('')}
           </tbody>
         </table>
         </div>
@@ -886,14 +1376,95 @@ function renderProd() {
   let html = '';
   let hayAlgo = false;
 
+  // Pool compartido — se descuenta entre modelos
+  const poolRend = {};
+  BOM.forEach(r => {
+    if (!r.pn) return;
+    const k = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    if (poolRend[k] === undefined) poolRend[k] = r.inv || 0;
+  });
+  const invPool = r => {
+    if (!r) return 0;
+    const k = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    return poolRend[k] || 0;
+  };
+  const takeRend = (r, cant) => {
+    if (!r) return 0;
+    const k = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    const disp = poolRend[k] || 0;
+    const tomar = Math.min(disp, cant);
+    poolRend[k] = disp - tomar;
+    return tomar;
+  };
+
+  // ── Helper: tarjeta de línea de producción ──
+  // targetLinea = requerido real para esa línea (puede ser targetReal o target completo)
+  const lineaCard = (label, color, icon, mats, puede, targetLinea) => {
+    if (!mats.length) return '';
+    const cuello = mats.reduce((mn,m) => m.inv < mn.inv ? m : mn, mats[0]);
+    const pctLinea = Math.min(100, targetLinea > 0 ? Math.round((puede / targetLinea) * 100) : 0);
+    const accion = label.includes('Ranurar') ? 'RANURAR' : label.includes('ASSY1') ? 'ENSAMBLAR' : 'PRODUCIR';
+    const faltaLinea = Math.max(0, targetLinea - puede);
+    return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
+          <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;background:${color}25;color:${color};border:1px solid ${color}50">
+            ${accion}: ${puede.toLocaleString()} pzas
+          </span>
+          ${faltaLinea > 0 ? `<span style="font-size:10px;color:var(--red);font-weight:600">· faltan ${faltaLinea.toLocaleString()} pzas</span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+            <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
+          </div>
+          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
+          <span style="font-size:10px;color:var(--text2)">/ ${targetLinea.toLocaleString()}</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="dt" style="width:100%;table-layout:fixed">
+        <thead><tr style="font-size:10px">
+          <th style="width:36%">Material</th>
+          <th style="width:20%">N° Parte</th>
+          <th style="width:14%;text-align:right">Disponible</th>
+          <th style="width:14%;text-align:right">A Producir</th>
+          <th style="width:16%;text-align:center">Estado</th>
+        </tr></thead><tbody>
+        ${mats.map((m,i) => {
+          const ok = m.inv >= targetLinea;
+          const tc = ok ? 'var(--green)' : m.inv > 0 ? 'var(--amber)' : 'var(--red)';
+          const tag = ok ? '<span class="tag tag-ok">OK</span>' : '<span class="tag tag-err">FALTA</span>';
+          const esCuello = m === cuello && !ok;
+          return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
+            <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
+            <td style="font-family:monospace;font-size:12px;color:${color}">${m.pn}</td>
+            <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
+            <td style="text-align:right;color:var(--red);font-weight:600">${targetLinea.toLocaleString()}</td>
+            <td style="text-align:center">${tag}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+  };
+
+  // ── Banner OK (cuando una línea no necesita producir) ──
+  const bannerOK = (msg, nota) =>
+    `<div style="background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.25);border-radius:10px;padding:.5rem .85rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem">
+      <span style="font-size:12px;font-weight:700;color:var(--green)">✓ ${msg}</span>
+      <span style="font-size:11px;color:var(--text2)">${nota}</span>
+    </div>`;
+
   modelos.forEach(sm => {
     const target = simTargetsPorModelo[sm] || 0;
     if (!target) return;
     hayAlgo = true;
 
-    const inv = r => r ? (r.inv || 0) : 0;
+    const inv = r => invPool(r);
 
-    // Materiales clave
+    // ── Materiales clave ──
     const cbTopVirgen = getComp(sm, ['CHIP BOARD TOP','VIRGEN']);
     const cbTopRan    = getComp(sm, ['CHIP BOARD TOP','RANURADO']);
     const sheetTop    = getComp(sm, ['SHEET TOP']);
@@ -908,94 +1479,92 @@ function renderProd() {
     const giftBox     = getComp(sm, ['GIFT BOX']);
     const bundle      = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
 
-    // ── VC: cuánto puede ranurar ──
-    const vcTopPuede = Math.min(inv(cbTopVirgen), target);
-    const vcBotPuede = Math.min(inv(cbBotVirgen), target);
+    // ── Inventarios de medio proceso (igual que Simulador) ──
+    const giftBoxInv  = inv(giftBox);   // Gift Box Top ya ensamblado
+    const lowerBoxInv = inv(lowerBox);  // Lower Box Bottom ya ensamblado
+    const stripInv    = inv(strip);
+    const bundleInv   = inv(bundle);
 
-    // Stock ranurado total = inventario actual + lo que VC puede ranurar
-    const topRanTotal = inv(cbTopRan) + vcTopPuede;
-    const botRanTotal = inv(cbBotRan) + vcBotPuede;
+    // targetReal por grupo = target - lo ya producido (igual que Simulador/Consolidado)
+    const targetRealTop = Math.max(0, target - giftBoxInv);
+    const targetRealBot = Math.max(0, target - lowerBoxInv);
 
-    // ── S1/S2 + Zhongke comparten pool TOP ──
-    const topMats = [
-      {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Top Box', inv: inv(sheetTop), pn: sheetTop?.pn||'—', nota:''},
-    ];
-    const topPuede = Math.min(...topMats.map(m=>m.inv));
+    // ── VC: ranurar Virgen para cubrir lo que falta de Ranurado ──
+    // Se calcula contra targetReal del grupo, no contra target completo
+    const topRanInvAct  = inv(cbTopRan);
+    const botRanInvAct  = inv(cbBotRan);
+    const virgenTopInv  = inv(cbTopVirgen);
+    const virgenBotInv  = inv(cbBotVirgen);
 
-    // ── S3: BOTTOM con etiqueta ──
-    const s3Mats = [
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Lower Box (Bottom)', inv: inv(sheetBot), pn: sheetBot?.pn||'—', nota:''},
-      {label:'Set Pad', inv: inv(setPad), pn: setPad?.pn||'—', nota:''},
-    ];
-    if (backSticker) s3Mats.push({label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
-    const s3Puede = Math.min(...s3Mats.map(m=>m.inv));
+    // ¿Cuánto falta de Ranurado para cubrir targetReal?
+    const vcTopNecesario = Math.max(0, targetRealTop - topRanInvAct);
+    const vcBotNecesario = Math.max(0, targetRealBot - botRanInvAct);
+    // VC puede ranurar lo que necesita, limitado por Virgen disponible
+    const vcTopPuede = Math.min(virgenTopInv, vcTopNecesario);
+    const vcBotPuede = Math.min(virgenBotInv, vcBotNecesario);
 
-    // ── S4: BOTTOM sin etiqueta ──
-    const s4Mats = [
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''},
-      {label:'Sheet Lower Box (Bottom)', inv: inv(sheetBot), pn: sheetBot?.pn||'—', nota:''},
-      {label:'Pulp Tray', inv: inv(pulpTray), pn: pulpTray?.pn||'—', nota:''},
-    ];
-    const s4Puede = pulpTray ? Math.min(...s4Mats.map(m=>m.inv)) : 0;
+    // Ranurado total disponible tras VC
+    const topRanTotal = topRanInvAct + vcTopPuede;
+    const botRanTotal = botRanInvAct + vcBotPuede;
 
-    // ── ASSY1 ──
-    const botPuede = Math.max(s3Puede, s4Puede); // lo producido en S3 o S4
+    // ── Sheet: inv real = físico + ya incorporado en header (igual que Simulador) ──
+    const sheetTopInvReal = (inv(sheetTop)||0) + giftBoxInv;
+    const sheetBotInvReal = (inv(sheetBot)||0) + lowerBoxInv;
+
+    // ── S1/S2 + Zhongke — Producir TOP ──
+    // Input: Chip Board Top Ranurado → Output: Gift Box Top
+    // Sheet Top Box se pide a P1, no es input de producción S1/S2
+    const topMats = [];
+    if (cbTopRan || cbTopVirgen) topMats.push(
+      {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''});
+    const topPuede = Math.min(topMats.length ? Math.min(...topMats.map(m=>m.inv)) : 0, targetRealTop);
+
+    // ── S3 — Producir Lower Box (S3) ──
+    // Input: Chip Board Bottom Ranurado → Output: Lower Box Bottom
+    // Sheet Lower Box se pide a P1, no es input de producción S3
+    const s3Mats = [];
+    if (cbBotRan || cbBotVirgen) s3Mats.push(
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
+    if (setPad) s3Mats.push(
+      {label:'Set Pad', inv: inv(setPad), pn: setPad.pn, nota:''});
+    if (backSticker) s3Mats.push(
+      {label:'Back Sticker', inv: inv(backSticker), pn: backSticker.pn, nota:''});
+    const s3Puede = Math.min(s3Mats.length ? Math.min(...s3Mats.map(m=>m.inv)) : 0, targetRealBot);
+
+    // ── S4 — Producir Lower Box (S4) ──
+    // Input: Chip Board Bottom Ranurado + Pulp Tray → Output: Lower Box Bottom
+    const s4Mats = [];
+    if (cbBotRan || cbBotVirgen) s4Mats.push(
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
+    if (pulpTray) s4Mats.push(
+      {label:'Pulp Tray', inv: inv(pulpTray), pn: pulpTray.pn, nota:''});
+    const s4Puede = pulpTray ? Math.min(Math.min(...s4Mats.map(m=>m.inv)), targetRealBot) : 0;
+
+    // ── Capacidad BOTTOM = la mejor entre S3 y S4, limitada a targetRealBot ──
+    const botPuede = Math.min(Math.max(s3Puede, s4Puede), targetRealBot);
+
+    // ── ASSY1 — Ensamble final ──
+    // Gift Box disponible = existente + producción TOP (limitada a lo que falta)
+    const giftBoxDisp  = giftBoxInv >= target ? giftBoxInv : Math.min(giftBoxInv + topPuede, target);
+    const lowerBoxDisp = lowerBoxInv >= target ? lowerBoxInv : Math.min(lowerBoxInv + botPuede, target);
+
+    // Descontar del pool para el siguiente modelo
+    if (bundle)   takeRend(bundle,   Math.min(bundleInv,   target));
+    if (strip)    takeRend(strip,    Math.min(stripInv,    target));
+    if (giftBox  && giftBoxInv  >= target) takeRend(giftBox,  target);
+    if (lowerBox && lowerBoxInv >= target) takeRend(lowerBox, target);
+
     const assy1Mats = [
-      {label:'Strip (GH90)', inv: inv(strip), pn: strip?.pn||'—', nota:''},
-      {label:'Gift Box Top (S1/S2/Zhongke)', inv: topPuede, pn: giftBox?.pn||'—', nota:'de producción TOP'},
-      {label:'Lower Box Bottom (S3/S4)', inv: botPuede, pn: lowerBox?.pn||'—', nota:'de producción BOTTOM'},
-      {label:'Bundle (P3)', inv: inv(bundle), pn: bundle?.pn||'—', nota:'pedir a P3'},
+      {label:'Strip (GH90)',               inv: stripInv,    pn: strip?.pn||'—',   nota: stripInv>=target?'inventario suficiente':''},
+      {label:'Gift Box Top (S1/S2/Zhongke)', inv: giftBoxDisp, pn: giftBox?.pn||'—', nota: giftBoxInv>=target?'inventario suficiente':'de producción TOP'},
+      {label:'Lower Box Bottom (S3/S4)',   inv: lowerBoxDisp, pn: lowerBox?.pn||'—', nota: lowerBoxInv>=target?'inventario suficiente':'de producción BOTTOM'},
+      {label:'Bundle (P3)',                inv: bundleInv,   pn: bundle?.pn||'—',  nota: bundleInv>=target?'inventario suficiente':'pedir a P3'},
     ];
-    const assy1Puede = Math.min(...assy1Mats.map(m=>m.inv));
+    const assy1Puede = Math.min(...assy1Mats.map(m=>m.inv), target);
 
-    const pct = Math.min(100, Math.round((assy1Puede/target)*100));
-    const sc = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
+    const pct  = Math.min(100, Math.round((assy1Puede/target)*100));
+    const sc   = pct>=100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
     const stag = pct>=100?'<span class="tag tag-ok">✓ LISTO</span>':pct>0?'<span class="tag tag-warn">⚠ PARCIAL</span>':'<span class="tag tag-err">✗ BLOQUEADO</span>';
-
-    const lineaCard = (label, color, icon, mats, puede) => {
-      if (!mats.length || mats.every(m=>m.inv===0 && !m.nota)) return '';
-      const cuello = mats.reduce((mn,m)=>m.inv<mn.inv?m:mn, mats[0]);
-      const pctLinea = Math.min(100, Math.round((puede/target)*100));
-      return `<div style="background:var(--bg2);border:1px solid ${color}40;border-radius:10px;margin-bottom:.5rem;overflow:hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .85rem;background:${color}12;border-bottom:1px solid ${color}30">
-          <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-              <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
-            </div>
-            <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
-            <span style="font-size:10px;color:var(--text2)">/ ${target.toLocaleString()}</span>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;min-width:400px;table-layout:fixed">
-          <thead><tr style="font-size:10px">
-            <th style="width:35%">Material</th>
-            <th style="width:20%;font-family:monospace">N° Parte</th>
-            <th style="width:15%;text-align:right">Disponible</th>
-            <th style="width:15%;text-align:right">Requerido</th>
-            <th style="width:15%;text-align:center">Estado</th>
-          </tr></thead><tbody>
-          ${mats.map((m,i)=>{
-            const ok=m.inv>=target;
-            const tc=ok?'var(--green)':m.inv>0?'var(--amber)':'var(--red)';
-            const tag=ok?'<span class="tag tag-ok">OK</span>':'<span class="tag tag-err">FALTA</span>';
-            const esCuello = m===cuello && !ok;
-            return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
-              <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
-              <td style="font-family:monospace;font-size:10px;color:${color}">${m.pn}</td>
-              <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
-              <td style="text-align:right">${target.toLocaleString()}</td>
-              <td style="text-align:center">${tag}</td>
-            </tr>`;
-          }).join('')}
-          </tbody>
-        </table>
-        </div>
-      </div>`;
-    };
 
     html += `
     <div style="background:var(--bg2);border:1px solid ${sc}40;border-radius:12px;margin-bottom:1.25rem;overflow:hidden">
@@ -1007,14 +1576,38 @@ function renderProd() {
         </div>
       </div>
       <div style="padding:.75rem">
-        ${lineaCard('VC — Ranurar','var(--amber)','⚙️',
-          [{label:'Chip Board Top (Virgen)',inv:inv(cbTopVirgen),pn:cbTopVirgen?.pn||'—',nota:'→ produce Ranurado'},
-           {label:'Chip Board Bottom (Virgen)',inv:inv(cbBotVirgen),pn:cbBotVirgen?.pn||'—',nota:'→ produce Ranurado'}],
-          Math.min(vcTopPuede,vcBotPuede))}
-        ${lineaCard('S1 / S2 + Zhongke — Producir TOP','var(--accent)','🏭', topMats, topPuede)}
-        ${lineaCard('S3 — Producir BOTTOM (con etiqueta)','#00B8A0','🏭', s3Mats, s3Puede)}
-        ${s4Puede>0||pulpTray?lineaCard('S4 — Producir BOTTOM (sin etiqueta)','#7C5CBF','🏭', s4Mats, s4Puede):''}
-        ${lineaCard('ASSY1 — Ensamble Final','var(--green)','✅', assy1Mats, assy1Puede)}
+
+        ${/* ── VC1 ── */ vcTopNecesario > 0
+          ? lineaCard('VC1 — Ranurar TOP', 'var(--amber)', '⚙️',
+              [{label:'Chip Board Top (Virgen)', inv: virgenTopInv, pn: cbTopVirgen?.pn||'—', nota:'→ produce Ranurado'}],
+              vcTopPuede, vcTopNecesario)
+          : bannerOK('VC1 — No necesita ranurar', `Ranurado TOP (${topRanInvAct.toLocaleString()}) cubre el requerido (${targetRealTop.toLocaleString()})`)
+        }
+
+        ${/* ── VC2 ── */ vcBotNecesario > 0
+          ? lineaCard('VC2 — Ranurar BOT', '#00B8A0', '⚙️',
+              [{label:'Chip Board Bottom (Virgen)', inv: virgenBotInv, pn: cbBotVirgen?.pn||'—', nota:'→ produce Ranurado'}],
+              vcBotPuede, vcBotNecesario)
+          : bannerOK('VC2 — No necesita ranurar', `Ranurado BOT (${botRanInvAct.toLocaleString()}) cubre el requerido (${targetRealBot.toLocaleString()})`)
+        }
+
+        ${/* ── S1/S2 ── */ giftBoxDisp >= target
+          ? bannerOK('S1/S2 + Zhongke — No necesita producir', `Gift Box Top (${giftBoxInv.toLocaleString()}) ya cubre el target`)
+          : lineaCard('S1 / S2 + Zhongke — Producir TOP', 'var(--accent)', '🏭', topMats, topPuede, targetRealTop)
+        }
+
+        ${/* ── S3 ── */ lowerBoxDisp >= target
+          ? bannerOK('S3 — No necesita producir', `Lower Box Bottom (${lowerBoxInv.toLocaleString()}) ya cubre el target`)
+          : lineaCard('S3 — Producir Lower Box (S3)', '#00B8A0', '🏭', s3Mats, s3Puede, targetRealBot)
+        }
+
+        ${/* ── S4 ── */ (s4Puede > 0 || pulpTray)
+          ? lineaCard('S4 — Producir Lower Box (S4)', '#7C5CBF', '🏭', s4Mats, s4Puede, targetRealBot)
+          : ''
+        }
+
+        ${/* ── ASSY1 ── */ lineaCard('ASSY1 — Ensamble Final', 'var(--green)', '✅', assy1Mats, assy1Puede, target)}
+
       </div>
     </div>`;
   });
@@ -1026,112 +1619,277 @@ function renderProd() {
 }
 
 // ASSY1
-function renderAssy() {
-  const modelos = [...new Set(BOM.map(r => r.sm))];
-  const rows = modelos.map(sm => {
-    const comps = BOM.filter(r => r.sm===sm && r.familia!=='GH90');
-    const conInv = comps.filter(r => r.inv>0).length;
-    const pct = comps.length>0?Math.round((conInv/comps.length)*100):0;
-    const gh90 = BOM.find(r => r.sm===sm && r.familia==='GH90');
-    return {sm, gh90:gh90?.pn||'—', gh90desc:gh90?.desc||'', comps:comps.length, conInv, pct, target:BOM.find(r=>r.sm===sm)?.target||0};
-  }).sort((a,b)=>b.pct-a.pct);
-
-  const assyTbody = rows.map((r,i) => {
-    const color = r.pct===100?'var(--green)':r.pct>=50?'var(--amber)':'var(--red)';
-    const tag = r.pct===100?'<span class="tag tag-ok">✓ LISTO</span>':'<span class="tag tag-err">⚠ INCOMPLETO</span>';
-    return `<tr>
-      <td style="text-align:center;font-family:Rajdhani,sans-serif;font-weight:700;color:${color}">#${i+1}</td>
-      <td style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:11px;overflow:hidden;text-overflow:ellipsis">${r.sm}</td>
-      <td style="font-family:monospace;font-size:10px;color:var(--accent);overflow:hidden;text-overflow:ellipsis">${r.gh90}</td>
-      <td style="font-size:10px;color:var(--text2);overflow:hidden;text-overflow:ellipsis">${r.gh90desc}</td>
-      <td style="text-align:right;color:var(--text2)">${r.comps}</td>
-      <td style="text-align:right;color:${color};font-weight:600">${r.conInv}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div class="prog" style="flex:1"><div class="prog-fill" style="width:${r.pct}%;background:${color}"></div></div>
-          <span style="font-family:Rajdhani,sans-serif;font-weight:700;color:${color};min-width:36px;text-align:right">${r.pct}%</span>
-        </div>
-      </td>
-      <td style="text-align:center">${tag}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('assyList').innerHTML = `<div class="table-wrap"><table class="dt" style="table-layout:fixed;width:100%">
-    <colgroup>
-      <col style="width:45px"><col style="width:160px"><col style="width:110px">
-      <col style="width:auto"><col style="width:65px"><col style="width:65px">
-      <col style="width:180px"><col style="width:100px">
-    </colgroup>
-    <thead><tr>
-      <th style="text-align:center">#</th><th>Modelo SM</th><th>GH90</th><th>Descripción</th>
-      <th style="text-align:right">Total</th><th style="text-align:right">Con Inv.</th>
-      <th>% Disponible</th><th style="text-align:center">Estado</th>
-    </tr></thead>
-    <tbody>${assyTbody}</tbody>
-  </table></div>`;
-
-  document.getElementById('assyEmpty').style.display = 'none';
-  document.getElementById('assyContent').style.display = 'block';
-}
 
 // EXPORT
 function exportarExcel() {
   if (!BOM.length) { alert('Primero procesa tu BOM'); return; }
   const semana = document.getElementById('semanaRef').value;
+  const EXTRA  = 1.10;
+  const fecha  = new Date().toLocaleDateString('es-MX');
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const wb = XLSX.utils.book_new();
 
-  // Hoja 1: Consolidado Pedidos
-  const h1 = [
-    ['CONSOLIDADO DE MATERIALES A PEDIR — POR PLANTA — P4 BOM'],
-    [`Fecha: ${new Date().toLocaleDateString('es-MX')}   |   Solo materiales visibles en BOM   |   Orden: P1 → P3 → ALIBER`],
-    [],
-    ['No.','Fecha','Ensamble (Strip Code)','Número de Parte','Descripción','Inventario Actual','Cantidad a Pedir','Recibido / Enviado']
-  ];
-  let no=1;
-  ['P1','P3','ALIBER'].forEach(pl => {
-    const rows = BOM.filter(r=>r.planta===pl);
-    if (!rows.length) return;
-    h1.push([`  ▶  PLANTA: ${pl}`,null,null,null,null,null,null,`TOTAL: ${rows.length} materiales`]);
-    h1.push(['No.','Fecha','Ensamble (Strip Code)','Número de Parte','Descripción','Inventario Actual','Cantidad a Pedir','Recibido / Enviado']);
-    rows.forEach(r=>h1.push([no++,null,r.sm,r.pn,r.desc,r.inv||0,r.qtyPlan||0,null]));
-    h1.push([]);
+  // ── Helpers de estilo ──
+  const s = (bold, fg, bg, ha, sz, wrap, border) => ({
+    font:      { bold:!!bold, color:{rgb: fg||'000000'}, name:'Calibri', sz: sz||10 },
+    fill:      bg ? {patternType:'solid', fgColor:{rgb:bg}} : {patternType:'none'},
+    alignment: { horizontal: ha||'left', vertical:'center', wrapText:!!wrap },
+    border: border ? {
+      top:{style:'thin',color:{rgb:'BBBBBB'}}, bottom:{style:'thin',color:{rgb:'BBBBBB'}},
+      left:{style:'thin',color:{rgb:'BBBBBB'}}, right:{style:'thin',color:{rgb:'BBBBBB'}}
+    } : {}
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h1), 'Consolidado Pedidos');
+  const c  = (v,bold,fg,bg,ha,sz,wrap) => ({ v: v??'', t: typeof v==='number'?'n':'s', s: s(bold,fg,bg,ha,sz,wrap,true) });
+  const n  = (v,bold,fg,bg,ha)         => ({ v: v||0,  t:'n', s: s(bold,fg,bg,ha||'right',10,false,true) });
 
-  // Hoja 2: Producir y VC Ranurar
-  const h2 = [
-    [`PRODUCIR Y VC RANURAR — ${semana}`],[],
-    ['No.','Ensamble (Strip Code)','Número de Parte','Descripción','Inventario','Cantidad Plan','Línea / Plan']
+  // ── Colores ──
+  const TITLE_BG='1A3A6B', TITLE_FG='FFFFFF';
+  const SUB_BG='D9E1F2',   SUB_FG='333333';
+  const HDR_BG='2E4D7B',   HDR_FG='FFFFFF';
+  const P1_BG='1A4F9C',    P1_FG='FFFFFF';
+  const P3_BG='1A6B3C',    P3_FG='FFFFFF';
+  const ALI_BG='8B3A00',   ALI_FG='FFFFFF';
+  const TOT_BG='1A3A6B',   TOT_FG='FFFFFF';
+  const BUNDLE_BG='4A2D7A';
+  const ALT_BG='EEF4FB';
+  const PEDIR_BG='FFF2CC',  PEDIR_FG='7B4F00';
+  const OK_BG='D7F4E3',     OK_FG='1A6B3C';
+  const FALTA_BG='FFD7D7',  FALTA_FG='CC0000';
+  const PROD_BG='E8F0FE';
+  const VC_BG='FFF3CD';
+
+  // ── Recalcular filas con logica correcta ──
+  const getRows = (plKey) => {
+    const result = [];
+    modelos.forEach(sm => {
+      const target = simTargetsPorModelo[sm] || 0;
+      if (!target) return;
+      const giftR  = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('GIFT BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
+      const lowR   = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('LOWER BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
+      const giftInv  = giftR  ? (giftR.inv||0)  : 0;
+      const lowInv   = lowR   ? (lowR.inv||0)   : 0;
+      const tRTop = Math.max(0, target - giftInv);
+      const tRBot = Math.max(0, target - lowInv);
+      const bundleR = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
+      const bundleInv = bundleR ? (bundleR.inv||0) : 0;
+      const necBundle = Math.max(0, target - bundleInv);
+      const stripR  = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
+      const stripInv = stripR ? (stripR.inv||0) : 0;
+
+      if (plKey === 'P4') {
+        // Gift Box Top y Lower Box Bottom — producidos en P4 (S1/S2 y S3/S4)
+        BOM.filter(r => r.sm===sm && getDestino(r)==='P4' && r.familia!=='GH90')
+          .forEach(r => {
+            const d=(r.desc||'').toUpperCase();
+            const falta = Math.max(0, target - (r.inv||0));
+            if (falta > 0) result.push({sm, pn:r.pn, desc:r.desc, inv:r.inv||0,
+              falta, aPedir:Math.ceil(falta*EXTRA), tgt:target});
+          });
+        return;
+      }
+      if (plKey === 'P3') {
+        if (bundleR && bundleInv < target)
+          result.push({ sm, pn:bundleR.pn, desc:bundleR.desc, inv:bundleInv,
+            falta:target-bundleInv, aPedir:Math.ceil((target-bundleInv)*EXTRA), tgt:target, isBundle:true });
+        BOM.filter(r => r.sm===sm && getDestino(r)==='P3' && r.familia!=='GH90')
+          .filter(r => (r.inv||0) < necBundle)
+          .forEach(r => { const f=necBundle-(r.inv||0); result.push({sm,pn:r.pn,desc:r.desc,inv:r.inv||0,falta:f,aPedir:Math.ceil(f*EXTRA),tgt:necBundle}); });
+        return;
+      }
+      BOM.filter(r => r.sm===sm && getDestino(r)===plKey && r.familia!=='GH90' && componenteNecesario(r,sm,target))
+        .filter(r => {
+          const d=(r.desc||'').toUpperCase();
+          if (d.includes('CHIP BOARD')) {
+            const isTop=d.includes('TOP'), gk=isTop?'CHIP BOARD TOP':'CHIP BOARD BOTTOM', tG=isTop?tRTop:tRBot;
+            const ran=BOM.find(b=>b.sm===sm&&(b.desc||'').toUpperCase().includes(gk)&&(b.desc||'').toUpperCase().includes('RANURADO'));
+            const vir=BOM.find(b=>b.sm===sm&&(b.desc||'').toUpperCase().includes(gk)&&(b.desc||'').toUpperCase().includes('VIRGEN'));
+            const rI=ran?(ran.inv||0):0, vI=vir?(vir.inv||0):0;
+            if (d.includes('VIRGEN')&&rI>=tG) return false;
+            if (d.includes('RANURADO')&&(rI+vI)>=tG&&rI<tG) return false;
+          }
+          const isH=(d.includes('GIFT BOX')&&!d.includes('SHEET'))||(d.includes('LOWER BOX')&&!d.includes('SHEET'));
+          const tg2=isH?target:d.includes('CHIP BOARD TOP')?tRTop:d.includes('CHIP BOARD BOTTOM')?tRBot:target;
+          const iR=isH?(r.inv||0):d.includes('SHEET TOP')?(r.inv||0)+giftInv:d.includes('SHEET LOWER')?(r.inv||0)+lowInv:(r.inv||0);
+          return iR < tg2;
+        })
+        .forEach(r => {
+          const d=(r.desc||'').toUpperCase();
+          const isH=(d.includes('GIFT BOX')&&!d.includes('SHEET'))||(d.includes('LOWER BOX')&&!d.includes('SHEET'));
+          const tg2=isH?target:d.includes('CHIP BOARD TOP')?tRTop:d.includes('CHIP BOARD BOTTOM')?tRBot:target;
+          const iR=isH?(r.inv||0):d.includes('SHEET TOP')?(r.inv||0)+giftInv:d.includes('SHEET LOWER')?(r.inv||0)+lowInv:(r.inv||0);
+          const f=Math.max(0,tg2-iR);
+          result.push({sm,pn:r.pn,desc:r.desc,inv:r.inv||0,falta:f,aPedir:f>0?Math.ceil(f*EXTRA):0,tgt:tg2});
+        });
+    });
+    return result;
+  };
+
+  // ══════════════════════════════════════════
+  // HOJA 1 — CONSOLIDADO PEDIDOS
+  // ══════════════════════════════════════════
+  const aoa = [];  // array of arrays of cell objects
+  const merges = [];
+  const push = (row) => aoa.push(row);
+  const R = () => aoa.length - 1;
+
+  // Fila 1 — Título
+  push([c('CONSOLIDADO DE MATERIALES A PEDIR — POR PLANTA — P4 BOM',true,TITLE_FG,TITLE_BG,'center',14),
+        ...Array(9).fill(c('',false,TITLE_FG,TITLE_BG))]);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:9}});
+
+  // Fila 2 — Subtítulo
+  push([c(`Fecha: ${fecha}  |  Solo materiales con faltante  |  Orden: P1 → P3 → ALIBER`,false,SUB_FG,SUB_BG,'center',10),
+        ...Array(9).fill(c('',false,SUB_FG,SUB_BG))]);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:9}});
+
+  // Fila 3 — Targets de producción diaria
+  const dias = parseInt(document.getElementById('simDias')?.value) || 5;
+  const allTargets = modelos.map(sm => (simTargetsPorModelo[sm]||0));
+  const totalTarget = allTargets.reduce((a,b)=>a+b,0);
+  const tpd = Math.round(totalTarget/dias);
+  push([
+    c('TARGETS DE PRODUCCIÓN DIARIA',true,'FFFFFF','243F60','left',9), c('',false,null,'243F60'),
+    c(`S1/S2 — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
+    c(`S3/S4 — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
+    c('',false,null,null), c('',false,null,null),
+    c(`VC/Zhongke — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'7B4F00','center',9), c('',false,null,'7B4F00'),
+  ]);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:1}});
+  merges.push({s:{r:R(),c:2},e:{r:R(),c:3}});
+  merges.push({s:{r:R(),c:4},e:{r:R(),c:5}});
+  merges.push({s:{r:R(),c:8},e:{r:R(),c:9}});
+  push(Array(10).fill(c(''))); // espacio
+
+  const COLS = ['No.','Fecha','Ensamble (Strip Code)','Modelo / Target Semana','Número de Parte','Descripción','Inventario Actual','Cantidad a Pedir','Recibido / Enviado','Notas BOM'];
+  const plantasCfg = [
+    {key:'P1',    label:'PLANTA 1  (P1)', sub:'Chip Boards · Sheets · Strip',            bg:P1_BG,  fg:P1_FG},
+    {key:'P3',    label:'PLANTA 3  (P3)', sub:'Bundles · Inserts · QSG',                 bg:P3_BG,  fg:P3_FG},
+    {key:'P4',    label:'PLANTA 4  (P4)', sub:'Gift Box Top · Lower Box Bottom (S1-S4)', bg:'007A8A', fg:'FFFFFF'},
+    {key:'ALIBER',label:'ALIBER',         sub:'Pulp Tray · Data Cable · Ejection Pin',   bg:ALI_BG, fg:ALI_FG},
   ];
+
+  let noGlobal=1, totalGen=0;
+  const totPorPlanta={};
+
+  plantasCfg.forEach(pl => {
+    const rows = getRows(pl.key);
+    if (!rows.length) return;
+    const totPlanta = rows.reduce((s,r)=>s+(r.aPedir||0),0);
+    totPorPlanta[pl.key] = totPlanta;
+    totalGen += totPlanta;
+
+    // Header planta
+    push([
+      c(`► ${pl.label}`,true,pl.fg,pl.bg,'left',11),
+      c(pl.sub,false,pl.fg,pl.bg,'left',9),
+      ...Array(6).fill(c('',false,pl.fg,pl.bg)),
+      c(`TOTAL PLANTA: ${totPlanta.toLocaleString()} pzas`,true,pl.fg,pl.bg,'right',10),
+      c('',false,pl.fg,pl.bg),
+    ]);
+    merges.push({s:{r:R(),c:0},e:{r:R(),c:0}});
+    merges.push({s:{r:R(),c:1},e:{r:R(),c:7}});
+    merges.push({s:{r:R(),c:8},e:{r:R(),c:9}});
+
+    // Sub-header columnas
+    push(COLS.map(h => c(h,true,HDR_FG,HDR_BG,'center',9,true)));
+
+    // Filas datos
+    rows.forEach((row,i) => {
+      const bg = i%2===1 ? ALT_BG : null;
+      const pBg = row.aPedir>0 ? PEDIR_BG : OK_BG;
+      const pFg = row.aPedir>0 ? PEDIR_FG : OK_FG;
+      const nota = row.aPedir>0 ? `${pl.key} PEDIR ${row.aPedir.toLocaleString()}` : 'OK';
+      const pnBg = row.isBundle ? BUNDLE_BG : bg;
+      const pnFg = row.isBundle ? 'FFFFFF' : '1A4F9C';
+      push([
+        n(noGlobal++,false,null,bg,'center'),
+        c('',false,null,bg),
+        c(row.sm,false,'1A4F9C',bg),
+        c(`(target:${row.tgt.toLocaleString()})`,false,'555555',bg),
+        c(row.pn,true,pnFg,pnBg),
+        c(row.desc,false,null,bg),
+        n(row.inv,false,null,bg),
+        n(row.aPedir,true,pFg,pBg),
+        c('',false,null,bg),
+        c(nota,true,pFg,pBg),
+      ]);
+    });
+
+    // Total planta
+    push([
+      ...Array(4).fill(c('',false,pl.fg,pl.bg)),
+      c(`TOTAL ${pl.label}`,true,pl.fg,pl.bg,'right'),
+      c('',false,pl.fg,pl.bg),
+      c('',false,pl.fg,pl.bg),
+      n(totPlanta,true,pl.fg,pl.bg),
+      c('',false,pl.fg,pl.bg),
+      c('',false,pl.fg,pl.bg),
+    ]);
+    merges.push({s:{r:R(),c:0},e:{r:R(),c:3}});
+    merges.push({s:{r:R(),c:4},e:{r:R(),c:6}});
+    push(Array(10).fill(c(''))); // espacio
+  });
+
+  // Total General
+  push([
+    ...Array(4).fill(c('',true,TOT_FG,TOT_BG)),
+    c('TOTAL GENERAL A PEDIR',true,TOT_FG,TOT_BG,'right'),
+    c('',false,TOT_FG,TOT_BG),
+    c('',false,TOT_FG,TOT_BG),
+    n(totalGen,true,TOT_FG,TOT_BG),
+    c('',false,TOT_FG,TOT_BG),
+    c(Object.entries(totPorPlanta).map(([k,v])=>`${k}: ${v.toLocaleString()}`).join('  |  '),true,TOT_FG,TOT_BG,'center'),
+  ]);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:3}});
+  merges.push({s:{r:R(),c:4},e:{r:R(),c:6}});
+  merges.push({s:{r:R(),c:8},e:{r:R(),c:9}});
+
+  // Construir ws1
+  const ws1 = {};
+  aoa.forEach((row,ri) => row.forEach((cell,ci) => { if(cell) ws1[XLSX.utils.encode_cell({r:ri,c:ci})]=cell; }));
+  ws1['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length,c:9}});
+  ws1['!merges'] = merges;
+  ws1['!cols'] = [{wch:5},{wch:10},{wch:18},{wch:20},{wch:14},{wch:28},{wch:13},{wch:13},{wch:13},{wch:22}];
+  ws1['!rows'] = [{hpt:28},{hpt:18},{hpt:22}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Consolidado Pedidos');
+
+  // ══════════════════════════════════════════
+  // HOJA 2 — PRODUCIR Y VC RANURAR
+  // ══════════════════════════════════════════
+  const aoa2 = [];
+  const merges2 = [];
+  const push2 = row => aoa2.push(row);
+  const R2 = () => aoa2.length-1;
+
+  push2([c('PRODUCIR Y VC RANURAR — '+semana,true,TITLE_FG,TITLE_BG,'center',14),...Array(5).fill(c('',false,TITLE_FG,TITLE_BG))]);
+  merges2.push({s:{r:R2(),c:0},e:{r:R2(),c:5}});
+  push2(Array(6).fill(c('')));
+  push2(['No.','Modelo SM','N° Parte','Descripción','Inventario','Cantidad Plan'].map(h=>c(h,true,HDR_FG,HDR_BG,'center')));
+
   let no2=1;
-  ['S1/S2','S3/S4','VC/Zhongke','ASSY1'].forEach(l=>{
-    const rows=BOM.filter(r=>r.planta===l);
+  [{key:'S1/S2',label:'S1/S2 + Zhongke — Producir TOP',bg:P1_BG},
+   {key:'S3/S4',label:'S3/S4 — Producir BOTTOM',bg:'006060'},
+   {key:'VC/Zhongke',label:'VC/Zhongke — Ranurar',bg:'7B4F00'},
+   {key:'ASSY1',label:'ASSY1 — Ensamble Final',bg:'1A6B2A'},
+  ].forEach(l => {
+    const rows = BOM.filter(r=>r.planta===l.key);
     if (!rows.length) return;
-    h2.push([`  ▶  ${l}`,null,null,null,null,null,null]);
-    rows.forEach(r=>h2.push([no2++,r.sm,r.pn,r.desc,r.inv||0,r.qtyPlan||0,r.plan]));
-    h2.push([]);
+    push2([c('  ► '+l.label,true,'FFFFFF',l.bg,'left',10),...Array(5).fill(c('',false,null,l.bg))]);
+    merges2.push({s:{r:R2(),c:0},e:{r:R2(),c:5}});
+    rows.forEach(r => push2([n(no2++),c(r.sm,false,'1A4F9C'),c(r.pn,true,'1A4F9C'),c(r.desc),n(r.inv||0),n(r.qtyPlan||0)]));
+    push2(Array(6).fill(c('')));
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h2), 'Producir y VC Ranurar');
 
-  // Hoja 3: ASSY1
-  const modelos=[...new Set(BOM.map(r=>r.sm))];
-  const h3=[
-    [`ASSY1 — CAPACIDAD DE PRODUCCIÓN — ${semana}`],
-    ['Regla: solo inventario actual. S1/S4/VC alimenta ASSY1 la semana siguiente.'],
-    [],
-    ['#','Modelo SM','GH90 (Ensamble)','Descripción','Total','Con Inv.','% Disp.','Estado']
-  ];
-  modelos.map(sm=>{
-    const comps=BOM.filter(r=>r.sm===sm&&r.familia!=='GH90');
-    const conInv=comps.filter(r=>r.inv>0).length;
-    const pct=comps.length>0?Math.round((conInv/comps.length)*100):0;
-    const gh90=BOM.find(r=>r.sm===sm&&r.familia==='GH90');
-    return {sm,gh90:gh90?.pn||'',gh90desc:gh90?.desc||'',comps:comps.length,conInv,pct};
-  }).sort((a,b)=>b.pct-a.pct)
-  .forEach((r,i)=>h3.push([i+1,r.sm,r.gh90,r.gh90desc,r.comps,r.conInv,`${r.pct}%`,r.pct===100?'LISTO':'INCOMPLETO']));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h3), 'ASSY1 Capacidad');
+  const ws2 = {};
+  aoa2.forEach((row,ri) => row.forEach((cell,ci) => { if(cell) ws2[XLSX.utils.encode_cell({r:ri,c:ci})]=cell; }));
+  ws2['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa2.length,c:5}});
+  ws2['!merges'] = merges2;
+  ws2['!cols'] = [{wch:5},{wch:18},{wch:14},{wch:30},{wch:13},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Producir y VC Ranurar');
 
-  XLSX.writeFile(wb, `BOM_Consolidado_P4_${semana.replace(/[\s—]+/g,'_')}.xlsx`);
+  XLSX.writeFile(wb, `BOM_Consolidado_P4_${semana.replace(/[\s\u2014]+/g,'_')}.xlsx`);
 }
+
 
 // Init
 const _d=new Date();
@@ -1154,16 +1912,35 @@ function initIMS() {
 }
 
 
-function getInvIMS(pn, desc) {
+function getInvIMS(pn, desc, planta) {
   var pnUp = pn.toUpperCase();
   var descUp = (desc||'').trim().toUpperCase();
-  // 1. Buscar por PN+DESC exacta
+  var plantaUp = (planta||'').toUpperCase();
+  // P3 y GH39 (ALIBER es proveedor, inventario fisico esta en P3): buscar solo por PN
+  if (plantaUp === 'P3' || plantaUp === 'ALIBER' || pnUp.startsWith('GH39')) {
+    var keyP3 = pnUp+'||PLANTA:P3';
+    if (imsInventario[keyP3] !== undefined) return imsInventario[keyP3];
+    return imsInventario[pnUp] || 0;
+  }
+  // P4 y demás: lógica original sin cambios
+  // 1. Buscar por PN+DESC+PLANTA exacta (más específico)
+  if (descUp && plantaUp) {
+    var keyPlantaDesc = pnUp+'||'+descUp+'||PLANTA:'+plantaUp;
+    if (imsInventario[keyPlantaDesc] !== undefined) return imsInventario[keyPlantaDesc];
+  }
+  // 2. Buscar por PN+PLANTA
+  if (plantaUp) {
+    var keyPlanta = pnUp+'||PLANTA:'+plantaUp;
+    if (imsInventario[keyPlanta] !== undefined) return imsInventario[keyPlanta];
+  }
+  // 3. Buscar por PN+DESC exacta
   if (descUp && imsInventario[pnUp+'||'+descUp] !== undefined)
     return imsInventario[pnUp+'||'+descUp];
-  // 2. Buscar por PN+DESC parcial (palabras clave)
+  // 4. Buscar por PN+DESC parcial (palabras clave)
   var keywords = ['VIRGEN','VIRGIN','RANURADO','GROOVING','TOP','BOTTOM','BOT','BUNDLE','STRIP','INSERT','PULP','SET PAD','PHONE PAD','BACK STICKER','QSG','HAC','MANUAL','GIFT BOX','LOWER BOX','SHEET'];
   var bestKey = null, bestScore = 0;
   Object.keys(imsInventario).forEach(function(key) {
+    if (key.indexOf('||PLANTA:') >= 0) return;
     if (key.indexOf(pnUp+'||') === 0) {
       var imsDesc = key.replace(pnUp+'||','');
       var score = 0;
@@ -1174,13 +1951,14 @@ function getInvIMS(pn, desc) {
     }
   });
   if (bestKey && bestScore > 0) return imsInventario[bestKey];
-  // 3. Buscar por PN solo (total)
+  // 5. Buscar por PN solo (total)
   return imsInventario[pnUp] || 0;
 }
 function actualizarInvBOM() {
   BOM.forEach(function(r) {
-    r.inv = getInvIMS(r.pn, r.desc);
-    if (!r.planta || r.planta === 'Sin Planta') r.planta = getDestino(r);
+    var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
+    r.inv = getInvIMS(r.pn, r.desc, plantaItem);
+    if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
   });
 }
 function sincIMS() {
@@ -1189,26 +1967,59 @@ function sincIMS() {
   st.textContent = '⬤ Sync...'; st.style.color = '#FFBA00';
   if (!db) initIMS();
   if (!db) { st.textContent = '⬤ Sin Firebase'; return; }
-  db.collection('planta4_inventario').get().then(function(snap) {
-    imsInventario = {};
-    snap.forEach(function(doc) {
-      var d=doc.data();
-      if (!d.pn) return;
-      var pn = d.pn.trim().toUpperCase();
-      var desc = (d.desc||'').trim().toUpperCase();
-      // Guardar por PN solo (suma total)
-      imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
-      // Guardar por PN+DESC exacta
-      if (desc) {
-        var keyExact = pn + '||' + desc;
-        imsInventario[keyExact] = (d.actual||0);
+  // Leer P4 y P3 en paralelo
+  var colecciones = [
+    {col: 'planta4_inventario', planta: 'P4'},
+    {col: 'planta3_inventario', planta: 'P3'}
+  ];
+  imsInventario = {};
+  var rawP4 = {}, rawP3 = {};
+  // Leer ambas colecciones en paralelo en objetos separados
+  Promise.all([
+    db.collection('planta4_inventario').get().then(function(snap) {
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        if (!d.pn) return;
+        var pn = d.pn.trim().toUpperCase();
+        var desc = (d.desc||'').trim().toUpperCase();
+        var actual = d.actual || 0;
+        rawP4[pn] = (rawP4[pn]||0) + actual;
+        if (desc) rawP4[pn+'||'+desc] = actual;
+      });
+    }).catch(function(){}),
+    db.collection('planta3_inventario').get().then(function(snap) {
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        if (!d.pn) return;
+        var pn = d.pn.trim().toUpperCase();
+        var desc = (d.desc||'').trim().toUpperCase();
+        var actual = d.actual || 0;
+        rawP3[pn] = (rawP3[pn]||0) + actual;
+        if (desc) rawP3[pn+'||'+desc] = actual;
+      });
+    }).catch(function(){})
+  ]).then(function() {
+    // Guardar P4
+    Object.keys(rawP4).forEach(function(k) {
+      imsInventario[k] = rawP4[k];
+      if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
+    });
+    // Guardar P3 — suma si PN existe en P4, usa P3 si no existe
+    Object.keys(rawP3).forEach(function(k) {
+      if (k.indexOf('||') < 0) {
+        // clave PN solo: sumar si existe en P4, si no existe usar P3
+        imsInventario[k] = (rawP4[k]||0) + rawP3[k];
+        imsInventario[k+'||PLANTA:P3'] = rawP3[k];
+      } else {
+        // clave PN+DESC: guardar siempre
+        imsInventario[k] = rawP3[k];
+        imsInventario[k+'||PLANTA:P3'] = rawP3[k];
       }
     });
-    var total = Object.keys(imsInventario).length;
+    var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
-    // Actualizar inventarios en BOM si ya está cargado
-    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy(); }
+    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 
@@ -1241,7 +2052,7 @@ function usarBomActivo() {
     var d = doc.data();
     BOM = JSON.parse(d.bom);
     document.getElementById('semanaRef').value = d.semana||'';
-    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+    renderPreview(); renderSim(); renderCons(); renderProd();
     goTab('sim');
   });
 }
@@ -1292,11 +2103,17 @@ function adminCargarBOM(file) {
         // Buscar por PN+condicion primero, luego solo PN
         var pnUp = codeVal.toUpperCase();
         var descUp = descVal.toUpperCase();
-        var inv = getInvIMS(codeVal, descVal);
+        var plantaParse = (typeof getDestino === 'function') ? getDestino({pn:codeVal,desc:descVal,familia:fam,planta:'Sin Planta'}) : '';
+        var inv = getInvIMS(codeVal, descVal, plantaParse);
         bomData.push({sm:curSM,target:0,pn:codeVal,desc:descVal,familia:fam,inv:inv,plan:'',planta:'Sin Planta',qtyPlan:0,groupNo:isNaN(levelVal)?null:levelVal,isBold:levelVal===1,level:isNaN(levelVal)?2:levelVal,isLevel1:levelVal===1,isLevel2:levelVal===2});
       }
       if (!bomData.length) { statusEl.textContent='❌ No se detectaron componentes'; statusEl.style.color='var(--red)'; return; }
-      BOM=bomData; renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+      BOM=bomData;
+      // Pre-llenar targets del BOM para todos los modelos
+      [...new Set(BOM.map(r=>r.sm))].forEach(sm => {
+        if (!simTargetsPorModelo[sm]) simTargetsPorModelo[sm] = BOM.find(r=>r.sm===sm)?.target || 0;
+      });
+      renderPreview(); renderSim(); renderCons(); renderProd();
       var semMatch=file.name.match(/W(\d+)/i);
       var semana=semMatch?'W'+semMatch[1]:'W—';
       var modelos=[...new Set(bomData.map(function(r){return r.sm;}))].length;
@@ -1322,7 +2139,7 @@ function autoCargarBOM() {
     var d=doc.data(); BOM=JSON.parse(d.bom);
     document.getElementById('semanaRef').value=d.semana||'';
     actualizarInvBOM();
-    renderPreview(); renderSim(); renderCons(); renderProd(); renderAssy();
+    renderPreview(); renderSim(); renderCons(); renderProd();
   }).catch(function(){});
 }
 
@@ -1339,16 +2156,34 @@ async function publicarPlan() {
   // Sync IMS fresco antes de calcular el plan
   await new Promise((resolve) => {
     if (!db) { resolve(); return; }
-    db.collection('planta4_inventario').get().then(function(snap) {
-      imsInventario = {};
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        if (!d.pn) return;
-        var pn = d.pn.trim().toUpperCase();
-        var desc = (d.desc||'').trim().toUpperCase();
-        imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
-        if (desc) imsInventario[pn+'||'+desc] = (d.actual||0);
-      });
+    // Leer P4 y P3 en paralelo antes de publicar
+    imsInventario = {};
+    var colsSync = [
+      {col: 'planta4_inventario', planta: 'P4'},
+      {col: 'planta3_inventario', planta: 'P3'}
+    ];
+    Promise.all(colsSync.map(function(c) {
+      return db.collection(c.col).get().then(function(snap) {
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          if (!d.pn) return;
+          var pn = d.pn.trim().toUpperCase();
+          var desc = (d.desc||'').trim().toUpperCase();
+          var actual = d.actual || 0;
+          var keyPlanta = pn + '||PLANTA:' + c.planta;
+          imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + actual;
+          if (c.planta === 'P3') {
+            imsInventario[pn] = actual;
+          } else {
+            imsInventario[pn] = (imsInventario[pn]||0) + actual;
+          }
+          if (desc) {
+            imsInventario[pn+'||'+desc] = actual;
+            imsInventario[pn+'||'+desc+'||PLANTA:'+c.planta] = actual;
+          }
+        });
+      }).catch(function(){});
+    })).then(function() {
       actualizarInvBOM();
       resolve();
     }).catch(() => resolve());
@@ -1414,7 +2249,8 @@ async function publicarPlan() {
     const vcMats = [];
     if (cbTopV && vcTopToma>0) vcMats.push({pn:cbTopV.pn, desc:cbTopV.desc||'', cant:vcTopToma});
     if (cbBotV && vcBotToma>0) vcMats.push({pn:cbBotV.pn, desc:cbBotV.desc||'', cant:vcBotToma});
-    addLinea('VC', sm, Math.min(vcTopToma,vcBotToma)||vcTopToma||vcBotToma, vcMats);
+    if(vcTopToma>0) addLinea('VC1', sm, vcTopToma, [{pn:cbTopV?.pn||'—', desc:'Chip Board Top (Virgen)', cant:vcTopToma}]);
+    if(vcBotToma>0) addLinea('VC2', sm, vcBotToma, [{pn:cbBotV?.pn||'—', desc:'Chip Board Bottom (Virgen)', cant:vcBotToma}]);
 
     // S1/S2 + Zhongke: Chip Board Top Ranurado (pool + lo que VC ranuró) + Sheet Top
     const topRanDisp = (cbTopR ? pool[cbTopR.pn]||0 : 0) + vcTopToma;
@@ -1464,13 +2300,24 @@ async function publicarPlan() {
     // ASSY1: Strip + Bundle
     const stripDisp = strip ? pool[strip.pn]||0 : 0;
     const bundleDisp = bundle ? pool[bundle.pn]||0 : 0;
-    const assy1Puede = Math.min(stripDisp, bundleDisp, topPuede, s3Puede, target);
+
+    // Si Bundle >= target, ASSY1 puede producir sin necesidad de TOP/BOT de línea
+    const bundleCubreTarget = bundle && bundleDisp >= target;
+    const assy1Puede = bundleCubreTarget
+      ? Math.min(stripDisp, bundleDisp, target)
+      : Math.min(stripDisp, bundleDisp, topPuede, s3Puede, target);
+
     const stripToma = takePool(strip?.pn, assy1Puede);
     const bundleToma = takePool(bundle?.pn, assy1Puede);
     const assyMats = [];
     if (strip && stripToma>0) assyMats.push({pn:strip.pn, desc:strip.desc||'', cant:stripToma});
     if (bundle && bundleToma>0) assyMats.push({pn:bundle.pn, desc:bundle.desc||'', cant:bundleToma});
     addLinea('ASSY1', sm, assy1Puede, assyMats);
+
+    // Si Bundle cubre el target, no necesita producir en P3 — agregar nota al plan
+    if (bundleCubreTarget && bundle) {
+      addLinea('TERMINAR ASSY', sm, assy1Puede, [{pn:bundle.pn, desc:'Bundle disponible — no requiere producción P3', cant:bundleToma}]);
+    }
   });
 
   try {
@@ -1490,8 +2337,431 @@ async function publicarPlan() {
 }
 window.publicarPlan = publicarPlan;
 
+// ── CREAR PARTES NUEVAS EN IMS ──
+// Crea en planta4_inventario las partes del BOM activo que aún no existen.
+// Las partes ya existentes NO se modifican (se preserva su stock real).
+// Estructura idéntica a la del IMS (alta manual).
+function _getDocIdIMS(pn, desc) {
+  return (pn + '_' + (desc||'')).replace(/[.#$[\]/\s]/g,'_').substring(0,100);
+}
+
+async function crearPartesNuevasIMS() {
+  var st = document.getElementById('crearIMSStatus');
+  var btn = document.getElementById('btnCrearIMS');
+  if (!st) return;
+
+  if (!db) { st.textContent='❌ Firebase no conectado'; st.style.color='#ff4444'; return; }
+  if (!BOM || !BOM.length) { st.textContent='⚠️ Primero carga un BOM'; st.style.color='#FFBA00'; return; }
+
+  if (!confirm('Se crearán en el IMS las partes nuevas del BOM con estatus "Pendiente" y stock 0.\nLas partes que ya existen NO se modificarán.\n\n¿Continuar?')) return;
+
+  btn.disabled = true;
+  st.textContent = '⏳ Leyendo inventario del IMS...';
+  st.style.color = '#FFBA00';
+
+  try {
+    // 1. Leer TODAS las partes existentes en IMS (por PN)
+    var snap = await db.collection('planta4_inventario').get();
+    var pnsExistentes = new Set();
+    snap.forEach(function(doc){
+      var d = doc.data();
+      if (d.pn) pnsExistentes.add(d.pn.trim().toUpperCase());
+    });
+
+    // 2. Partes únicas del BOM (deduplicar por PN+DESC)
+    var vistas = new Set();
+    var partesBOM = [];
+    BOM.forEach(function(r){
+      if (!r.pn) return;
+      var key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+      if (vistas.has(key)) return;
+      vistas.add(key);
+      partesBOM.push(r);
+    });
+
+    // 3. Filtrar las que NO existen en IMS
+    var nuevas = partesBOM.filter(function(r){
+      return !pnsExistentes.has(r.pn.trim().toUpperCase());
+    });
+
+    if (!nuevas.length) {
+      st.innerHTML = '✅ Todas las partes del BOM ya existen en el IMS<br>' +
+        '<span style="font-size:11px;color:var(--text2)">Verificadas: '+partesBOM.length+'</span>';
+      st.style.color = '#00e676';
+      btn.disabled = false;
+      return;
+    }
+
+    st.textContent = '⏳ Creando '+nuevas.length+' partes nuevas en el IMS...';
+
+    // 4. Crear en batch (rápido)
+    var semana = document.getElementById('semanaRef').value || 'BOM';
+    var fechaISO = new Date().toISOString();
+    var batch = db.batch();
+    nuevas.forEach(function(r){
+      var ni = {
+        pn: r.pn,
+        desc: r.desc || '',
+        familia: r.familia || 'OTRO',
+        inicial: 0,
+        precio: 0,
+        estatus: 'Pendiente',
+        ubicacion: 'Almacén',
+        entradas: 0,
+        salidas: 0,
+        actual: 0,
+        historial: [{
+          tipo: 'INI',
+          fecha: fechaISO,
+          qty: 0,
+          loc: 'Almacén',
+          user: 'BOM Simulator',
+          ref: 'Alta desde BOM ' + semana
+        }]
+      };
+      var docId = _getDocIdIMS(ni.pn, ni.desc);
+      batch.set(db.collection('planta4_inventario').doc(docId), ni);
+    });
+    await batch.commit();
+
+    st.innerHTML = '✅ Sincronización completa<br>' +
+      '<span style="font-size:11px;color:var(--text2)">Nuevas creadas: <b style="color:#00e676">'+nuevas.length+'</b> · ' +
+      'Ya existían: <b>'+(partesBOM.length-nuevas.length)+'</b> · ' +
+      'Total BOM: '+partesBOM.length+'</span>';
+    st.style.color = '#00e676';
+
+    // Refrescar sincronización para que el header IMS muestre el nuevo total
+    if (typeof sincIMS === 'function') sincIMS();
+
+  } catch(err) {
+    st.textContent = '❌ Error: ' + err.message;
+    st.style.color = '#ff4444';
+    console.error('crearPartesNuevasIMS:', err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+window.crearPartesNuevasIMS = crearPartesNuevasIMS;
+
+// ── ADMINISTRAR PARTES DEL BOM ACTIVO ──
+// Edita o elimina partes del BOM activo y replica el cambio en el IMS.
+var _admEditIdx = -1;
+
+function _admGetDocIdIMS(pn, desc) {
+  return (pn + '_' + (desc||'')).replace(/[.#$[\]/\s]/g,'_').substring(0,100);
+}
+
+function _admGetStockIMS(pn, desc) {
+  if (typeof imsInventario === 'undefined' || !imsInventario) return null;
+  var p = (pn||'').trim().toUpperCase();
+  var d = (desc||'').trim().toUpperCase();
+  if (d && imsInventario[p+'||'+d] !== undefined) return imsInventario[p+'||'+d];
+  if (imsInventario[p] !== undefined) return imsInventario[p];
+  return null;
+}
+
+function renderAdminPartes() {
+  var body = document.getElementById('admPartBody');
+  var foot = document.getElementById('admPartFoot');
+  if (!body || !foot) return;
+
+  if (!BOM || !BOM.length) {
+    body.innerHTML = '<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--text2)">No hay BOM activo cargado</td></tr>';
+    foot.textContent = '';
+    return;
+  }
+
+  var q = (document.getElementById('admPartSearch').value||'').trim().toUpperCase();
+  var fam = document.getElementById('admPartFam').value;
+
+  var html = '';
+  var visibles = 0;
+  BOM.forEach(function(r, idx) {
+    if (!r.pn) return;
+    if (fam && r.familia !== fam) return;
+    if (q) {
+      var hay = (r.pn||'').toUpperCase().indexOf(q)>=0 ||
+                (r.desc||'').toUpperCase().indexOf(q)>=0 ||
+                (r.sm||'').toUpperCase().indexOf(q)>=0;
+      if (!hay) return;
+    }
+    visibles++;
+    var stock = _admGetStockIMS(r.pn, r.desc);
+    var stockTxt, stockColor;
+    if (stock === null) { stockTxt = '— Sin IMS'; stockColor = 'var(--text2)'; }
+    else if (stock === 0) { stockTxt = '0'; stockColor = '#FFBA00'; }
+    else { stockTxt = stock.toLocaleString(); stockColor = '#00e676'; }
+
+    var famColor = r.familia==='GH90'?'rgba(168,85,247,.2)':
+                   r.familia==='GH69'?'rgba(0,230,118,.2)':
+                   r.familia==='GH68'?'rgba(26,111,212,.2)':'rgba(150,150,150,.2)';
+    var famText  = r.familia==='GH90'?'#a855f7':
+                   r.familia==='GH69'?'#00e676':
+                   r.familia==='GH68'?'#1A6FD4':'#888';
+
+    html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05)">' +
+      '<td style="padding:.4rem .5rem;color:var(--text2);font-size:10px">'+(r.sm||'')+'</td>' +
+      '<td style="padding:.4rem .5rem;font-family:\'IBM Plex Mono\',monospace;color:var(--text)">'+r.pn+'</td>' +
+      '<td style="padding:.4rem .5rem;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.desc||'').replace(/"/g,'&quot;')+'">'+(r.desc||'')+'</td>' +
+      '<td style="padding:.4rem .5rem;text-align:center"><span style="background:'+famColor+';color:'+famText+';padding:.15rem .5rem;border-radius:4px;font-size:10px;font-weight:600">'+(r.familia||'—')+'</span></td>' +
+      '<td style="padding:.4rem .5rem;text-align:right;font-family:\'IBM Plex Mono\',monospace;color:'+stockColor+'">'+stockTxt+'</td>' +
+      '<td style="padding:.4rem .5rem;text-align:center;white-space:nowrap">' +
+        '<button onclick="abrirAdmEdit('+idx+')" title="Editar" style="background:rgba(26,111,212,.15);border:1px solid rgba(26,111,212,.4);color:#5BA3FF;border-radius:4px;padding:.2rem .45rem;font-size:11px;cursor:pointer;margin-right:.2rem">✏️</button>' +
+        '<button onclick="eliminarAdmParte('+idx+')" title="Eliminar" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.4);color:#ff6b6b;border-radius:4px;padding:.2rem .45rem;font-size:11px;cursor:pointer">🗑️</button>' +
+      '</td>' +
+    '</tr>';
+  });
+
+  if (!html) html = '<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--text2)">No hay partes que coincidan con el filtro</td></tr>';
+  body.innerHTML = html;
+  foot.textContent = 'Mostrando '+visibles+' de '+BOM.length+' componentes del BOM activo';
+}
+
+function abrirAdmEdit(idx) {
+  var r = BOM[idx];
+  if (!r) return;
+  _admEditIdx = idx;
+  document.getElementById('admEditOriginal').innerHTML =
+    '<b style="color:var(--text)">Original:</b> ' + r.pn + ' · ' + (r.desc||'') + ' · ' + (r.familia||'—') + '<br>' +
+    '<span style="color:var(--text2)">Modelo: '+(r.sm||'')+'</span>';
+  document.getElementById('admEditPN').value = r.pn || '';
+  document.getElementById('admEditDesc').value = r.desc || '';
+  document.getElementById('admEditFam').value = r.familia || 'OTRO';
+  document.getElementById('admEditWarning').style.display = 'none';
+
+  // Avisar si cambia el PN y existe en IMS con stock
+  var stock = _admGetStockIMS(r.pn, r.desc);
+  if (stock !== null && stock > 0) {
+    var w = document.getElementById('admEditWarning');
+    w.innerHTML = '⚠️ Esta parte tiene stock en IMS ('+stock.toLocaleString()+'). ' +
+      'Si cambias el PN, se renombrará el documento en IMS preservando el stock e historial. ' +
+      'Si solo cambias descripción o familia, también se actualiza en IMS.';
+    w.style.display = 'block';
+  }
+
+  document.getElementById('admEditModal').style.display = 'flex';
+}
+
+function cerrarAdmEditModal() {
+  document.getElementById('admEditModal').style.display = 'none';
+  _admEditIdx = -1;
+}
+
+async function guardarAdmEdit() {
+  if (_admEditIdx < 0) return;
+  var r = BOM[_admEditIdx];
+  if (!r) return;
+
+  var newPN = (document.getElementById('admEditPN').value||'').trim();
+  var newDesc = (document.getElementById('admEditDesc').value||'').trim();
+  var newFam = document.getElementById('admEditFam').value;
+  if (!newPN) { alert('El PN no puede estar vacío'); return; }
+
+  var st = document.getElementById('admPartStatus');
+  var btn = document.getElementById('admEditSaveBtn');
+  var oldPN = r.pn, oldDesc = r.desc||'', oldFam = r.familia||'';
+
+  // Si no cambió nada, cerrar
+  if (newPN === oldPN && newDesc === oldDesc && newFam === oldFam) {
+    cerrarAdmEditModal();
+    return;
+  }
+
+  btn.disabled = true;
+  st.textContent = '⏳ Guardando cambios...';
+  st.style.color = '#FFBA00';
+
+  try {
+    // 1. Detectar cambios en IMS
+    var oldDocId = _admGetDocIdIMS(oldPN, oldDesc);
+    var newDocId = _admGetDocIdIMS(newPN, newDesc);
+    var imsRef = db.collection('planta4_inventario').doc(oldDocId);
+    var imsSnap = await imsRef.get();
+
+    if (imsSnap.exists) {
+      var imsData = imsSnap.data();
+      if (oldDocId === newDocId) {
+        // Misma clave: solo actualizar familia
+        await imsRef.update({ familia: newFam });
+      } else {
+        // Cambió PN o desc: crear nuevo doc preservando datos y borrar el viejo
+        var nuevo = Object.assign({}, imsData, { pn: newPN, desc: newDesc, familia: newFam });
+        nuevo.historial = (imsData.historial||[]).concat([{
+          tipo: 'EDIT',
+          fecha: new Date().toISOString(),
+          qty: 0,
+          loc: imsData.ubicacion||'Almacén',
+          user: 'BOM Simulator',
+          ref: 'Editado: '+oldPN+' → '+newPN
+        }]);
+        await db.collection('planta4_inventario').doc(newDocId).set(nuevo);
+        await imsRef.delete();
+      }
+    }
+
+    // 2. Actualizar BOM local y guardar en Firebase
+    BOM[_admEditIdx].pn = newPN;
+    BOM[_admEditIdx].desc = newDesc;
+    BOM[_admEditIdx].familia = newFam;
+    await _admGuardarBomActivo();
+
+    st.innerHTML = '✅ Parte actualizada: <b>'+newPN+'</b>';
+    st.style.color = '#00e676';
+    cerrarAdmEditModal();
+
+    // Toast visible
+    _admMostrarToast('✅ Cambios guardados · '+oldPN+' → '+newPN, 'success');
+
+    // 3. Refrescar UI
+    if (typeof sincIMS === 'function') sincIMS();
+    renderAdminPartes();
+    if (typeof renderPreview === 'function') renderPreview();
+    if (typeof renderSim === 'function') renderSim();
+    if (typeof renderCons === 'function') renderCons();
+    if (typeof renderProd === 'function') renderProd();
+
+  } catch(err) {
+    st.textContent = '❌ Error: '+err.message;
+    st.style.color = '#ff4444';
+    console.error('guardarAdmEdit:', err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function eliminarAdmParte(idx) {
+  var r = BOM[idx];
+  if (!r) return;
+
+  var stock = _admGetStockIMS(r.pn, r.desc);
+  var docId = _admGetDocIdIMS(r.pn, r.desc);
+  var imsRef = db.collection('planta4_inventario').doc(docId);
+  var imsSnap = await imsRef.get();
+  var imsExiste = imsSnap.exists;
+  var imsEstatus = imsExiste ? (imsSnap.data().estatus||'') : '';
+  var imsStock = imsExiste ? (imsSnap.data().actual||0) : 0;
+
+  // Construir mensaje según condición
+  var puedeBorrarIMS = imsExiste && imsEstatus === 'Pendiente' && imsStock === 0;
+  var msg = 'Eliminar parte del BOM activo:\n\n' +
+    'PN: ' + r.pn + '\n' +
+    'Descripción: ' + (r.desc||'(sin descripción)') + '\n' +
+    'Modelo: ' + (r.sm||'') + '\n\n';
+
+  if (!imsExiste) {
+    msg += '✅ No existe en IMS, solo se borrará del BOM.';
+  } else if (puedeBorrarIMS) {
+    msg += '✅ En IMS: estatus "Pendiente" con stock 0 → se borrará también del IMS.';
+  } else {
+    msg += '⚠️ La parte EXISTE en IMS con estatus "'+imsEstatus+'" y stock '+imsStock.toLocaleString()+'.\n' +
+           'Solo se borrará del BOM activo. NO se borrará del IMS para no perder stock real.';
+  }
+  msg += '\n\n¿Continuar?';
+
+  if (!confirm(msg)) return;
+
+  var st = document.getElementById('admPartStatus');
+  st.textContent = '⏳ Eliminando...';
+  st.style.color = '#FFBA00';
+
+  try {
+    // 1. Borrar de IMS si aplica
+    if (puedeBorrarIMS) await imsRef.delete();
+
+    // 2. Borrar del BOM local
+    BOM.splice(idx, 1);
+    await _admGuardarBomActivo();
+
+    st.innerHTML = '✅ Parte eliminada del BOM' + (puedeBorrarIMS ? ' y del IMS' : '');
+    st.style.color = '#00e676';
+
+    // Mostrar toast visible arriba
+    _admMostrarToast('✅ Cambios guardados · Parte "' + r.pn + '" eliminada' + (puedeBorrarIMS ? ' (BOM + IMS)' : ' (solo BOM)'), 'success');
+
+    // Limpiar filtro de búsqueda para evitar confusión visual
+    var searchEl = document.getElementById('admPartSearch');
+    if (searchEl) searchEl.value = '';
+
+    // 3. Refrescar
+    if (typeof sincIMS === 'function') sincIMS();
+    renderAdminPartes();
+    if (typeof renderPreview === 'function') renderPreview();
+    if (typeof renderSim === 'function') renderSim();
+    if (typeof renderCons === 'function') renderCons();
+    if (typeof renderProd === 'function') renderProd();
+
+  } catch(err) {
+    st.textContent = '❌ Error: '+err.message;
+    st.style.color = '#ff4444';
+    console.error('eliminarAdmParte:', err);
+  }
+}
+
+async function _admGuardarBomActivo() {
+  if (!db) throw new Error('Firebase no conectado');
+  var semana = (document.getElementById('semanaRef')||{}).value || '';
+  await db.collection('bom_simulator_p4').doc('bom_activo').set({
+    bom: JSON.stringify(BOM),
+    semana: semana,
+    fecha: new Date().toISOString(),
+    editadoPor: 'Admin BOM'
+  }, { merge: true });
+}
+
+window.renderAdminPartes = renderAdminPartes;
+window.abrirAdmEdit = abrirAdmEdit;
+window.cerrarAdmEditModal = cerrarAdmEditModal;
+window.guardarAdmEdit = guardarAdmEdit;
+window.eliminarAdmParte = eliminarAdmParte;
+
+// Toast visible para confirmar cambios
+function _admMostrarToast(msg, tipo) {
+  var existing = document.getElementById('_admToast');
+  if (existing) existing.remove();
+  var color = tipo==='success'?'#00e676':tipo==='error'?'#ff4444':'#FFBA00';
+  var bg = tipo==='success'?'rgba(0,230,118,.12)':tipo==='error'?'rgba(255,68,68,.12)':'rgba(255,186,0,.12)';
+  var t = document.createElement('div');
+  t.id = '_admToast';
+  t.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:99999;'+
+    'background:'+bg+';color:'+color+';border:1px solid '+color+';border-radius:8px;'+
+    'padding:.8rem 1.4rem;font-size:13px;font-weight:600;'+
+    'box-shadow:0 4px 20px rgba(0,0,0,.4);'+
+    'animation:admToastIn .25s ease-out;backdrop-filter:blur(8px)';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  // Auto-cerrar a los 4 segundos con fade-out
+  setTimeout(function(){
+    t.style.transition = 'opacity .35s ease,transform .35s ease';
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(-10px)';
+    setTimeout(function(){ if (t.parentNode) t.remove(); }, 350);
+  }, 4000);
+}
+// Inyectar animación de entrada
+(function(){
+  if (document.getElementById('_admToastCSS')) return;
+  var s = document.createElement('style');
+  s.id = '_admToastCSS';
+  s.textContent = '@keyframes admToastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+  document.head.appendChild(s);
+})();
+window._admMostrarToast = _admMostrarToast;
+
+// Auto-renderizar al entrar al panel Admin (después de validar contraseña)
+(function(){
+  var oldCheck = window.checkAdminKey;
+  if (typeof oldCheck === 'function') {
+    window.checkAdminKey = function() {
+      var r = oldCheck.apply(this, arguments);
+      setTimeout(function(){ try { renderAdminPartes(); } catch(e){} }, 100);
+      return r;
+    };
+  }
+})();
+
 window.addEventListener('DOMContentLoaded', function() {
-  cargarTargets(); setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
+  // targets siempre arrancan en 0 al cargar la página
+  setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
 });
 </script>
 
@@ -1521,6 +2791,83 @@ window.addEventListener('DOMContentLoaded', function() {
       </div>
       <div id="adminUploadStatus" style="margin-top:.75rem;font-size:13px"></div>
     </div>
+    <div class="card" style="margin-top:1rem;background:rgba(0,230,118,.06);border-color:rgba(0,230,118,.25)">
+      <div class="card-title" style="color:#00e676">🔄 Crear Partes Nuevas en IMS</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
+        Crea en el IMS las partes del BOM activo que aún no existen, con estatus <b style="color:var(--text)">Pendiente</b> y stock 0.<br>
+        Las partes que ya existen en el IMS <b style="color:var(--text)">NO se modifican</b> (se preserva su stock real).
+      </div>
+      <button id="btnCrearIMS" class="btn btn-primary btn-sm" onclick="crearPartesNuevasIMS()" style="background:rgba(0,230,118,.2);border-color:rgba(0,230,118,.4);color:#00e676">🔄 Crear Partes Nuevas</button>
+      <div id="crearIMSStatus" style="margin-top:.75rem;font-size:13px"></div>
+    </div>
+    <div class="card" style="margin-top:1rem;background:rgba(212,87,140,.06);border-color:rgba(212,87,140,.25)">
+      <div class="card-title" style="color:#D4578C">🗂️ Administrar Partes del BOM Activo</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
+        Editar o eliminar partes del BOM activo. Si la parte existe en IMS, también se actualiza/elimina ahí.<br>
+        <b style="color:var(--text)">Eliminación segura:</b> solo se borra del IMS si está en estatus "Pendiente" con stock 0.
+      </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap">
+        <input id="admPartSearch" type="text" placeholder="Buscar PN, descripción o modelo..." oninput="renderAdminPartes()" style="flex:1;min-width:180px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.4rem .6rem;color:var(--text);font-size:12px">
+        <select id="admPartFam" onchange="renderAdminPartes()" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.4rem .6rem;color:var(--text);font-size:12px;min-width:120px">
+          <option value="">Todas familias</option>
+          <option value="GH68">GH68</option>
+          <option value="GH69">GH69</option>
+          <option value="GH90">GH90</option>
+          <option value="OTRO">OTRO</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="renderAdminPartes()" style="font-size:11px">🔄 Refrescar</button>
+      </div>
+      <div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <table id="admPartTbl" style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead style="position:sticky;top:0;background:var(--card);z-index:1">
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600">Modelo</th>
+              <th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600">PN</th>
+              <th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600">Descripción</th>
+              <th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600">Familia</th>
+              <th style="text-align:right;padding:.5rem;color:var(--text2);font-weight:600">Stock IMS</th>
+              <th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="admPartBody"></tbody>
+        </table>
+      </div>
+      <div id="admPartFoot" style="margin-top:.5rem;font-size:11px;color:var(--text2);text-align:center"></div>
+      <div id="admPartStatus" style="margin-top:.5rem;font-size:12px"></div>
+    </div>
+
+    <!-- Modal de edición de parte -->
+    <div id="admEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;padding:1rem">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.25rem;max-width:480px;width:100%">
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:.75rem">✏️ Editar parte del BOM</div>
+        <div id="admEditOriginal" style="font-size:11px;color:var(--text2);margin-bottom:1rem;padding:.5rem;background:rgba(255,255,255,.03);border-radius:6px"></div>
+        <div style="display:grid;gap:.6rem">
+          <div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">PN</label>
+            <input id="admEditPN" type="text" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">Descripción</label>
+            <input id="admEditDesc" type="text" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">Familia</label>
+            <select id="admEditFam" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px">
+              <option value="GH68">GH68</option>
+              <option value="GH69">GH69</option>
+              <option value="GH90">GH90</option>
+              <option value="OTRO">OTRO</option>
+            </select>
+          </div>
+          <div id="admEditWarning" style="display:none;font-size:11px;color:#FFBA00;padding:.5rem;background:rgba(255,186,0,.08);border:1px solid rgba(255,186,0,.25);border-radius:6px;line-height:1.5"></div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end">
+          <button class="btn btn-secondary btn-sm" onclick="cerrarAdmEditModal()">Cancelar</button>
+          <button id="admEditSaveBtn" class="btn btn-primary btn-sm" onclick="guardarAdmEdit()">💾 Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+
     <div class="card" style="margin-top:1rem;background:rgba(26,111,212,.06);border-color:rgba(26,111,212,.2)">
       <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:.5rem">ESTRUCTURA ESPERADA</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.8">

@@ -2004,14 +2004,16 @@ function sincIMS() {
       imsInventario[k] = rawP4[k];
       if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
     });
-    // Guardar P3 — suma si PN existe en P4, usa P3 si no existe
+    // Guardar P3 — GH90 se excluye (materia prima, no bundle terminado)
     Object.keys(rawP3).forEach(function(k) {
+      // Extraer el PN de la clave (puede ser 'PN' o 'PN||DESC')
+      var pnBase = k.indexOf('||') >= 0 ? k.split('||')[0] : k;
+      // GH90 en P3 = materia prima, NO contar como bundle terminado
+      if (pnBase.startsWith('GH90')) return;
       if (k.indexOf('||') < 0) {
-        // clave PN solo: sumar si existe en P4, si no existe usar P3
         imsInventario[k] = (rawP4[k]||0) + rawP3[k];
         imsInventario[k+'||PLANTA:P3'] = rawP3[k];
       } else {
-        // clave PN+DESC: guardar siempre
         imsInventario[k] = rawP3[k];
         imsInventario[k+'||PLANTA:P3'] = rawP3[k];
       }

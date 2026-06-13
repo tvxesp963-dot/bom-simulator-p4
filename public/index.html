@@ -1916,8 +1916,8 @@ function getInvIMS(pn, desc, planta) {
   var pnUp = pn.toUpperCase();
   var descUp = (desc||'').trim().toUpperCase();
   var plantaUp = (planta||'').toUpperCase();
-  // P3: buscar solo por PN (descripciones pueden diferir entre BOM e IMS P3)
-  if (plantaUp === 'P3') {
+  // P3 y GH39 (ALIBER es proveedor, inventario fisico esta en P3): buscar solo por PN
+  if (plantaUp === 'P3' || pnUp.startsWith('GH39')) {
     var keyP3 = pnUp+'||PLANTA:P3';
     if (imsInventario[keyP3] !== undefined) return imsInventario[keyP3];
     return imsInventario[pnUp] || 0;

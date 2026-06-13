@@ -801,6 +801,9 @@ function getDestino(r) {
   if (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'OK') return r.planta;
   var d = (r.desc||'').toUpperCase();
   var fam = r.familia || '';
+  var pn = (r.pn||'').toUpperCase();
+  // GH39 — siempre ALIBER
+  if (pn.startsWith('GH39') || fam === 'GH39') return 'ALIBER';
   // GH90
   if (fam === 'GH90') {
     if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) return 'P3';
@@ -810,7 +813,6 @@ function getDestino(r) {
   if (fam === 'GH69') {
     if (d.includes('PULP') || d.includes('TRAY')) return 'ALIBER';
     if (d.includes('INSERT') || d.includes('MANUAL') || d.includes('BUNDLE')) return 'P3';
-    // Gift Box Top y Lower Box Bottom se producen internamente en Planta 4
     if (d.includes('GIFT BOX') && !d.includes('SHEET')) return 'P4';
     if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && !d.includes('SHEET')) return 'P4';
     return 'P1'; // Chip Board, Sheet
@@ -1914,6 +1916,13 @@ function getInvIMS(pn, desc, planta) {
   var pnUp = pn.toUpperCase();
   var descUp = (desc||'').trim().toUpperCase();
   var plantaUp = (planta||'').toUpperCase();
+  // P3: buscar solo por PN (descripciones pueden diferir entre BOM e IMS P3)
+  if (plantaUp === 'P3') {
+    var keyP3 = pnUp+'||PLANTA:P3';
+    if (imsInventario[keyP3] !== undefined) return imsInventario[keyP3];
+    return imsInventario[pnUp] || 0;
+  }
+  // P4 y demás: lógica original sin cambios
   // 1. Buscar por PN+DESC+PLANTA exacta (más específico)
   if (descUp && plantaUp) {
     var keyPlantaDesc = pnUp+'||'+descUp+'||PLANTA:'+plantaUp;

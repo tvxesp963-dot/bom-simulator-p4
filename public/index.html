@@ -1917,7 +1917,7 @@ function getInvIMS(pn, desc, planta) {
   var descUp = (desc||'').trim().toUpperCase();
   var plantaUp = (planta||'').toUpperCase();
   // P3 y GH39 (ALIBER es proveedor, inventario fisico esta en P3): buscar solo por PN
-  if (plantaUp === 'P3' || pnUp.startsWith('GH39')) {
+  if (plantaUp === 'P3' || plantaUp === 'ALIBER' && pnUp.startsWith('GH39') || pnUp.startsWith('GH39')) {
     var keyP3 = pnUp+'||PLANTA:P3';
     if (imsInventario[keyP3] !== undefined) return imsInventario[keyP3];
     return imsInventario[pnUp] || 0;
@@ -1956,7 +1956,7 @@ function getInvIMS(pn, desc, planta) {
 }
 function actualizarInvBOM() {
   BOM.forEach(function(r) {
-    var plantaItem = r.planta && r.planta !== 'Sin Planta' ? r.planta : getDestino(r);
+    var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
     r.inv = getInvIMS(r.pn, r.desc, plantaItem);
     if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
   });

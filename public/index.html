@@ -1910,16 +1910,28 @@ function initIMS() {
 }
 
 
-function getInvIMS(pn, desc) {
+function getInvIMS(pn, desc, planta) {
   var pnUp = pn.toUpperCase();
   var descUp = (desc||'').trim().toUpperCase();
-  // 1. Buscar por PN+DESC exacta
+  var plantaUp = (planta||'').toUpperCase();
+  // 1. Buscar por PN+DESC+PLANTA exacta (más específico)
+  if (descUp && plantaUp) {
+    var keyPlantaDesc = pnUp+'||'+descUp+'||PLANTA:'+plantaUp;
+    if (imsInventario[keyPlantaDesc] !== undefined) return imsInventario[keyPlantaDesc];
+  }
+  // 2. Buscar por PN+PLANTA
+  if (plantaUp) {
+    var keyPlanta = pnUp+'||PLANTA:'+plantaUp;
+    if (imsInventario[keyPlanta] !== undefined) return imsInventario[keyPlanta];
+  }
+  // 3. Buscar por PN+DESC exacta
   if (descUp && imsInventario[pnUp+'||'+descUp] !== undefined)
     return imsInventario[pnUp+'||'+descUp];
-  // 2. Buscar por PN+DESC parcial (palabras clave)
+  // 4. Buscar por PN+DESC parcial (palabras clave)
   var keywords = ['VIRGEN','VIRGIN','RANURADO','GROOVING','TOP','BOTTOM','BOT','BUNDLE','STRIP','INSERT','PULP','SET PAD','PHONE PAD','BACK STICKER','QSG','HAC','MANUAL','GIFT BOX','LOWER BOX','SHEET'];
   var bestKey = null, bestScore = 0;
   Object.keys(imsInventario).forEach(function(key) {
+    if (key.indexOf('||PLANTA:') >= 0) return;
     if (key.indexOf(pnUp+'||') === 0) {
       var imsDesc = key.replace(pnUp+'||','');
       var score = 0;
@@ -1930,13 +1942,14 @@ function getInvIMS(pn, desc) {
     }
   });
   if (bestKey && bestScore > 0) return imsInventario[bestKey];
-  // 3. Buscar por PN solo (total)
+  // 5. Buscar por PN solo (total)
   return imsInventario[pnUp] || 0;
 }
 function actualizarInvBOM() {
   BOM.forEach(function(r) {
-    r.inv = getInvIMS(r.pn, r.desc);
-    if (!r.planta || r.planta === 'Sin Planta') r.planta = getDestino(r);
+    var plantaItem = r.planta && r.planta !== 'Sin Planta' ? r.planta : getDestino(r);
+    r.inv = getInvIMS(r.pn, r.desc, plantaItem);
+    if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
   });
 }
 function sincIMS() {
@@ -1945,25 +1958,38 @@ function sincIMS() {
   st.textContent = '⬤ Sync...'; st.style.color = '#FFBA00';
   if (!db) initIMS();
   if (!db) { st.textContent = '⬤ Sin Firebase'; return; }
-  db.collection('planta4_inventario').get().then(function(snap) {
-    imsInventario = {};
-    snap.forEach(function(doc) {
-      var d=doc.data();
-      if (!d.pn) return;
-      var pn = d.pn.trim().toUpperCase();
-      var desc = (d.desc||'').trim().toUpperCase();
-      // Guardar por PN solo (suma total)
-      imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
-      // Guardar por PN+DESC exacta
-      if (desc) {
-        var keyExact = pn + '||' + desc;
-        imsInventario[keyExact] = (d.actual||0);
-      }
-    });
-    var total = Object.keys(imsInventario).length;
+  // Leer P4 y P3 en paralelo
+  var colecciones = [
+    {col: 'planta4_inventario', planta: 'P4'},
+    {col: 'planta3_inventario', planta: 'P3'}
+  ];
+  imsInventario = {};
+  var promesas = colecciones.map(function(c) {
+    return db.collection(c.col).get().then(function(snap) {
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        if (!d.pn) return;
+        var pn = d.pn.trim().toUpperCase();
+        var desc = (d.desc||'').trim().toUpperCase();
+        // Guardar por PN+PLANTA (clave específica por planta)
+        var keyPlanta = pn + '||PLANTA:' + c.planta;
+        imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + (d.actual||0);
+        // Guardar por PN solo (suma total todas las plantas)
+        imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
+        // Guardar por PN+DESC exacta con planta
+        if (desc) {
+          var keyExact = pn + '||' + desc;
+          imsInventario[keyExact] = (d.actual||0);
+          var keyExactPlanta = pn + '||' + desc + '||PLANTA:' + c.planta;
+          imsInventario[keyExactPlanta] = (d.actual||0);
+        }
+      });
+    }).catch(function() {});
+  });
+  Promise.all(promesas).then(function() {
+    var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
-    // Actualizar inventarios en BOM si ya está cargado
     if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
@@ -2048,7 +2074,8 @@ function adminCargarBOM(file) {
         // Buscar por PN+condicion primero, luego solo PN
         var pnUp = codeVal.toUpperCase();
         var descUp = descVal.toUpperCase();
-        var inv = getInvIMS(codeVal, descVal);
+        var plantaParse = (typeof getDestino === 'function') ? getDestino({pn:codeVal,desc:descVal,familia:fam,planta:'Sin Planta'}) : '';
+        var inv = getInvIMS(codeVal, descVal, plantaParse);
         bomData.push({sm:curSM,target:0,pn:codeVal,desc:descVal,familia:fam,inv:inv,plan:'',planta:'Sin Planta',qtyPlan:0,groupNo:isNaN(levelVal)?null:levelVal,isBold:levelVal===1,level:isNaN(levelVal)?2:levelVal,isLevel1:levelVal===1,isLevel2:levelVal===2});
       }
       if (!bomData.length) { statusEl.textContent='❌ No se detectaron componentes'; statusEl.style.color='var(--red)'; return; }
@@ -2100,16 +2127,29 @@ async function publicarPlan() {
   // Sync IMS fresco antes de calcular el plan
   await new Promise((resolve) => {
     if (!db) { resolve(); return; }
-    db.collection('planta4_inventario').get().then(function(snap) {
-      imsInventario = {};
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        if (!d.pn) return;
-        var pn = d.pn.trim().toUpperCase();
-        var desc = (d.desc||'').trim().toUpperCase();
-        imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
-        if (desc) imsInventario[pn+'||'+desc] = (d.actual||0);
-      });
+    // Leer P4 y P3 en paralelo antes de publicar
+    imsInventario = {};
+    var colsSync = [
+      {col: 'planta4_inventario', planta: 'P4'},
+      {col: 'planta3_inventario', planta: 'P3'}
+    ];
+    Promise.all(colsSync.map(function(c) {
+      return db.collection(c.col).get().then(function(snap) {
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          if (!d.pn) return;
+          var pn = d.pn.trim().toUpperCase();
+          var desc = (d.desc||'').trim().toUpperCase();
+          var keyPlanta = pn + '||PLANTA:' + c.planta;
+          imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + (d.actual||0);
+          imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
+          if (desc) {
+            imsInventario[pn+'||'+desc] = (d.actual||0);
+            imsInventario[pn+'||'+desc+'||PLANTA:'+c.planta] = (d.actual||0);
+          }
+        });
+      }).catch(function(){});
+    })).then(function() {
       actualizarInvBOM();
       resolve();
     }).catch(() => resolve());

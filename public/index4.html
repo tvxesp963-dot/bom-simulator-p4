@@ -449,16 +449,6 @@ function procesarBOM() {
     const levelInt = levelRaw !== null && !isNaN(parseInt(levelRaw)) ? parseInt(levelRaw) : null;
     const isLevel1 = levelInt === 1 || (groupNo !== null && levelInt === null);
     const isLevel2 = levelInt === 2;
-    // Si es Level 2 y el padre inmediato es GH90 Bundle → sus piezas vienen de P3
-    const lastL1 = BOM.filter(r => r.sm === currentSM && r.isLevel1).slice(-1)[0];
-    if (isLevel2 && lastL1 && lastL1.familia === 'GH90' && (lastL1.desc||'').toUpperCase().includes('BUNDLE')) {
-      if (!codeVal.startsWith('GH90')) {
-        // Sub-componente del bundle: piezas sueltas en P3
-        planta = getDestino ? getDestino({pn:codeVal, desc:descVal, familia, planta:'Sin Planta'}) : planta;
-        // Forzar búsqueda de inventario en P3
-        planta = planta === 'Sin Planta' ? 'P3' : planta;
-      }
-    }
     BOM.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia, inv, plan, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2 });
   }
 
@@ -811,9 +801,6 @@ function getDestino(r) {
   if (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'OK') return r.planta;
   var d = (r.desc||'').toUpperCase();
   var fam = r.familia || '';
-  var pn = (r.pn||'').toUpperCase();
-  // GH39 — siempre ALIBER
-  if (pn.startsWith('GH39') || fam === 'GH39') return 'ALIBER';
   // GH90
   if (fam === 'GH90') {
     if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) return 'P3';
@@ -823,6 +810,7 @@ function getDestino(r) {
   if (fam === 'GH69') {
     if (d.includes('PULP') || d.includes('TRAY')) return 'ALIBER';
     if (d.includes('INSERT') || d.includes('MANUAL') || d.includes('BUNDLE')) return 'P3';
+    // Gift Box Top y Lower Box Bottom se producen internamente en Planta 4
     if (d.includes('GIFT BOX') && !d.includes('SHEET')) return 'P4';
     if ((d.includes('LOWER BOX') || d.includes('LOWER BOT')) && !d.includes('SHEET')) return 'P4';
     return 'P1'; // Chip Board, Sheet
@@ -1283,6 +1271,7 @@ function renderCons() {
 
       const rowsP3 = pl.key === 'P3'
         ? BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90')
+            .filter(r => (r.inv||0) < necesitaProducir)
         : [];
       const rowsActual = pl.key === 'P3' ? rowsP3 : rows;
 
@@ -1921,35 +1910,16 @@ function initIMS() {
 }
 
 
-function getInvIMS(pn, desc, planta) {
+function getInvIMS(pn, desc) {
   var pnUp = pn.toUpperCase();
   var descUp = (desc||'').trim().toUpperCase();
-  var plantaUp = (planta||'').toUpperCase();
-  // P3 y ALIBER: buscar SOLO por PN — descripciones del BOM no coinciden con IMS
-  if (plantaUp === 'P3' || plantaUp === 'ALIBER' || pnUp.startsWith('GH39')) {
-    if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];
-    if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
-    return 0;
-  }
-  // P4 y demás: lógica original sin cambios
-  // 1. Buscar por PN+DESC+PLANTA exacta (más específico)
-  if (descUp && plantaUp) {
-    var keyPlantaDesc = pnUp+'||'+descUp+'||PLANTA:'+plantaUp;
-    if (imsInventario[keyPlantaDesc] !== undefined) return imsInventario[keyPlantaDesc];
-  }
-  // 2. Buscar por PN+PLANTA
-  if (plantaUp) {
-    var keyPlanta = pnUp+'||PLANTA:'+plantaUp;
-    if (imsInventario[keyPlanta] !== undefined) return imsInventario[keyPlanta];
-  }
-  // 3. Buscar por PN+DESC exacta
+  // 1. Buscar por PN+DESC exacta
   if (descUp && imsInventario[pnUp+'||'+descUp] !== undefined)
     return imsInventario[pnUp+'||'+descUp];
-  // 4. Buscar por PN+DESC parcial (palabras clave)
+  // 2. Buscar por PN+DESC parcial (palabras clave)
   var keywords = ['VIRGEN','VIRGIN','RANURADO','GROOVING','TOP','BOTTOM','BOT','BUNDLE','STRIP','INSERT','PULP','SET PAD','PHONE PAD','BACK STICKER','QSG','HAC','MANUAL','GIFT BOX','LOWER BOX','SHEET'];
   var bestKey = null, bestScore = 0;
   Object.keys(imsInventario).forEach(function(key) {
-    if (key.indexOf('||PLANTA:') >= 0) return;
     if (key.indexOf(pnUp+'||') === 0) {
       var imsDesc = key.replace(pnUp+'||','');
       var score = 0;
@@ -1960,14 +1930,13 @@ function getInvIMS(pn, desc, planta) {
     }
   });
   if (bestKey && bestScore > 0) return imsInventario[bestKey];
-  // 5. Buscar por PN solo (total)
+  // 3. Buscar por PN solo (total)
   return imsInventario[pnUp] || 0;
 }
 function actualizarInvBOM() {
   BOM.forEach(function(r) {
-    var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
-    r.inv = getInvIMS(r.pn, r.desc, plantaItem);
-    if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
+    r.inv = getInvIMS(r.pn, r.desc);
+    if (!r.planta || r.planta === 'Sin Planta') r.planta = getDestino(r);
   });
 }
 function sincIMS() {
@@ -1976,51 +1945,25 @@ function sincIMS() {
   st.textContent = '⬤ Sync...'; st.style.color = '#FFBA00';
   if (!db) initIMS();
   if (!db) { st.textContent = '⬤ Sin Firebase'; return; }
-  // Leer P4 y P3 en paralelo
-  var colecciones = [
-    {col: 'planta4_inventario', planta: 'P4'},
-    {col: 'planta3_inventario', planta: 'P3'}
-  ];
-  imsInventario = {};
-  var rawP4 = {}, rawP3 = {};
-  // Leer ambas colecciones en paralelo en objetos separados
-  Promise.all([
-    db.collection('planta4_inventario').get().then(function(snap) {
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        if (!d.pn) return;
-        var pn = d.pn.trim().toUpperCase();
-        var desc = (d.desc||'').trim().toUpperCase();
-        var actual = d.actual || 0;
-        rawP4[pn] = (rawP4[pn]||0) + actual;
-        if (desc) rawP4[pn+'||'+desc] = actual;
-      });
-    }).catch(function(){}),
-    db.collection('planta3_inventario').get().then(function(snap) {
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        if (!d.pn) return;
-        var pn = d.pn.trim().toUpperCase();
-        var actual = d.actual || 0;
-        // P3: guardar SOLO por PN — no usar desc porque no coincide con el BOM
-        rawP3[pn] = (rawP3[pn]||0) + actual;
-      });
-    }).catch(function(){})
-  ]).then(function() {
-    // Guardar P4
-    Object.keys(rawP4).forEach(function(k) {
-      imsInventario[k] = rawP4[k];
-      if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
+  db.collection('planta4_inventario').get().then(function(snap) {
+    imsInventario = {};
+    snap.forEach(function(doc) {
+      var d=doc.data();
+      if (!d.pn) return;
+      var pn = d.pn.trim().toUpperCase();
+      var desc = (d.desc||'').trim().toUpperCase();
+      // Guardar por PN solo (suma total)
+      imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
+      // Guardar por PN+DESC exacta
+      if (desc) {
+        var keyExact = pn + '||' + desc;
+        imsInventario[keyExact] = (d.actual||0);
+      }
     });
-    // Guardar P3 — solo por PN, GH90 excluido (materia prima)
-    Object.keys(rawP3).forEach(function(k) {
-      if (k.startsWith('GH90')) return;
-      imsInventario[k] = rawP3[k];
-      imsInventario[k+'||PLANTA:P3'] = rawP3[k];
-    });
-    var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
+    var total = Object.keys(imsInventario).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
+    // Actualizar inventarios en BOM si ya está cargado
     if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
@@ -2105,8 +2048,7 @@ function adminCargarBOM(file) {
         // Buscar por PN+condicion primero, luego solo PN
         var pnUp = codeVal.toUpperCase();
         var descUp = descVal.toUpperCase();
-        var plantaParse = (typeof getDestino === 'function') ? getDestino({pn:codeVal,desc:descVal,familia:fam,planta:'Sin Planta'}) : '';
-        var inv = getInvIMS(codeVal, descVal, plantaParse);
+        var inv = getInvIMS(codeVal, descVal);
         bomData.push({sm:curSM,target:0,pn:codeVal,desc:descVal,familia:fam,inv:inv,plan:'',planta:'Sin Planta',qtyPlan:0,groupNo:isNaN(levelVal)?null:levelVal,isBold:levelVal===1,level:isNaN(levelVal)?2:levelVal,isLevel1:levelVal===1,isLevel2:levelVal===2});
       }
       if (!bomData.length) { statusEl.textContent='❌ No se detectaron componentes'; statusEl.style.color='var(--red)'; return; }
@@ -2158,34 +2100,16 @@ async function publicarPlan() {
   // Sync IMS fresco antes de calcular el plan
   await new Promise((resolve) => {
     if (!db) { resolve(); return; }
-    // Leer P4 y P3 en paralelo antes de publicar
-    imsInventario = {};
-    var colsSync = [
-      {col: 'planta4_inventario', planta: 'P4'},
-      {col: 'planta3_inventario', planta: 'P3'}
-    ];
-    Promise.all(colsSync.map(function(c) {
-      return db.collection(c.col).get().then(function(snap) {
-        snap.forEach(function(doc) {
-          var d = doc.data();
-          if (!d.pn) return;
-          var pn = d.pn.trim().toUpperCase();
-          var desc = (d.desc||'').trim().toUpperCase();
-          var actual = d.actual || 0;
-          var keyPlanta = pn + '||PLANTA:' + c.planta;
-          imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + actual;
-          if (c.planta === 'P3') {
-            imsInventario[pn] = actual;
-          } else {
-            imsInventario[pn] = (imsInventario[pn]||0) + actual;
-          }
-          if (desc) {
-            imsInventario[pn+'||'+desc] = actual;
-            imsInventario[pn+'||'+desc+'||PLANTA:'+c.planta] = actual;
-          }
-        });
-      }).catch(function(){});
-    })).then(function() {
+    db.collection('planta4_inventario').get().then(function(snap) {
+      imsInventario = {};
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        if (!d.pn) return;
+        var pn = d.pn.trim().toUpperCase();
+        var desc = (d.desc||'').trim().toUpperCase();
+        imsInventario[pn] = (imsInventario[pn]||0) + (d.actual||0);
+        if (desc) imsInventario[pn+'||'+desc] = (d.actual||0);
+      });
       actualizarInvBOM();
       resolve();
     }).catch(() => resolve());

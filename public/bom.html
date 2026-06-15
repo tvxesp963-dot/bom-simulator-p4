@@ -449,6 +449,16 @@ function procesarBOM() {
     const levelInt = levelRaw !== null && !isNaN(parseInt(levelRaw)) ? parseInt(levelRaw) : null;
     const isLevel1 = levelInt === 1 || (groupNo !== null && levelInt === null);
     const isLevel2 = levelInt === 2;
+    // Si es Level 2 y el padre inmediato es GH90 Bundle → sus piezas vienen de P3
+    const lastL1 = BOM.filter(r => r.sm === currentSM && r.isLevel1).slice(-1)[0];
+    if (isLevel2 && lastL1 && lastL1.familia === 'GH90' && (lastL1.desc||'').toUpperCase().includes('BUNDLE')) {
+      if (!codeVal.startsWith('GH90')) {
+        // Sub-componente del bundle: piezas sueltas en P3
+        planta = getDestino ? getDestino({pn:codeVal, desc:descVal, familia, planta:'Sin Planta'}) : planta;
+        // Forzar búsqueda de inventario en P3
+        planta = planta === 'Sin Planta' ? 'P3' : planta;
+      }
+    }
     BOM.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia, inv, plan, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2 });
   }
 

@@ -2009,7 +2009,8 @@ function sincIMS() {
   ]).then(function() {
     // Guardar P3 primero — GH90 excluido (son WIP, no bundle terminado)
     Object.keys(rawP3).forEach(function(k) {
-      if (k.startsWith('GH90')) return;
+      var pnBase = k.split('||')[0].trim().toUpperCase();
+      if (pnBase.startsWith('GH90')) return;
       imsInventario[k] = rawP3[k];
       imsInventario[k+'||PLANTA:P3'] = rawP3[k];
     });
@@ -2017,6 +2018,12 @@ function sincIMS() {
     Object.keys(rawP4).forEach(function(k) {
       imsInventario[k] = rawP4[k];
       if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
+    });
+    // Eliminar explícitamente cualquier GH90 que haya entrado de P3
+    Object.keys(imsInventario).forEach(function(k) {
+      var pnBase = k.split('||')[0].trim().toUpperCase();
+      if (pnBase.startsWith('GH90') && k.indexOf('PLANTA:P3') >= 0) delete imsInventario[k];
+      if (pnBase.startsWith('GH90') && !rawP4[k]) delete imsInventario[k];
     });
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';

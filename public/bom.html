@@ -2021,7 +2021,10 @@ function sincIMS() {
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
-    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
+    if (BOM && BOM.length) {
+      console.log('DEBUG GH90-01572K en imsInventario:', imsInventario['GH90-01572K'], '| PLANTA:P3:', imsInventario['GH90-01572K||PLANTA:P3'], '| PLANTA:P4:', imsInventario['GH90-01572K||PLANTA:P4']);
+      actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd();
+    }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 

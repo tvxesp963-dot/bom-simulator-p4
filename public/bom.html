@@ -459,7 +459,8 @@ function procesarBOM() {
         planta = planta === 'Sin Planta' ? 'P3' : planta;
       }
     }
-    BOM.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia, inv, plan, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2 });
+    const isSubBundle = isLevel2 && lastL1 && lastL1.familia === 'GH90' && (lastL1.desc||'').toUpperCase().includes('BUNDLE');
+    BOM.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia, inv, plan, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2, isSubBundle });
   }
 
   if (!BOM.length) { alert('No se detectaron componentes. Verifica la hoja.'); return; }
@@ -1095,18 +1096,17 @@ function renderSimTable() {
     const bundleHeader = g.header;
     const bundleInv = bundleHeader ? (bundleHeader.inv || 0) : 0;
     const targetSim = parseInt(document.getElementById('simTarget')?.value) || 0;
-    // Si Bundle >= target, marcar como OK y no mostrar componentes
+    // Siempre mostrar sub-componentes; banner OK es solo informativo
+    const rows = [];
     if (bundleHeader && bundleInv >= targetSim && targetSim > 0) {
       bundleOK = true;
-      secBUNDLE.push(`<tr>
+      rows.push(`<tr>
         <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
           <span style="color:var(--green);font-weight:700;font-size:12px">✓ Bundle OK — No requiere producción P3</span>
           <span style="color:var(--text2);font-size:11px;margin-left:8px">${bundleHeader.pn} · ${bundleInv.toLocaleString()} en inventario ≥ target ${targetSim.toLocaleString()}</span>
         </td>
       </tr>`);
-      return;
     }
-    const rows = [];
     if(passFilter(bundleHeader)) rows.push(rowHTML(bundleHeader, false));
     const bundleTargetReal = Math.max(0, targetSim2 - (bundleHeader ? (bundleHeader.inv || 0) : 0));
     g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true, false, null, bundleTargetReal)); });
@@ -1966,6 +1966,8 @@ function getInvIMS(pn, desc, planta) {
 function actualizarInvBOM() {
   BOM.forEach(function(r) {
     var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
+    // Sub-componentes del bundle siempre buscan en P3
+    if (r.isSubBundle) plantaItem = 'P3';
     r.inv = getInvIMS(r.pn, r.desc, plantaItem);
     if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
   });

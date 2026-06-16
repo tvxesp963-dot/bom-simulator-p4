@@ -2001,7 +2001,7 @@ function sincIMS() {
         var d = doc.data();
         if (!d.pn) return;
         var pn = d.pn.trim().toUpperCase();
-        var actual = d.actual || 0;
+        var actual = d.Current || d.actual || 0;
         // P3: guardar SOLO por PN — no usar desc porque no coincide con el BOM
         rawP3[pn] = (rawP3[pn]||0) + actual;
       });

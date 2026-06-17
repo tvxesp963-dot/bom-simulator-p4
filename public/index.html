@@ -906,11 +906,13 @@ function renderSimTable() {
     const dc = diff===null?'var(--text3)':noRequerido?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
     const dtxt = diff===null?'—':noRequerido?'—':(diff>=0?'+':'')+diff.toLocaleString();
     // Strip (GH90 ENSAMBLE): mostrar OK/ORDER según inventario vs target
-    // Bundle (GH90 BUNDLE): mantener ASSEMBLY
+    // Bundle Level1 (P4, terminado): mostrar OK/ORDER con inventario real
+    // Bundle Level2 (P3, WIP): mantener ASSEMBLY
     const esStrip = r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP');
+    const esBundleL1 = r.familia==='GH90' && r.isLevel1 && !esStrip;
     const estado = noRequerido
       ? `<span class="tag tag-info" style="background:rgba(122,136,184,.12);color:var(--text2);border-color:rgba(122,136,184,.3)">— N/R</span>`
-      : esStrip
+      : (esStrip || esBundleL1)
         ? (r.inv >= tgt
             ? `<span class="tag tag-ok">✓ OK</span>`
             : `<span class="tag tag-err">⚠ ORDER</span>`)
@@ -1998,6 +2000,13 @@ function actualizarInvBOM() {
     var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
     // Sub-componentes del bundle siempre buscan inventario en P3
     if (r.isSubBundle) plantaItem = 'P3';
+    // GH90 Bundle: forzar destino por nivel ignorando planta guardada
+    if ((r.familia||'') === 'GH90') {
+      var dUp = (r.desc||'').toUpperCase();
+      if (dUp.includes('BUNDLE') || dUp.includes('LIT') || dUp.includes('MANUAL')) {
+        plantaItem = r.isLevel2 ? 'P3' : 'P4';
+      }
+    }
     // Pasar nivel: GH90 Level2 busca en P3, Level1 en P4
     var nivel = (r.isLevel2) ? 2 : 1;
     r.inv = getInvIMS(r.pn, r.desc, plantaItem, nivel);

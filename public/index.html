@@ -817,7 +817,11 @@ function getDestino(r) {
   if (pn.startsWith('GH39') || fam === 'GH39') return 'ALIBER';
   // GH90
   if (fam === 'GH90') {
-    if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) return 'P3';
+    if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) {
+      // Level 1 = bundle terminado recibido en P4
+      // Level 2 = WIP en ensamble en P3
+      return (r.isLevel2) ? 'P3' : 'P4';
+    }
     return 'P1'; // Strip
   }
   // GH69

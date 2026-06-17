@@ -449,7 +449,18 @@ function procesarBOM() {
     const levelInt = levelRaw !== null && !isNaN(parseInt(levelRaw)) ? parseInt(levelRaw) : null;
     const isLevel1 = levelInt === 1 || (groupNo !== null && levelInt === null);
     const isLevel2 = levelInt === 2;
-    BOM.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia, inv, plan, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2 });
+    // Si es Level 2 y el padre inmediato es GH90 Bundle → sus piezas vienen de P3
+    const lastL1 = BOM.filter(r => r.sm === currentSM && r.isLevel1).slice(-1)[0];
+    if (isLevel2 && lastL1 && lastL1.familia === 'GH90' && (lastL1.desc||'').toUpperCase().includes('BUNDLE')) {
+      if (!codeVal.startsWith('GH90')) {
+        // Sub-componente del bundle: piezas sueltas en P3
+        planta = getDestino ? getDestino({pn:codeVal, desc:descVal, familia, planta:'Sin Planta'}) : planta;
+        // Forzar búsqueda de inventario en P3
+        planta = planta === 'Sin Planta' ? 'P3' : planta;
+      }
+    }
+    const isSubBundle = isLevel2 && lastL1 && lastL1.familia === 'GH90' && (lastL1.desc||'').toUpperCase().includes('BUNDLE');
+    BOM.push({ sm: currentSM, target: currentTarget, pn: codeVal, desc: descVal, familia, inv, plan, planta, qtyPlan, groupNo, isBold, level: levelInt, isLevel1, isLevel2, isSubBundle });
   }
 
   if (!BOM.length) { alert('No se detectaron componentes. Verifica la hoja.'); return; }
@@ -1085,18 +1096,17 @@ function renderSimTable() {
     const bundleHeader = g.header;
     const bundleInv = bundleHeader ? (bundleHeader.inv || 0) : 0;
     const targetSim = parseInt(document.getElementById('simTarget')?.value) || 0;
-    // Si Bundle >= target, marcar como OK y no mostrar componentes
+    // Siempre mostrar sub-componentes; banner OK es solo informativo
+    const rows = [];
     if (bundleHeader && bundleInv >= targetSim && targetSim > 0) {
       bundleOK = true;
-      secBUNDLE.push(`<tr>
+      rows.push(`<tr>
         <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
           <span style="color:var(--green);font-weight:700;font-size:12px">✓ Bundle OK — No requiere producción P3</span>
           <span style="color:var(--text2);font-size:11px;margin-left:8px">${bundleHeader.pn} · ${bundleInv.toLocaleString()} en inventario ≥ target ${targetSim.toLocaleString()}</span>
         </td>
       </tr>`);
-      return;
     }
-    const rows = [];
     if(passFilter(bundleHeader)) rows.push(rowHTML(bundleHeader, false));
     const bundleTargetReal = Math.max(0, targetSim2 - (bundleHeader ? (bundleHeader.inv || 0) : 0));
     g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true, false, null, bundleTargetReal)); });
@@ -1273,7 +1283,6 @@ function renderCons() {
 
       const rowsP3 = pl.key === 'P3'
         ? BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90')
-            .filter(r => (r.inv||0) < necesitaProducir)
         : [];
       const rowsActual = pl.key === 'P3' ? rowsP3 : rows;
 
@@ -1912,15 +1921,27 @@ function initIMS() {
 }
 
 
-function getInvIMS(pn, desc, planta) {
+function getInvIMS(pn, desc, planta, level) {
   var pnUp = pn.toUpperCase();
   var descUp = (desc||'').trim().toUpperCase();
   var plantaUp = (planta||'').toUpperCase();
-  // P3 y GH39 (ALIBER es proveedor, inventario fisico esta en P3): buscar solo por PN
+  var lvl = level || 1;
+  // GH90 Level 1 = bundle terminado en P4 → solo contar de P4
+  // GH90 Level 2 = sub-articulo WIP en P3 → buscar solo por PN en P3
+  if (pnUp.startsWith('GH90')) {
+    if (lvl === 2) {
+      if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];
+      if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
+      return 0;
+    } else {
+      if (plantaUp === 'P3') return 0;
+    }
+  }
+  // P3 y ALIBER: buscar SOLO por PN — descripciones del BOM no coinciden con IMS
   if (plantaUp === 'P3' || plantaUp === 'ALIBER' || pnUp.startsWith('GH39')) {
-    var keyP3 = pnUp+'||PLANTA:P3';
-    if (imsInventario[keyP3] !== undefined) return imsInventario[keyP3];
-    return imsInventario[pnUp] || 0;
+    if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];
+    if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
+    return 0;
   }
   // P4 y demás: lógica original sin cambios
   // 1. Buscar por PN+DESC+PLANTA exacta (más específico)
@@ -1955,9 +1976,27 @@ function getInvIMS(pn, desc, planta) {
   return imsInventario[pnUp] || 0;
 }
 function actualizarInvBOM() {
+  // Agrupar BOM por SM y detectar subs del bundle correctamente
+  var smList = [...new Set(BOM.map(function(r){ return r.sm; }))];
+  smList.forEach(function(sm) {
+    var filas = BOM.filter(function(r){ return r.sm === sm; });
+    var dentroDeBundle = false;
+    filas.forEach(function(r) {
+      if (r.isLevel1) {
+        dentroDeBundle = r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE');
+      }
+      if (r.isLevel2 && dentroDeBundle && !r.pn.toUpperCase().startsWith('GH90')) {
+        r.isSubBundle = true;
+      }
+    });
+  });
   BOM.forEach(function(r) {
     var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
-    r.inv = getInvIMS(r.pn, r.desc, plantaItem);
+    // Sub-componentes del bundle siempre buscan inventario en P3
+    if (r.isSubBundle) plantaItem = 'P3';
+    // Pasar nivel: GH90 Level2 busca en P3, Level1 en P4
+    var nivel = (r.isLevel2) ? 2 : 1;
+    r.inv = getInvIMS(r.pn, r.desc, plantaItem, nivel);
     if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
   });
 }
@@ -1992,34 +2031,41 @@ function sincIMS() {
         var d = doc.data();
         if (!d.pn) return;
         var pn = d.pn.trim().toUpperCase();
-        var desc = (d.desc||'').trim().toUpperCase();
-        var actual = d.actual || 0;
+        var actual = d.Current || d.actual || 0;
+        // P3: guardar SOLO por PN — no usar desc porque no coincide con el BOM
         rawP3[pn] = (rawP3[pn]||0) + actual;
-        if (desc) rawP3[pn+'||'+desc] = actual;
       });
     }).catch(function(){})
   ]).then(function() {
-    // Guardar P4
+    // Guardar P3 primero — GH90 excluido (son WIP, no bundle terminado)
+    Object.keys(rawP3).forEach(function(k) {
+      var pnBase = k.split('||')[0].trim().toUpperCase();
+      if (pnBase.startsWith('GH90')) return;
+      imsInventario[k] = rawP3[k];
+      imsInventario[k+'||PLANTA:P3'] = rawP3[k];
+    });
+    // Guardar P4 después — sobreescribe donde hay conflicto (P4 tiene prioridad)
     Object.keys(rawP4).forEach(function(k) {
       imsInventario[k] = rawP4[k];
       if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
     });
-    // Guardar P3 — suma si PN existe en P4, usa P3 si no existe
-    Object.keys(rawP3).forEach(function(k) {
-      if (k.indexOf('||') < 0) {
-        // clave PN solo: sumar si existe en P4, si no existe usar P3
-        imsInventario[k] = (rawP4[k]||0) + rawP3[k];
-        imsInventario[k+'||PLANTA:P3'] = rawP3[k];
-      } else {
-        // clave PN+DESC: guardar siempre
-        imsInventario[k] = rawP3[k];
-        imsInventario[k+'||PLANTA:P3'] = rawP3[k];
-      }
+    // Eliminar explícitamente cualquier GH90 que haya entrado de P3 o sin planta
+    Object.keys(imsInventario).forEach(function(k) {
+      var pnBase = k.split('||')[0].trim().toUpperCase();
+      if (!pnBase.startsWith('GH90')) return;
+      // Siempre eliminar GH90 de P3
+      if (k.indexOf('PLANTA:P3') >= 0) { delete imsInventario[k]; return; }
+      // Eliminar GH90 sin etiqueta de planta si P4 tiene 0 o no existe
+      var p4val = rawP4[pnBase] || 0;
+      if (k.indexOf('||') < 0 && p4val === 0) delete imsInventario[k];
     });
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
-    if (BOM && BOM.length) { actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd(); }
+    if (BOM && BOM.length) {
+      console.log('DEBUG GH90-01572K en imsInventario:', imsInventario['GH90-01572K'], '| PLANTA:P3:', imsInventario['GH90-01572K||PLANTA:P3'], '| PLANTA:P4:', imsInventario['GH90-01572K||PLANTA:P4']);
+      actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd();
+    }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 

@@ -1964,10 +1964,24 @@ function getInvIMS(pn, desc, planta) {
   return imsInventario[pnUp] || 0;
 }
 function actualizarInvBOM() {
+  // Construir set de PNs que son sub-componentes de un Bundle GH90
+  var subBundlePNs = {};
+  var lastBundleSM = null;
+  BOM.forEach(function(r) {
+    if (r.isLevel1 && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE')) {
+      lastBundleSM = r.sm;
+    } else if (r.isLevel1) {
+      if (r.sm !== lastBundleSM) lastBundleSM = null;
+    }
+    if (r.isLevel2 && lastBundleSM && r.sm === lastBundleSM && !r.pn.toUpperCase().startsWith('GH90')) {
+      subBundlePNs[r.sm + '||' + r.pn] = true;
+      r.isSubBundle = true;
+    }
+  });
   BOM.forEach(function(r) {
     var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
     // Sub-componentes del bundle siempre buscan en P3
-    if (r.isSubBundle) plantaItem = 'P3';
+    if (r.isSubBundle || subBundlePNs[r.sm + '||' + r.pn]) plantaItem = 'P3';
     r.inv = getInvIMS(r.pn, r.desc, plantaItem);
     if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
   });

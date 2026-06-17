@@ -1925,6 +1925,8 @@ function getInvIMS(pn, desc, planta) {
   var pnUp = pn.toUpperCase();
   var descUp = (desc||'').trim().toUpperCase();
   var plantaUp = (planta||'').toUpperCase();
+  // GH90 Bundle en P3 es materia prima, no producto terminado — no contar ese inventario
+  if (pnUp.startsWith('GH90') && plantaUp === 'P3') return 0;
   // P3 y ALIBER: buscar SOLO por PN — descripciones del BOM no coinciden con IMS
   if (plantaUp === 'P3' || plantaUp === 'ALIBER' || pnUp.startsWith('GH39')) {
     if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];

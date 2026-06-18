@@ -2052,27 +2052,15 @@ function sincIMS() {
       });
     }).catch(function(){})
   ]).then(function() {
-    // Guardar P3 primero — GH90 excluido (son WIP, no bundle terminado)
+    // Guardar P3 — incluir GH90 Bundle (P3 los ensambla y manda a P4)
     Object.keys(rawP3).forEach(function(k) {
-      var pnBase = k.split('||')[0].trim().toUpperCase();
-      if (pnBase.startsWith('GH90')) return;
       imsInventario[k] = rawP3[k];
       imsInventario[k+'||PLANTA:P3'] = rawP3[k];
     });
-    // Guardar P4 después — sobreescribe donde hay conflicto (P4 tiene prioridad)
+    // Guardar P4 — sobreescribe donde hay conflicto (P4 tiene prioridad)
     Object.keys(rawP4).forEach(function(k) {
       imsInventario[k] = rawP4[k];
       if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
-    });
-    // Eliminar explícitamente cualquier GH90 que haya entrado de P3 o sin planta
-    Object.keys(imsInventario).forEach(function(k) {
-      var pnBase = k.split('||')[0].trim().toUpperCase();
-      if (!pnBase.startsWith('GH90')) return;
-      // Siempre eliminar GH90 de P3
-      if (k.indexOf('PLANTA:P3') >= 0) { delete imsInventario[k]; return; }
-      // Eliminar GH90 sin etiqueta de planta si P4 tiene 0 o no existe
-      var p4val = rawP4[pnBase] || 0;
-      if (k.indexOf('||') < 0 && p4val === 0) delete imsInventario[k];
     });
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';

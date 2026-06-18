@@ -900,16 +900,17 @@ function renderSimTable() {
   const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null, invOverride=null, noRequerido=false) => {
     const tgt = targetOverride !== null ? targetOverride : target;
     const invForDiff = invOverride !== null ? invOverride : r.inv;
-    // Strip muestra diferencia real; Bundle y otros GH90 muestran —
+    // Strip y Bundle Level1 muestran diferencia real; Bundle Level2 y otros GH90 muestran —
     const esStripDiff = r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('STRIP');
-    const diff = (r.familia === 'GH90' && !esStripDiff) ? null : invForDiff - tgt;
+    const esBundleL1diff = r.familia === 'GH90' && (r.isLevel1 || r.level===1 || (r.isBold && r.level!==2)) && !esStripDiff;
+    const diff = (r.familia === 'GH90' && !esStripDiff && !esBundleL1diff) ? null : invForDiff - tgt;
     const dc = diff===null?'var(--text3)':noRequerido?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
     const dtxt = diff===null?'—':noRequerido?'—':(diff>=0?'+':'')+diff.toLocaleString();
     // Strip (GH90 ENSAMBLE): mostrar OK/ORDER según inventario vs target
     // Bundle Level1 (P4, terminado): mostrar OK/ORDER con inventario real
     // Bundle Level2 (P3, WIP): mantener ASSEMBLY
     const esStrip = r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP');
-    const esBundleL1 = r.familia==='GH90' && r.isLevel1 && !esStrip;
+    const esBundleL1 = r.familia==='GH90' && (r.isLevel1 || r.level===1 || (r.isBold && r.level!==2)) && !esStrip;
     const estado = noRequerido
       ? `<span class="tag tag-info" style="background:rgba(122,136,184,.12);color:var(--text2);border-color:rgba(122,136,184,.3)">— N/R</span>`
       : (esStrip || esBundleL1)
@@ -2001,16 +2002,23 @@ function actualizarInvBOM() {
     // Sub-componentes del bundle siempre buscan inventario en P3
     if (r.isSubBundle) plantaItem = 'P3';
     // GH90 Bundle: forzar destino por nivel ignorando planta guardada
+    var esGH90Bundle = false;
     if ((r.familia||'') === 'GH90') {
       var dUp = (r.desc||'').toUpperCase();
       if (dUp.includes('BUNDLE') || dUp.includes('LIT') || dUp.includes('MANUAL')) {
         plantaItem = r.isLevel2 ? 'P3' : 'P4';
+        esGH90Bundle = true;
       }
     }
     // Pasar nivel: GH90 Level2 busca en P3, Level1 en P4
     var nivel = (r.isLevel2) ? 2 : 1;
     r.inv = getInvIMS(r.pn, r.desc, plantaItem, nivel);
-    if (!r.planta || r.planta === 'Sin Planta') r.planta = plantaItem;
+    // Forzar actualización de r.planta para GH90 Bundle (no respetar planta guardada)
+    if (esGH90Bundle) {
+      r.planta = plantaItem;
+    } else if (!r.planta || r.planta === 'Sin Planta') {
+      r.planta = plantaItem;
+    }
   });
 }
 function sincIMS() {

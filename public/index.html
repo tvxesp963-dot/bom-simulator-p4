@@ -427,7 +427,7 @@ function procesarBOM() {
     else if (pu.includes('VC RANURAR')||pu.includes('VC ')) planta = 'VC/Zhongke';
     else if (pu.includes('ASSY')) planta = 'ASSY1';
     else if (familia === 'GH69' && (du.includes('PULP')||du.includes('TRAY'))) planta = 'ALIBER';
-    else if (familia === 'GH90' && (du.includes('BUNDLE')||du.includes('LIT'))) planta = 'P3';
+    else if (familia === 'GH90' && (du.includes('BUNDLE')||du.includes('LIT')||du.includes('MANUAL'))) planta = 'Sin Planta'; // se resuelve por nivel en actualizarInvBOM
     else if (familia === 'GH69') planta = 'P1';
     else if (familia === 'GH68') planta = 'P1';
     else if (familia === 'GH90') planta = 'P1';

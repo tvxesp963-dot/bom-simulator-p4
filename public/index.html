@@ -427,7 +427,7 @@ function procesarBOM() {
     else if (pu.includes('VC RANURAR')||pu.includes('VC ')) planta = 'VC/Zhongke';
     else if (pu.includes('ASSY')) planta = 'ASSY1';
     else if (familia === 'GH69' && (du.includes('PULP')||du.includes('TRAY'))) planta = 'ALIBER';
-    else if (familia === 'GH90' && (du.includes('BUNDLE')||du.includes('LIT')||du.includes('MANUAL'))) planta = 'P3'; // bundle siempre en P3, nivel 2 son componentes
+    else if (familia === 'GH90' && (du.includes('BUNDLE')||du.includes('LIT')||du.includes('MANUAL'))) planta = 'Sin Planta'; // resuelve por nivel: L1=P4, L2=P3
     else if (familia === 'GH69') planta = 'P1';
     else if (familia === 'GH68') planta = 'P1';
     else if (familia === 'GH90') planta = 'P1';
@@ -818,8 +818,8 @@ function getDestino(r) {
   // GH90
   if (fam === 'GH90') {
     if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) {
-      // Bundle siempre en P3 — P3 ensambla y manda a P4
-      return 'P3';
+      // Level 1 = bundle terminado en P4, Level 2 = componentes a ensamblar en P3
+      return (r.isLevel2) ? 'P3' : 'P4';
     }
     return 'P1'; // Strip
   }
@@ -1935,10 +1935,16 @@ function getInvIMS(pn, desc, planta, level) {
   // GH90 Level 1 = bundle terminado en P4 → solo contar de P4
   // GH90 Level 2 = sub-articulo WIP en P3 → buscar solo por PN en P3
   if (pnUp.startsWith('GH90')) {
-    // Bundle GH90: siempre buscar en P3 (P3 ensambla, P4 consume)
-    if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];
-    if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
-    return 0;
+    if (lvl === 2) {
+      // Level 2 = componentes en P3
+      if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];
+      if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
+      return 0;
+    } else {
+      // Level 1 = bundle terminado en P4
+      if (imsInventario[pnUp+'||PLANTA:P4'] !== undefined) return imsInventario[pnUp+'||PLANTA:P4'];
+      if (plantaUp === 'P3') return 0;
+    }
   }
   // P3 y ALIBER: buscar SOLO por PN — descripciones del BOM no coinciden con IMS
   if (plantaUp === 'P3' || plantaUp === 'ALIBER' || pnUp.startsWith('GH39')) {
@@ -1997,12 +2003,12 @@ function actualizarInvBOM() {
     var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
     // Sub-componentes del bundle siempre buscan inventario en P3
     if (r.isSubBundle) plantaItem = 'P3';
-    // GH90 Bundle: siempre buscar en P3 (P3 ensambla y manda a P4)
+    // GH90 Bundle: Level1=P4 (bundle terminado), Level2=P3 (componentes a ensamblar)
     var esGH90Bundle = false;
     if ((r.familia||'') === 'GH90') {
       var dUp = (r.desc||'').toUpperCase();
       if (dUp.includes('BUNDLE') || dUp.includes('LIT') || dUp.includes('MANUAL')) {
-        plantaItem = 'P3';
+        plantaItem = r.isLevel2 ? 'P3' : 'P4';
         esGH90Bundle = true;
       }
     }
@@ -2052,15 +2058,24 @@ function sincIMS() {
       });
     }).catch(function(){})
   ]).then(function() {
-    // Guardar P3 — incluir GH90 Bundle (P3 los ensambla y manda a P4)
+    // Guardar P3 primero (sin GH90 — se maneja por separado)
     Object.keys(rawP3).forEach(function(k) {
+      var pnBase = k.split('||')[0].trim().toUpperCase();
+      if (pnBase.startsWith('GH90')) return;
       imsInventario[k] = rawP3[k];
       imsInventario[k+'||PLANTA:P3'] = rawP3[k];
     });
-    // Guardar P4 — sobreescribe donde hay conflicto (P4 tiene prioridad)
+    // Guardar P4 — sobreescribe donde hay conflicto
     Object.keys(rawP4).forEach(function(k) {
       imsInventario[k] = rawP4[k];
       if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
+    });
+    // GH90: Level1 busca en P4 (bundle terminado), Level2 busca en P3 (componentes)
+    // Guardar P3 GH90 con etiqueta PLANTA:P3 para que Level2 los encuentre
+    Object.keys(rawP3).filter(function(k) {
+      return k.split('||')[0].trim().toUpperCase().startsWith('GH90');
+    }).forEach(function(pn) {
+      imsInventario[pn+'||PLANTA:P3'] = rawP3[pn];
     });
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';

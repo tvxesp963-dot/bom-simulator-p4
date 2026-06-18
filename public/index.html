@@ -681,7 +681,7 @@ function componenteNecesario(r, sm, target) {
   const topRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (x.desc||'').toUpperCase().includes('RANURADO'));
   const botRan    = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (x.desc||'').toUpperCase().includes('RANURADO'));
   const giftBox   = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('GIFT BOX'));
-  const lowerBox  = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('LOWER BOX'));
+  const lowerBox  = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('LOWER BOX') && !(x.desc||'').toUpperCase().includes('SHEET'));
   const topRanInv = inv(topRan);
   const botRanInv = inv(botRan);
   const giftInv   = inv(giftBox);
@@ -954,11 +954,14 @@ function renderSimTable() {
   const secENSAMBLE = [], secTOP = [], secBOT = [];
   const targetSim2 = parseInt(document.getElementById('simTarget')?.value) || 0;
 
+  // Modelo seleccionado (necesario para filtrar Ranurado por sm)
+  const smSim = document.getElementById('simModelo')?.value || '';
+
   // Pre-calcular inventario de Ranurado por modelo para saber si VC es necesario
   const getRanuradoInv = (desc) => {
     const match = BOM.find(r => {
       const d = (r.desc||'').toUpperCase();
-      return d.includes('RANURADO') && d.includes(desc.toUpperCase());
+      return r.sm === smSim && d.includes('RANURADO') && d.includes(desc.toUpperCase());
     });
     return match ? (match.inv || 0) : 0;
   };
@@ -966,15 +969,16 @@ function renderSimTable() {
   const botRanInv = getRanuradoInv('BOTTOM');
 
   // Calcular inventarios de medio proceso UNA VEZ antes del forEach
-  const smSim = document.getElementById('simModelo')?.value || '';
   // Gift Box Top: buscar por desc
   const giftBoxSim = BOM.find(r => r.sm === smSim && (r.desc||'').toUpperCase().includes('GIFT BOX'));
   const giftBoxSimInv = giftBoxSim ? (giftBoxSim.inv||0) : 0;
-  // Lower Box Bottom: inv=0 en BOM (se produce en S3), usar Ranurado BOT como indicador
+  // Lower Box Bottom: buscar inventario físico primero; si no existe, usar Ranurado BOT como proxy
   const botRanSim = BOM.find(r => r.sm === smSim && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
   const botRanSimInv = botRanSim ? (botRanSim.inv||0) : 0;
-  // S3 puede producir Lower Box si Ranurado BOT cubre el target
-  const lowerBoxSimInv = botRanSimInv >= targetSim2 ? botRanSimInv : 0;
+  const lowerBoxPhys = BOM.find(r => r.sm === smSim && (r.desc||'').toUpperCase().includes('LOWER BOX') && !(r.desc||'').toUpperCase().includes('SHEET'));
+  const lowerBoxPhysInv = lowerBoxPhys ? (lowerBoxPhys.inv||0) : 0;
+  // S3 puede cubrir el target con Ranurado BOT; también contar inventario físico de Lower Box
+  const lowerBoxSimInv = lowerBoxPhysInv > 0 ? lowerBoxPhysInv : (botRanSimInv >= targetSim2 ? botRanSimInv : 0);
 
   bomGroups.forEach(g => {
     const sec = g.section;
@@ -2081,7 +2085,6 @@ function sincIMS() {
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
     if (BOM && BOM.length) {
-      console.log('DEBUG GH90-01572K en imsInventario:', imsInventario['GH90-01572K'], '| PLANTA:P3:', imsInventario['GH90-01572K||PLANTA:P3'], '| PLANTA:P4:', imsInventario['GH90-01572K||PLANTA:P4']);
       actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd();
     }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });

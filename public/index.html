@@ -2072,7 +2072,13 @@ function sincIMS() {
     // Guardar P4 — sobreescribe donde hay conflicto
     Object.keys(rawP4).forEach(function(k) {
       imsInventario[k] = rawP4[k];
-      if (k.indexOf('||') < 0) imsInventario[k+'||PLANTA:P4'] = rawP4[k];
+      if (k.indexOf('||') < 0) {
+        // Clave sin desc: guardar total por PN+PLANTA
+        imsInventario[k+'||PLANTA:P4'] = rawP4[k];
+      } else {
+        // Clave con desc: guardar también con etiqueta PLANTA:P4 para búsqueda específica
+        imsInventario[k+'||PLANTA:P4'] = rawP4[k];
+      }
     });
     // GH90: Level1 busca en P4 (bundle terminado), Level2 busca en P3 (componentes)
     // Guardar P3 GH90 con etiqueta PLANTA:P3 para que Level2 los encuentre

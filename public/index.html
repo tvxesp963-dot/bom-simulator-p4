@@ -427,7 +427,7 @@ function procesarBOM() {
     else if (pu.includes('VC RANURAR')||pu.includes('VC ')) planta = 'VC/Zhongke';
     else if (pu.includes('ASSY')) planta = 'ASSY1';
     else if (familia === 'GH69' && (du.includes('PULP')||du.includes('TRAY'))) planta = 'ALIBER';
-    else if (familia === 'GH90' && (du.includes('BUNDLE')||du.includes('LIT')||du.includes('MANUAL'))) planta = 'Sin Planta'; // se resuelve por nivel en actualizarInvBOM
+    else if (familia === 'GH90' && (du.includes('BUNDLE')||du.includes('LIT')||du.includes('MANUAL'))) planta = 'P3'; // bundle siempre en P3, nivel 2 son componentes
     else if (familia === 'GH69') planta = 'P1';
     else if (familia === 'GH68') planta = 'P1';
     else if (familia === 'GH90') planta = 'P1';
@@ -818,9 +818,8 @@ function getDestino(r) {
   // GH90
   if (fam === 'GH90') {
     if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) {
-      // Level 1 = bundle terminado recibido en P4
-      // Level 2 = WIP en ensamble en P3
-      return (r.isLevel2) ? 'P3' : 'P4';
+      // Bundle siempre en P3 — P3 ensambla y manda a P4
+      return 'P3';
     }
     return 'P1'; // Strip
   }
@@ -1936,13 +1935,10 @@ function getInvIMS(pn, desc, planta, level) {
   // GH90 Level 1 = bundle terminado en P4 → solo contar de P4
   // GH90 Level 2 = sub-articulo WIP en P3 → buscar solo por PN en P3
   if (pnUp.startsWith('GH90')) {
-    if (lvl === 2) {
-      if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];
-      if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
-      return 0;
-    } else {
-      if (plantaUp === 'P3') return 0;
-    }
+    // Bundle GH90: siempre buscar en P3 (P3 ensambla, P4 consume)
+    if (imsInventario[pnUp+'||PLANTA:P3'] !== undefined) return imsInventario[pnUp+'||PLANTA:P3'];
+    if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
+    return 0;
   }
   // P3 y ALIBER: buscar SOLO por PN — descripciones del BOM no coinciden con IMS
   if (plantaUp === 'P3' || plantaUp === 'ALIBER' || pnUp.startsWith('GH39')) {
@@ -2001,19 +1997,17 @@ function actualizarInvBOM() {
     var plantaItem = (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'auto' && r.planta !== 'Auto') ? r.planta : getDestino(r);
     // Sub-componentes del bundle siempre buscan inventario en P3
     if (r.isSubBundle) plantaItem = 'P3';
-    // GH90 Bundle: forzar destino por nivel ignorando planta guardada
+    // GH90 Bundle: siempre buscar en P3 (P3 ensambla y manda a P4)
     var esGH90Bundle = false;
     if ((r.familia||'') === 'GH90') {
       var dUp = (r.desc||'').toUpperCase();
       if (dUp.includes('BUNDLE') || dUp.includes('LIT') || dUp.includes('MANUAL')) {
-        plantaItem = r.isLevel2 ? 'P3' : 'P4';
+        plantaItem = 'P3';
         esGH90Bundle = true;
       }
     }
-    // Pasar nivel: GH90 Level2 busca en P3, Level1 en P4
-    var nivel = (r.isLevel2) ? 2 : 1;
+    var nivel = r.isLevel2 ? 2 : 1;
     r.inv = getInvIMS(r.pn, r.desc, plantaItem, nivel);
-    // Forzar actualización de r.planta para GH90 Bundle (no respetar planta guardada)
     if (esGH90Bundle) {
       r.planta = plantaItem;
     } else if (!r.planta || r.planta === 'Sin Planta') {

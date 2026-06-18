@@ -916,7 +916,9 @@ function renderSimTable() {
         ? (r.inv >= tgt
             ? `<span class="tag tag-ok">✓ OK</span>`
             : `<span class="tag tag-err">⚠ ORDER</span>`)
-        : r.familia==='GH90'
+        : (r.familia==='GH90' && poolOK)
+          ? `<span class="tag tag-ok">✓ OK</span>`
+          : r.familia==='GH90'
           ? `<span class="tag tag-info">ASSEMBLY</span>`
           : vcTag
             ? `<span class="tag tag-warn">${vcTag}</span>`
@@ -1119,7 +1121,7 @@ function renderSimTable() {
     }
     if(passFilter(bundleHeader)) rows.push(rowHTML(bundleHeader, false));
     const bundleTargetReal = Math.max(0, targetSim2 - (bundleHeader ? (bundleHeader.inv || 0) : 0));
-    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true, false, null, bundleTargetReal)); });
+    g.subs.forEach(s => { if(passFilter(s)) rows.push(rowHTML(s, true, bundleOK, null, bundleTargetReal)); });
     if(rows.length > 0) secBUNDLE.push(rows.join(''));
   });
 

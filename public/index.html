@@ -811,14 +811,15 @@ function getGrupo(r) {
 
 
 function getDestino(r) {
+  var pn0 = (r.pn||'').toUpperCase();
+  // GH64 — SIEMPRE ALIBER, sin excepción (ignora cualquier valor manual guardado)
+  if (pn0.startsWith('GH64') || r.familia === 'GH64') return 'ALIBER';
   if (r.planta && r.planta !== 'Sin Planta' && r.planta !== 'OK') return r.planta;
   var d = (r.desc||'').toUpperCase();
   var fam = r.familia || '';
   var pn = (r.pn||'').toUpperCase();
   // GH39 — siempre ALIBER
   if (pn.startsWith('GH39') || fam === 'GH39') return 'ALIBER';
-  // GH64 — siempre ALIBER
-  if (pn.startsWith('GH64') || fam === 'GH64') return 'ALIBER';
   // GH90
   if (fam === 'GH90') {
     if (d.includes('BUNDLE') || d.includes('LIT') || d.includes('MANUAL')) {

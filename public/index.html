@@ -65,6 +65,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .fam-GH90{background:rgba(179,136,255,.15);color:var(--purple);border:1px solid rgba(179,136,255,.3)}
 .fam-GH69{background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.25)}
 .fam-GH68{background:rgba(77,166,255,.1);color:var(--accent);border:1px solid rgba(77,166,255,.25)}
+.fam-GH64{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
 .fam-OTRO{background:rgba(122,136,184,.1);color:var(--text2);border:1px solid rgba(122,136,184,.25)}
 .comp-inv{font-size:11px;font-weight:600;width:65px;text-align:right;flex-shrink:0}
 .comp-plan{font-size:9px;color:var(--text2);width:130px;text-align:right;flex-shrink:0}
@@ -420,6 +421,7 @@ function procesarBOM() {
     if (codeVal.startsWith('GH90')) familia = 'GH90';
     else if (codeVal.startsWith('GH69')) familia = 'GH69';
     else if (codeVal.startsWith('GH68')) familia = 'GH68';
+    else if (codeVal.startsWith('GH64')) familia = 'GH64';
 
     let planta = 'Sin Planta';
     if (pu.includes('S1 PRODUCIR')||pu.includes('S2 PRODUCIR')) planta = 'S1/S2';
@@ -2175,6 +2177,7 @@ function adminCargarBOM(file) {
         if(codeVal.startsWith('GH90'))fam='GH90';
         else if(codeVal.startsWith('GH69'))fam='GH69';
         else if(codeVal.startsWith('GH68'))fam='GH68';
+        else if(codeVal.startsWith('GH64'))fam='GH64';
         // Buscar por PN+condicion primero, luego solo PN
         var pnUp = codeVal.toUpperCase();
         var descUp = descVal.toUpperCase();
@@ -2888,6 +2891,8 @@ window.addEventListener('DOMContentLoaded', function() {
           <option value="GH68">GH68</option>
           <option value="GH69">GH69</option>
           <option value="GH90">GH90</option>
+          <option value="GH39">GH39</option>
+          <option value="GH64">GH64</option>
           <option value="OTRO">OTRO</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="renderAdminPartes()" style="font-size:11px">🔄 Refrescar</button>
@@ -2931,6 +2936,8 @@ window.addEventListener('DOMContentLoaded', function() {
               <option value="GH68">GH68</option>
               <option value="GH69">GH69</option>
               <option value="GH90">GH90</option>
+              <option value="GH39">GH39</option>
+              <option value="GH64">GH64</option>
               <option value="OTRO">OTRO</option>
             </select>
           </div>

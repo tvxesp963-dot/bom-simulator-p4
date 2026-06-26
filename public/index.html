@@ -1386,24 +1386,17 @@ function renderCons() {
   let hayAlgo = false;
   window.consolidadoData = {};
 
-  // Requerido TOTAL por PN+Desc sumando los targets de TODOS los modelos activos
-  // (independiente de planta) — esto es lo que permite ver el déficit real del
-  // pool compartido cuando un mismo componente lo usan varios modelos a la vez.
-  const requeridoTotalPorPN = {};
-  modelos.forEach(sm => {
-    const target = modeloTargets[sm] || 0;
-    if (!target) return;
-    BOM.filter(r => r.sm === sm).forEach(r => {
-      const key = (r.pn||'').trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-      requeridoTotalPorPN[key] = (requeridoTotalPorPN[key] || 0) + target;
-    });
-  });
-  // Inventario físico real (una sola vez) por PN+Desc, para comparar contra el requerido total
-  const invFisicoPorPN = {};
-  BOM.forEach(r => {
-    const key = (r.pn||'').trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-    if (invFisicoPorPN[key] === undefined) invFisicoPorPN[key] = r.inv || 0;
-  });
+  // Déficit consolidado por PN+Desc: suma del FALTANTE REAL (sin 10%) de
+  // cada modelo individual que usa este componente. El +10% se aplica
+  // UNA SOLA VEZ al final, sobre la suma — nunca antes, para no inflar
+  // cada modelo por separado y luego sumar montos ya con margen.
+  const faltanteAcumuladoPorPN = {};
+  const sumarFaltantePN = (pn, desc, faltaSinExtra, silencioso) => {
+    if (!silencioso) return; // solo se acumula en la pasada 1; la pasada 2 solo lee
+    if (!faltaSinExtra || faltaSinExtra <= 0) return;
+    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    faltanteAcumuladoPorPN[key] = (faltanteAcumuladoPorPN[key] || 0) + faltaSinExtra;
+  };
 
   // Pool compartido de inventario — se descuenta conforme se asigna a modelos
   const poolCompartido = {};
@@ -1425,7 +1418,15 @@ function renderCons() {
     return poolCompartido[key] || 0;
   };
 
-  plantas.forEach(pl => {
+  // Ejecuta el cálculo de todas las plantas/modelos. Es EXACTAMENTE la misma
+  // lógica de siempre (pool, prioridad, Bundle, etc.) sin ninguna modificación.
+  // Se ejecuta DOS VECES: la primera en modo silencioso (silencioso=true) solo
+  // para llenar faltanteAcumuladoPorPN con el faltante real de cada modelo;
+  // la segunda vez (real) ya pinta el HTML usando ese acumulado completo.
+  function procesarPlantas(silencioso) {
+    let htmlLocal = '';
+    let hayAlgoLocal = false;
+    plantas.forEach(pl => {
     // Resetear pool al inicio de cada planta para calcular independiente por planta
     const poolPlanta = {};
     BOM.forEach(r => {
@@ -1589,7 +1590,13 @@ function renderCons() {
 
       const totalPedir = [...rowsCalc, ...bundleCalc].reduce((s,r) => s + (r.aPedir||0), 0);
       const totalFaltantes = rowsActual.length + bundleCalc.filter(r=>r.aPedir>0).length;
-      hayAlgo = true;
+      hayAlgoLocal = true;
+
+      // Acumular el faltante REAL (sin 10%) de este modelo hacia el consolidado por PN.
+      // Solo se acumula si aPedir>0 (es decir, ese modelo de verdad necesita pedir ese PN),
+      // para no contar de más componentes donde el bundle/header ya cubrió el target.
+      rowsCalc.filter(r => r.aPedir > 0).forEach(r => sumarFaltantePN(r.pn, r.desc, r.falta, silencioso));
+      bundleCalc.filter(r => r.aPedir > 0).forEach(r => sumarFaltantePN(r.pn, r.desc, r.falta, silencioso));
 
       // Capturar datos exactos para que el Excel sea espejo de lo mostrado en pantalla
       if (!window.consolidadoData[pl.key]) window.consolidadoData[pl.key] = {};
@@ -1599,16 +1606,15 @@ function renderCons() {
 
       const renderRow = (r, i, color) => {
         const keyPN = (r.pn||'').trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-        const reqTotal = requeridoTotalPorPN[keyPN] || 0;
-        const invFisico = invFisicoPorPN[keyPN] || 0;
-        const deficitTotal = invFisico - reqTotal;
+        const faltanteConsolidado = faltanteAcumuladoPorPN[keyPN] || 0;
+        const aPedirConsolidado = faltanteConsolidado > 0 ? Math.ceil(faltanteConsolidado * EXTRA) : 0;
         return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
         <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${r.pn}</td>
         <td style="font-size:12px">${r.desc}</td>
         <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
         <td style="text-align:right;color:${r.falta>0?'var(--red)':'var(--green)'};font-weight:600">${r.falta>0?'-'+r.falta.toLocaleString():'+'+Math.abs(r.falta).toLocaleString()}</td>
         <td style="text-align:right;color:${r.aPedir>0?'var(--amber)':'var(--text)'};font-weight:700">${r.aPedir>0?r.aPedir.toLocaleString():'—'}</td>
-        <td style="text-align:right;color:${deficitTotal>=0?'var(--green)':'var(--red)'};font-weight:700">${deficitTotal>=0?'+':''}${deficitTotal.toLocaleString()}</td>
+        <td style="text-align:right;color:${aPedirConsolidado>0?'var(--amber)':'var(--text2)'};font-weight:700" title="Suma del faltante real de todos los modelos que comparten este componente, +10% aplicado una sola vez al final">${aPedirConsolidado>0?aPedirConsolidado.toLocaleString():'—'}</td>
       </tr>`;
       };
 
@@ -1633,7 +1639,7 @@ function renderCons() {
             <th style="text-align:right">Inv. Actual</th>
             <th style="text-align:right">Diferencia</th>
             <th style="text-align:right;color:var(--amber)">A Pedir +10%</th>
-            <th style="text-align:right;color:var(--red)" title="Inventario real menos la suma del requerido de TODOS los modelos activos que comparten este componente">Déficit Total Pool</th>
+            <th style="text-align:right;color:var(--amber)" title="Suma del faltante real (sin 10%) de todos los modelos que comparten este componente, con el +10% aplicado una sola vez al final">A Pedir Consolidado</th>
           </tr></thead><tbody>
           ${bundleCalc.length ? sectionHeader('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
           ${bundleCalc.map((r,i)=>renderRow(r,i,'#a78bfa')).join('')}
@@ -1646,7 +1652,7 @@ function renderCons() {
     });
 
     if (!plantaHtml) return;
-    html += `
+    htmlLocal += `
     <div style="margin-bottom:1.25rem">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
         <span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.label}</span>
@@ -1655,6 +1661,16 @@ function renderCons() {
       ${plantaHtml}
     </div>`;
   });
+  return { htmlLocal, hayAlgoLocal };
+  }
+
+  // PASADA 1 (silenciosa): solo llena faltanteAcumuladoPorPN, descarta el HTML.
+  procesarPlantas(true);
+  // PASADA 2 (real): ahora faltanteAcumuladoPorPN ya está completo con la suma
+  // de TODOS los modelos, así que la columna consolidada en cada fila sale correcta.
+  const resultado = procesarPlantas(false);
+  html = resultado.htmlLocal;
+  hayAlgo = resultado.hayAlgoLocal;
 
   if (!hayAlgo) {
     const anyTarget = modelos.some(sm => (simTargetsPorModelo[sm]||0) > 0);

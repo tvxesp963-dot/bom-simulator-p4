@@ -1418,6 +1418,19 @@ function renderCons() {
     return poolCompartido[key] || 0;
   };
 
+  // Pool de inventario por PN+Desc — GLOBAL a todas las plantas (P1, P3, P4, ALIBER).
+  // Antes se reiniciaba dentro de cada planta, lo que hacía que un mismo PN
+  // (ej. 46504A, que aparece tanto en P1 como en P4) se calculara con inventario
+  // "fresco" en cada planta por separado, en vez de un solo pool real compartido.
+  // Ahora se calcula UNA SOLA VEZ aquí y se va descontando conforme avanzan
+  // P1 → P3 → P4 → ALIBER, en el mismo orden en que ya se procesan las plantas.
+  const poolPlantaGlobal = {};
+  BOM.forEach(r => {
+    if (!r.pn) return;
+    const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    if (poolPlantaGlobal[key] === undefined) poolPlantaGlobal[key] = r.inv || 0;
+  });
+
   // Ejecuta el cálculo de todas las plantas/modelos. Es EXACTAMENTE la misma
   // lógica de siempre (pool, prioridad, Bundle, etc.) sin ninguna modificación.
   // Se ejecuta DOS VECES: la primera en modo silencioso (silencioso=true) solo
@@ -1426,15 +1439,12 @@ function renderCons() {
   function procesarPlantas(silencioso) {
     let htmlLocal = '';
     let hayAlgoLocal = false;
+    // El pool parte de una copia fresca del inventario real en CADA pasada completa
+    // (pasada 1 silenciosa, pasada 2 real) — así ambas pasadas calculan exactamente
+    // lo mismo. Pero DENTRO de una misma pasada, el pool YA NO se reinicia por
+    // planta: se comparte y se va descontando de forma continua P1 → P3 → P4 → ALIBER.
+    const poolPlanta = { ...poolPlantaGlobal };
     plantas.forEach(pl => {
-    // Resetear pool al inicio de cada planta para calcular independiente por planta
-    const poolPlanta = {};
-    BOM.forEach(r => {
-      if (!r.pn) return;
-      const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-      if (poolPlanta[key] === undefined) poolPlanta[key] = r.inv || 0;
-    });
-
     let plantaHtml = '';
     modelos.forEach(sm => {
       const target = modeloTargets[sm] || 0;

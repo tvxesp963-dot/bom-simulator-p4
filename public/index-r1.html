@@ -266,21 +266,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </table>
       </div>
     </div>
-
-    <!-- COMPARACIÓN MULTI-MODELO -->
-    <div class="card" style="margin-top:1rem">
-      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
-        <span>📊 Analizar varios modelos</span>
-        <span id="multiCount" style="font-size:11px;color:var(--text2)"></span>
-      </div>
-      <div style="display:flex;gap:.5rem;margin-bottom:.7rem;flex-wrap:wrap">
-        <select class="select" id="multiModeloSel" style="flex:1;min-width:200px">
-          <option value="">— Agregar modelo a analizar —</option>
-        </select>
-        <button class="btn btn-secondary btn-sm" onclick="agregarModeloMulti()">+ Agregar</button>
-      </div>
-      <div id="multiModelosWrap"></div>
-    </div>
   </div>
 </div>
 
@@ -599,173 +584,6 @@ function toggleTree(idx) {
 }
 
 // SIMULADOR
-// ── COMPARACIÓN MULTI-MODELO (no modifica lógica existente del Simulador) ──
-let multiModelosActivos = [];
-window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
-
-function agregarModeloMulti() {
-  const sel = document.getElementById('multiModeloSel');
-  const sm = (sel.value || '').trim();
-  if (!sm) return;
-  if (!multiModelosActivos.includes(sm)) {
-    multiModelosActivos.push(sm);
-    // Si el modelo no tiene target guardado, usar el target del BOM como default
-    if (simTargetsPorModelo[sm] === undefined) {
-      const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
-      simTargetsPorModelo[sm] = bomTarget;
-    }
-    // Prioridad default = siguiente número disponible (orden de llegada)
-    if (window.simPrioridadPorModelo[sm] === undefined) {
-      window.simPrioridadPorModelo[sm] = multiModelosActivos.length;
-    }
-  }
-  sel.value = '';
-  renderMultiModelos();
-}
-
-function quitarModeloMulti(sm) {
-  multiModelosActivos = multiModelosActivos.filter(m => m !== sm);
-  // Poner target en 0 para que el Consolidado deje de procesar este modelo
-  simTargetsPorModelo[sm] = 0;
-  renderMultiModelos();
-  if (typeof renderCons === 'function') renderCons();
-}
-
-function actualizarTargetMulti(sm, valor) {
-  simTargetsPorModelo[sm] = parseInt(valor) || 0;
-  renderMultiModelos();
-  if (typeof renderCons === 'function') renderCons();
-}
-
-function actualizarPrioridadMulti(sm, valor) {
-  window.simPrioridadPorModelo[sm] = parseInt(valor) || 999;
-  renderMultiModelos();
-  if (typeof renderCons === 'function') renderCons();
-}
-
-// Captura el HTML de detalle de un modelo reutilizando calcSim() de forma segura,
-// sin alterar la selección activa del Simulador principal
-function calcularDetalleModeloMulti(sm) {
-  const selPrincipal = document.getElementById('simModelo');
-  const targetPrincipal = document.getElementById('simTarget');
-  const smOriginal = selPrincipal.value;
-  const targetOriginal = targetPrincipal.value;
-
-  selPrincipal.value = sm;
-  targetPrincipal.value = simTargetsPorModelo[sm] || 0;
-  calcSim();
-  const html = document.getElementById('simTable').innerHTML;
-
-  // Restaurar el Simulador principal exactamente como estaba
-  selPrincipal.value = smOriginal;
-  targetPrincipal.value = targetOriginal;
-  calcSim();
-
-  return html;
-}
-
-function renderMultiModeloDetalle(sm) {
-  const tbody = document.getElementById('multiTable-' + sm.replace(/[^a-zA-Z0-9]/g, '_'));
-  if (!tbody) return;
-  tbody.innerHTML = calcularDetalleModeloMulti(sm);
-}
-
-// Calcula el detalle de TODOS los modelos activos en orden de PRIORIDAD,
-// descontando temporalmente el inventario de BOM conforme cada modelo lo consume
-// (mismo PN compartido entre modelos). Restaura BOM a su estado original al final.
-function calcularTodosMultiModeloConPool() {
-  const ordenados = [...multiModelosActivos].sort((a, b) => {
-    const pa = window.simPrioridadPorModelo[a] || 999;
-    const pb = window.simPrioridadPorModelo[b] || 999;
-    return pa - pb;
-  });
-
-  // Guardar inventario original de TODAS las filas del BOM para restaurar después
-  const invOriginal = new Map();
-  BOM.forEach(r => { if (!invOriginal.has(r)) invOriginal.set(r, r.inv); });
-
-  const resultados = {};
-  ordenados.forEach(sm => {
-    resultados[sm] = calcularDetalleModeloMulti(sm);
-    // Después de calcular este modelo, descontar del BOM (mismo PN) lo que este modelo tomó,
-    // para que el siguiente modelo (menor prioridad) vea el inventario ya reducido
-    const target = simTargetsPorModelo[sm] || 0;
-    const filasModelo = BOM.filter(r => r.sm === sm);
-    filasModelo.forEach(rowModelo => {
-      const pn = (rowModelo.pn||'').trim().toUpperCase();
-      const desc = (rowModelo.desc||'').trim().toUpperCase();
-      // Encontrar TODAS las filas de BOM (de cualquier modelo) con el mismo PN+desc (componente compartido)
-      BOM.forEach(r => {
-        if ((r.pn||'').trim().toUpperCase() === pn && (r.desc||'').trim().toUpperCase() === desc) {
-          const tomar = Math.min(r.inv || 0, target);
-          r.inv = Math.max(0, (r.inv || 0) - tomar);
-        }
-      });
-    });
-  });
-
-  // Restaurar inventario original del BOM (no dejar el descuento permanente)
-  invOriginal.forEach((inv, r) => { r.inv = inv; });
-
-  return { ordenados, resultados };
-}
-
-function renderMultiModelos() {
-  const wrap = document.getElementById('multiModelosWrap');
-  const countEl = document.getElementById('multiCount');
-  if (!wrap) return;
-  if (countEl) countEl.textContent = multiModelosActivos.length ? `${multiModelosActivos.length} modelo(s) activo(s)` : '';
-
-  if (!multiModelosActivos.length) {
-    wrap.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:12px">Agrega modelos arriba para analizarlos. Si comparten componentes, asigna prioridad para repartir el inventario disponible.</div>`;
-    return;
-  }
-
-  const { ordenados, resultados } = calcularTodosMultiModeloConPool();
-
-  wrap.innerHTML = ordenados.map((sm, idx) => {
-    const safeId = sm.replace(/[^a-zA-Z0-9]/g, '_');
-    return `
-      <div class="card" style="margin-top:.7rem;border:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem">
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <span style="font-size:10px;color:var(--text3);background:var(--bg2);border-radius:4px;padding:2px 6px">#${idx+1}</span>
-            <span style="font-weight:600;font-size:14px">${sm}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <label style="font-size:11px;color:var(--text2)">Prioridad</label>
-            <input class="input" type="number" style="width:60px" value="${window.simPrioridadPorModelo[sm] || 999}" onchange="actualizarPrioridadMulti('${sm.replace(/'/g, "\\'")}', this.value)" title="Modelo con prioridad menor toma el inventario compartido primero">
-            <label style="font-size:11px;color:var(--text2)">Target</label>
-            <input class="input" type="number" style="width:90px" value="${simTargetsPorModelo[sm] || 0}" onchange="actualizarTargetMulti('${sm.replace(/'/g, "\\'")}', this.value)">
-            <button class="btn btn-secondary btn-sm" onclick="quitarModeloMulti('${sm.replace(/'/g, "\\'")}')" title="Quitar del análisis">✕</button>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;font-size:12px">
-            <thead><tr>
-              <th style="width:110px">N° Parte</th>
-              <th>Descripción</th>
-              <th style="width:70px;text-align:center">Familia</th>
-              <th style="width:60px;text-align:center">Destino</th>
-              <th style="width:100px;text-align:right">Inventario</th>
-              <th style="width:100px;text-align:right">Requerido</th>
-              <th style="width:100px;text-align:right">Diferencia</th>
-              <th style="width:90px;text-align:center">Estado</th>
-            </tr></thead>
-            <tbody id="multiTable-${safeId}"></tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  // Pintar el detalle ya calculado (en orden de prioridad, con pool ya descontado)
-  ordenados.forEach(sm => {
-    const tbody = document.getElementById('multiTable-' + sm.replace(/[^a-zA-Z0-9]/g, '_'));
-    if (tbody) tbody.innerHTML = resultados[sm];
-  });
-}
-
 function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))].sort();
   const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))].sort();
@@ -781,13 +599,6 @@ function renderSim() {
   const smActual = sel.value;
   sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
   if (smActual && modelos.includes(smActual)) sel.value = smActual;
-
-  // Poblar select de comparación multi-modelo (no afecta el select principal)
-  const selMulti = document.getElementById('multiModeloSel');
-  if (selMulti) {
-    selMulti.innerHTML = '<option value="">— Agregar modelo a analizar —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
-  }
-  renderMultiModelos();
 
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
@@ -1371,12 +1182,8 @@ function renderCons() {
     {key:'P4',    label:'P4 — Planta 4', sub:'Gift Box Top · Lower Box Bottom (S1-S4)', color:'rgba(0,188,212,.12)', bc:'rgba(0,188,212,.4)',   tc:'#00BCD4'},
     {key:'ALIBER',label:'ALIBER',        sub:'Pulp Tray · Data Cable · Ejection Pin',   color:'rgba(255,179,0,.1)',  bc:'rgba(255,179,0,.3)',   tc:'var(--amber)'}
   ];
-  // Obtener todos los modelos con su target, ordenados por PRIORIDAD (menor número = toma inventario compartido primero)
-  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean).sort((a, b) => {
-    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
-    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
-    return pa - pb;
-  });
+  // Obtener todos los modelos con su target
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const modeloTargets = {};
   modelos.forEach(sm => {
     modeloTargets[sm] = simTargetsPorModelo[sm] || 0;
@@ -1385,25 +1192,6 @@ function renderCons() {
   let html = '';
   let hayAlgo = false;
   window.consolidadoData = {};
-
-  // Requerido TOTAL por PN+Desc sumando los targets de TODOS los modelos activos
-  // (independiente de planta) — esto es lo que permite ver el déficit real del
-  // pool compartido cuando un mismo componente lo usan varios modelos a la vez.
-  const requeridoTotalPorPN = {};
-  modelos.forEach(sm => {
-    const target = modeloTargets[sm] || 0;
-    if (!target) return;
-    BOM.filter(r => r.sm === sm).forEach(r => {
-      const key = (r.pn||'').trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-      requeridoTotalPorPN[key] = (requeridoTotalPorPN[key] || 0) + target;
-    });
-  });
-  // Inventario físico real (una sola vez) por PN+Desc, para comparar contra el requerido total
-  const invFisicoPorPN = {};
-  BOM.forEach(r => {
-    const key = (r.pn||'').trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-    if (invFisicoPorPN[key] === undefined) invFisicoPorPN[key] = r.inv || 0;
-  });
 
   // Pool compartido de inventario — se descuenta conforme se asigna a modelos
   const poolCompartido = {};
@@ -1448,25 +1236,14 @@ function renderCons() {
       const giftBoxCC_inv = giftBoxCC ? (giftBoxCC.inv||0) : 0;
       const lowerBoxCC_inv = lowerBoxCC ? (lowerBoxCC.inv||0) : 0;
 
-      // GH90 para P3: Bundle (ensamble padre, header terminado) y MANUAL BUNDLE (insumo con inventario real en P3)
+      // GH90 para P3: Bundle (ensamble padre) y MANUAL BUNDLE (insumo con inventario real en P3)
       const bundleRows = pl.key === 'P3'
         ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'))
         : [];
 
-      // Header real del Bundle (terminado, sin "MANUAL") — su inventario decide si ya está cubierto, igual que el Simulador
-      const bundleHeaderRow = bundleRows.find(r => (r.desc||'').toUpperCase() === 'BUNDLE' || ((r.desc||'').toUpperCase().includes('BUNDLE') && !(r.desc||'').toUpperCase().includes('MANUAL')));
-      const bundleHeaderInvDisp = bundleHeaderRow ? (poolPlanta[(bundleHeaderRow.pn||'').trim().toUpperCase()+'||'+(bundleHeaderRow.desc||'').trim().toUpperCase()] ?? (bundleHeaderRow.inv||0)) : 0;
-
       // MANUAL BUNDLE es el que tiene el inventario real de avance en P3 (Bundle header normalmente vive en IMS P4 = 0)
       const bundle = bundleRows.find(r => (r.desc||'').toUpperCase().includes('MANUAL BUNDLE')) || bundleRows[0];
       const bundleInvDisp = bundle ? (poolPlanta[(bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase()] ?? (bundle.inv||0)) : 0;
-
-      // Si el HEADER del Bundle (terminado) ya cubre el target, NADA de este grupo se pide (ni MANUAL BUNDLE ni sus componentes)
-      if (pl.key === 'P3' && bundleHeaderRow && bundleHeaderInvDisp >= target && target > 0) {
-        const keyH = (bundleHeaderRow.pn||'').trim().toUpperCase()+'||'+(bundleHeaderRow.desc||'').trim().toUpperCase();
-        poolPlanta[keyH] = Math.max(0, (poolPlanta[keyH]||0) - target);
-        return;
-      }
 
       if (pl.key === 'P3' && bundle && bundleInvDisp >= target) {
         const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
@@ -1478,22 +1255,11 @@ function renderCons() {
       // P3: necesitaProducir = target - bundle inv
       const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundleInvDisp) : target;
 
-      // Pool compartido para headers (Gift Box / Lower Box): el inventario disponible se descuenta
-      // conforme cada modelo lo va tomando, en el mismo orden en que se procesan los modelos
-      const keyGiftBox = giftBoxCC ? (giftBoxCC.pn||'').trim().toUpperCase()+'||'+(giftBoxCC.desc||'').trim().toUpperCase() : null;
-      const keyLowerBox = lowerBoxCC ? (lowerBoxCC.pn||'').trim().toUpperCase()+'||'+(lowerBoxCC.desc||'').trim().toUpperCase() : null;
-      const giftBoxInvDisp = keyGiftBox ? (poolPlanta[keyGiftBox] ?? giftBoxCC_inv) : giftBoxCC_inv;
-      const lowerBoxInvDisp = keyLowerBox ? (poolPlanta[keyLowerBox] ?? lowerBoxCC_inv) : lowerBoxCC_inv;
-
-      // P1: targetReal por grupo usando header (Gift Box / Lower Box) — usando inventario YA disponible del pool
+      // P1: targetReal por grupo usando header (Gift Box / Lower Box)
       // Gift Box group targetReal
-      const targetRealTop = Math.max(0, target - giftBoxInvDisp);
+      const targetRealTop = Math.max(0, target - giftBoxCC_inv);
       // Lower Box group targetReal
-      const targetRealBot = Math.max(0, target - lowerBoxInvDisp);
-
-      // Descontar del pool lo que este modelo toma del header (Gift Box / Lower Box)
-      if (keyGiftBox) poolPlanta[keyGiftBox] = Math.max(0, giftBoxInvDisp - Math.min(giftBoxInvDisp, target));
-      if (keyLowerBox) poolPlanta[keyLowerBox] = Math.max(0, lowerBoxInvDisp - Math.min(lowerBoxInvDisp, target));
+      const targetRealBot = Math.max(0, target - lowerBoxCC_inv);
 
       // Descontar Bundle del pool
       if (bundle) {
@@ -1521,15 +1287,10 @@ function renderCons() {
       };
 
       // Sheet: inventario real = físico + ya incorporado en header
-      // Header (Gift Box/Lower Box): usar inventario del pool compartido (ya descontado entre modelos)
       const getInvReal = (r) => {
         const d = (r.desc||'').toUpperCase();
-        const isHeaderGift = d.includes('GIFT BOX') && !d.includes('SHEET');
-        const isHeaderLower = d.includes('LOWER BOX') && !d.includes('SHEET');
-        if (isHeaderGift) return giftBoxInvDisp;
-        if (isHeaderLower) return lowerBoxInvDisp;
-        if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxInvDisp; }
-        if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxInvDisp; }
+        if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxCC_inv; }
+        if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxCC_inv; }
         return r.inv||0;
       };
 
@@ -1563,17 +1324,13 @@ function renderCons() {
       const rowsCalc = rowsActual.map(r => {
         const d2 = (r.desc||'').toUpperCase();
         // Solo el header exacto (no Sheet Lower Box que también contiene LOWER BOX)
-        const isHeaderGift = d2.includes('GIFT BOX') && !d2.includes('SHEET');
-        const isHeaderLower = d2.includes('LOWER BOX') && !d2.includes('SHEET');
-        const isHeader = isHeaderGift || isHeaderLower;
+        const isHeader = (d2.includes('GIFT BOX') && !d2.includes('SHEET')) || 
+                         (d2.includes('LOWER BOX') && !d2.includes('SHEET'));
         const tgt = isHeader ? target : getTargetReal(r);
-        // Para diferencia usar inventario disponible del pool compartido (ya descontado entre modelos)
-        const invParaDiff = isHeaderGift ? giftBoxInvDisp : isHeaderLower ? lowerBoxInvDisp : getInvReal(r);
-        // Para mostrar en columna inventario: header usa el disponible del pool; otros, el físico del IMS
-        const d3 = (r.desc||'').toUpperCase();
-        const isHG = d3.includes('GIFT BOX') && !d3.includes('SHEET');
-        const isHL = d3.includes('LOWER BOX') && !d3.includes('SHEET');
-        const invDisplay = isHG ? giftBoxInvDisp : isHL ? lowerBoxInvDisp : (r.inv || 0);
+        // Para diferencia usar inventario real (fisico + ya producido en header)
+        const invParaDiff = isHeader ? (r.inv||0) : getInvReal(r);
+        // Para mostrar en columna inventario: siempre el fisico del IMS
+        const invDisplay = r.inv || 0;
         const falta = tgt - invParaDiff;
         return {...r, inv: invDisplay, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
       });
@@ -1597,23 +1354,16 @@ function renderCons() {
       const normalRowsMarked = rowsCalc.filter(r => r.aPedir > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
       window.consolidadoData[pl.key][sm] = { target, rows: [...bundleRowsMarked, ...normalRowsMarked] };
 
-      const renderRow = (r, i, color) => {
-        const keyPN = (r.pn||'').trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-        const reqTotal = requeridoTotalPorPN[keyPN] || 0;
-        const invFisico = invFisicoPorPN[keyPN] || 0;
-        const deficitTotal = invFisico - reqTotal;
-        return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
+      const renderRow = (r, i, color) => `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
         <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${r.pn}</td>
         <td style="font-size:12px">${r.desc}</td>
         <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
         <td style="text-align:right;color:${r.falta>0?'var(--red)':'var(--green)'};font-weight:600">${r.falta>0?'-'+r.falta.toLocaleString():'+'+Math.abs(r.falta).toLocaleString()}</td>
         <td style="text-align:right;color:${r.aPedir>0?'var(--amber)':'var(--text)'};font-weight:700">${r.aPedir>0?r.aPedir.toLocaleString():'—'}</td>
-        <td style="text-align:right;color:${deficitTotal>=0?'var(--green)':'var(--red)'};font-weight:700">${deficitTotal>=0?'+':''}${deficitTotal.toLocaleString()}</td>
       </tr>`;
-      };
 
       const sectionHeader = (label, bg, tc) => `<tr style="background:${bg}">
-        <td colspan="6" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
+        <td colspan="5" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
       </tr>`;
 
       plantaHtml += `
@@ -1627,13 +1377,12 @@ function renderCons() {
         </div>
         <div style="overflow-x:auto">
         <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
-          <colgroup><col style="width:15%"><col style="width:28%"><col style="width:12%"><col style="width:12%"><col style="width:16%"><col style="width:17%"></colgroup>
+          <colgroup><col style="width:18%"><col style="width:34%"><col style="width:14%"><col style="width:14%"><col style="width:20%"></colgroup>
           <thead><tr style="font-size:10px">
             <th>N° Parte</th><th>Descripción</th>
             <th style="text-align:right">Inv. Actual</th>
             <th style="text-align:right">Diferencia</th>
             <th style="text-align:right;color:var(--amber)">A Pedir +10%</th>
-            <th style="text-align:right;color:var(--red)" title="Inventario real menos la suma del requerido de TODOS los modelos activos que comparten este componente">Déficit Total Pool</th>
           </tr></thead><tbody>
           ${bundleCalc.length ? sectionHeader('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
           ${bundleCalc.map((r,i)=>renderRow(r,i,'#a78bfa')).join('')}

@@ -884,6 +884,9 @@ function componenteNecesario(r, sm, target, poolOverride) {
   // inventario propio del modelo, exactamente como siempre.
   const giftInv   = (poolOverride && poolOverride.gift !== undefined) ? poolOverride.gift : inv(giftBox);
   const lowerInv  = (poolOverride && poolOverride.lower !== undefined) ? poolOverride.lower : inv(lowerBox);
+  // Igual que Gift/Lower: en el Consolidado, el Ranurado Bottom ya viene
+  // repartido en cascada entre modelos — se usa ese valor en vez del crudo.
+  const botRanInvReal = (poolOverride && poolOverride.botRanurado !== undefined) ? poolOverride.botRanurado : botRanInv;
 
   // targetReal por grupo = target - lo ya producido en el header
   const targetRealTop = Math.max(0, target - giftInv);
@@ -892,7 +895,7 @@ function componenteNecesario(r, sm, target, poolOverride) {
   // Virgen TOP innecesario si Ranurado TOP cubre el targetReal del grupo
   if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= targetRealTop) return false;
   // Virgen BOT innecesario si Ranurado BOT cubre el targetReal del grupo
-  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInv >= targetRealBot) return false;
+  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInvReal >= targetRealBot) return false;
   // Sheet Top Box innecesario si Gift Box cubre el target completo
   if (d.includes('SHEET TOP') && giftInv >= target) return false;
   // Gift Box innecesario si tiene inventario suficiente
@@ -1527,6 +1530,17 @@ function renderCons() {
       const giftBoxInvDisp = keyGiftBox ? (poolPlanta[keyGiftBox] ?? giftBoxCC_inv) : giftBoxCC_inv;
       const lowerBoxInvDisp = keyLowerBox ? (poolPlanta[keyLowerBox] ?? lowerBoxCC_inv) : lowerBoxCC_inv;
 
+      // Pool en cascada para Chip Board BOTTOM (Virgen y Ranurado por separado —
+      // son dos etapas distintas del mismo material, cada una con su propia
+      // cantidad, confirmado con Octavio: no se mezclan entre sí). El remanente
+      // que deja Prioridad 1 después de cubrir su target pasa a Prioridad 2,
+      // y lo que sobre de ahí pasa a Prioridad 3 — misma cascada que Gift Box.
+      const botVirC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('VIRGEN'));
+      const keyBotVirgen = botVirC ? keyPool(botVirC.pn, botVirC.desc) : null;
+      const keyBotRanurado = botRanC ? keyPool(botRanC.pn, botRanC.desc) : null;
+      const botVirgenInvDisp = keyBotVirgen ? (poolPlanta[keyBotVirgen] ?? (botVirC.inv||0)) : (botVirC ? (botVirC.inv||0) : 0);
+      const botRanuradoInvDisp = keyBotRanurado ? (poolPlanta[keyBotRanurado] ?? botRanCC) : botRanCC;
+
       // P1: targetReal por grupo usando header (Gift Box / Lower Box) — usando inventario YA disponible del pool
       // Gift Box group targetReal
       const targetRealTop = Math.max(0, target - giftBoxInvDisp);
@@ -1539,6 +1553,13 @@ function renderCons() {
       if (!yaDescontadoPorModelo.has(modeloKey)) {
         if (keyGiftBox) poolPlanta[keyGiftBox] = Math.max(0, giftBoxInvDisp - Math.min(giftBoxInvDisp, target));
         if (keyLowerBox) poolPlanta[keyLowerBox] = Math.max(0, lowerBoxInvDisp - Math.min(lowerBoxInvDisp, target));
+        // Chip Board Bottom: el target real de cada etapa ya considera lo que
+        // cubre la otra (Virgen resta lo que Ranurado ya cubre) — se descuenta
+        // contra ese target real de cada etapa, no contra el target completo.
+        const targetRealBotParaDescuento = Math.max(0, target - lowerBoxInvDisp);
+        if (keyBotRanurado) poolPlanta[keyBotRanurado] = Math.max(0, botRanuradoInvDisp - Math.min(botRanuradoInvDisp, targetRealBotParaDescuento));
+        const targetVirgenDescuento = Math.max(0, targetRealBotParaDescuento - botRanuradoInvDisp);
+        if (keyBotVirgen) poolPlanta[keyBotVirgen] = Math.max(0, botVirgenInvDisp - Math.min(botVirgenInvDisp, targetVirgenDescuento));
       }
 
       // Descontar Bundle del pool — también solo una vez por modelo
@@ -1559,7 +1580,7 @@ function renderCons() {
         // Chip Board: Ranurado usa targetReal completo; Virgen resta lo que Ranurado ya cubre
         const esVirgenChip = (d.includes('VIRGEN') || d.includes('VIRGIN'));
         if (d.includes('CHIP BOARD TOP')) return esVirgenChip ? Math.max(0, targetRealTop - topRanCC) : targetRealTop;
-        if (d.includes('CHIP BOARD BOTTOM')) return esVirgenChip ? Math.max(0, targetRealBot - botRanCC) : targetRealBot;
+        if (d.includes('CHIP BOARD BOTTOM')) return esVirgenChip ? Math.max(0, targetRealBot - botRanuradoInvDisp) : targetRealBot;
         // Sheet usa target completo (la diferencia se calcula con inv real = fisico + ya producido)
         if (d.includes('SHEET TOP') || d.includes('SHEET LOWER')) return target;
         if (pl.key === 'P3') return necesitaProducir;
@@ -1580,11 +1601,15 @@ function renderCons() {
         if (isHeaderLower) return lowerBoxInvDisp;
         if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxInvDisp; }
         if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxInvDisp; }
+        // Chip Board Bottom: usar el pool en cascada (remanente entre modelos),
+        // no el inventario crudo de cada modelo por separado.
+        if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO')) return botRanuradoInvDisp;
+        if (d.includes('CHIP BOARD BOTTOM') && (d.includes('VIRGEN') || d.includes('VIRGIN'))) return botVirgenInvDisp;
         return r.inv||0;
       };
 
       // P4: Gift Box y Lower Box producidos internamente — mismo calculo que P1 headers
-      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target, {gift: giftBoxInvDisp, lower: lowerBoxInvDisp}))
+      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target, {gift: giftBoxInvDisp, lower: lowerBoxInvDisp, botRanurado: botRanuradoInvDisp}))
         .filter(r => {
           const tgt = getTargetReal(r);
           const inv = getInvReal(r);
@@ -1597,7 +1622,8 @@ function renderCons() {
             const tgtGrupo = esTop ? targetRealTop : targetRealBot;
             const grupoKey = esTop ? 'CHIP BOARD TOP' : 'CHIP BOARD BOTTOM';
             const ranurado = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(grupoKey) && ((b.desc||'').toUpperCase().includes('RANURADO') || (b.desc||'').toUpperCase().includes('GROOVING')));
-            const ranuradoInv = ranurado ? (ranurado.inv||0) : 0;
+            // Bottom usa el pool en cascada (botRanuradoInvDisp); Top sigue igual que antes (sin tocar, por instrucción de Octavio)
+            const ranuradoInv = esTop ? (ranurado ? (ranurado.inv||0) : 0) : botRanuradoInvDisp;
             // Virgen: excluir si ranurado solo cubre (no se necesita procesar)
             if (esVirgen && ranuradoInv >= tgtGrupo) return false;
             // Ranurado: nunca se compra aparte — si hay faltante, se cubre comprando Virgen (que se ranura)

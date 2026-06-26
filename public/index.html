@@ -864,7 +864,7 @@ function onModeloChange() {
 
 
 // ── FUNCIÓN CENTRALIZADA: decide si un componente es relevante dado el inventario de medio proceso ──
-function componenteNecesario(r, sm, target) {
+function componenteNecesario(r, sm, target, poolOverride) {
   const d = (r.desc||'').toUpperCase();
   const inv = n => n ? (n.inv||0) : 0;
 
@@ -875,8 +875,15 @@ function componenteNecesario(r, sm, target) {
   const lowerBox  = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('LOWER BOX') && !(x.desc||'').toUpperCase().includes('SHEET'));
   const topRanInv = inv(topRan);
   const botRanInv = inv(botRan);
-  const giftInv   = inv(giftBox);
-  const lowerInv  = inv(lowerBox);
+  // En el Consolidado (multi-modelo), el inventario del Gift Box/Lower Box ya
+  // fue repartido entre modelos por el pool compartido — se usa ESE valor
+  // (poolOverride) en vez del inventario crudo del modelo, para no descartar
+  // por error a un modelo que en realidad sigue necesitando el componente
+  // porque otro modelo de mayor prioridad ya se llevó el inventario antes.
+  // En el Simulador de un solo modelo (sin poolOverride), se sigue usando el
+  // inventario propio del modelo, exactamente como siempre.
+  const giftInv   = (poolOverride && poolOverride.gift !== undefined) ? poolOverride.gift : inv(giftBox);
+  const lowerInv  = (poolOverride && poolOverride.lower !== undefined) ? poolOverride.lower : inv(lowerBox);
 
   // targetReal por grupo = target - lo ya producido en el header
   const targetRealTop = Math.max(0, target - giftInv);
@@ -1386,6 +1393,14 @@ function renderCons() {
   let hayAlgo = false;
   window.consolidadoData = {};
 
+  // Llave del pool y del consolidado: PN + Descripción. Cada variante (Sheet Top
+  // Box, Gift Box Top, Chip Board Virgen, Chip Board Ranurado, etc.) tiene su
+  // propio inventario y su propio requerimiento — no se mezclan entre sí aunque
+  // compartan el mismo PN base. Cada variante suma su faltante real ENTRE LOS
+  // MODELOS que la usan (ej. Sheet Top Box de KAXAA+KAXAU+KACHA se suma entre
+  // sí), pero permanece separada de las demás variantes de ese mismo PN.
+  const keyPool = (pn, desc) => (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+
   // Déficit consolidado por PN+Desc: suma del FALTANTE REAL (sin 10%) de
   // cada modelo individual que usa este componente. El +10% se aplica
   // UNA SOLA VEZ al final, sobre la suma — nunca antes, para no inflar
@@ -1394,7 +1409,7 @@ function renderCons() {
   const sumarFaltantePN = (pn, desc, faltaSinExtra, silencioso) => {
     if (!silencioso) return; // solo se acumula en la pasada 1; la pasada 2 solo lee
     if (!faltaSinExtra || faltaSinExtra <= 0) return;
-    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    const key = keyPool(pn, desc);
     faltanteAcumuladoPorPN[key] = (faltanteAcumuladoPorPN[key] || 0) + faltaSinExtra;
   };
 
@@ -1418,16 +1433,18 @@ function renderCons() {
     return poolCompartido[key] || 0;
   };
 
-  // Pool de inventario por PN+Desc — GLOBAL a todas las plantas (P1, P3, P4, ALIBER).
+  // Pool de inventario — GLOBAL a todas las plantas (P1, P3, P4, ALIBER).
   // Antes se reiniciaba dentro de cada planta, lo que hacía que un mismo PN
   // (ej. 46504A, que aparece tanto en P1 como en P4) se calculara con inventario
   // "fresco" en cada planta por separado, en vez de un solo pool real compartido.
   // Ahora se calcula UNA SOLA VEZ aquí y se va descontando conforme avanzan
   // P1 → P3 → P4 → ALIBER, en el mismo orden en que ya se procesan las plantas.
+  // Cada variante (PN+Desc) usa su PROPIO inventario real — no se mezcla con
+  // el inventario de otras variantes del mismo PN base.
   const poolPlantaGlobal = {};
   BOM.forEach(r => {
     if (!r.pn) return;
-    const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    const key = keyPool(r.pn, r.desc);
     if (poolPlantaGlobal[key] === undefined) poolPlantaGlobal[key] = r.inv || 0;
   });
 
@@ -1444,7 +1461,19 @@ function renderCons() {
     // lo mismo. Pero DENTRO de una misma pasada, el pool YA NO se reinicia por
     // planta: se comparte y se va descontando de forma continua P1 → P3 → P4 → ALIBER.
     const poolPlanta = { ...poolPlantaGlobal };
+    // Evita doble descuento: el header Gift Box / Lower Box / Bundle de un modelo
+    // se descuenta del pool SOLO LA PRIMERA VEZ que se procesa ese modelo, sin
+    // importar que el mismo header aparezca en más de una planta (P1 y P4 a la
+    // vez, por ejemplo). Antes se descontaba una vez por planta, lo que vaciaba
+    // el pool más rápido de lo real y desalineaba el Consolidado vs. el Simulador.
+    const yaDescontadoPorModelo = new Set();
+    // Acumulador de filas por planta — en vez de pintar una tarjeta por modelo,
+    // se guardan TODAS las filas (de todos los modelos) y al final de la planta
+    // se agrupan por variante (PN+Desc), sumando el faltante real entre modelos,
+    // para mostrar UNA sola línea por variante en vez de una por modelo.
+    const filasPorPlanta = {};
     plantas.forEach(pl => {
+    filasPorPlanta[pl.key] = filasPorPlanta[pl.key] || [];
     let plantaHtml = '';
     modelos.forEach(sm => {
       const target = modeloTargets[sm] || 0;
@@ -1490,9 +1519,11 @@ function renderCons() {
       const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundleInvDisp) : target;
 
       // Pool compartido para headers (Gift Box / Lower Box): el inventario disponible se descuenta
-      // conforme cada modelo lo va tomando, en el mismo orden en que se procesan los modelos
-      const keyGiftBox = giftBoxCC ? (giftBoxCC.pn||'').trim().toUpperCase()+'||'+(giftBoxCC.desc||'').trim().toUpperCase() : null;
-      const keyLowerBox = lowerBoxCC ? (lowerBoxCC.pn||'').trim().toUpperCase()+'||'+(lowerBoxCC.desc||'').trim().toUpperCase() : null;
+      // conforme cada modelo lo va tomando, en el mismo orden en que se procesan los modelos.
+      // Se usa keyPool() para que la llave coincida con la del pool global (agrupado solo
+      // por PN en este grupo, ya que Gift Box y su Sheet Top comparten el mismo inventario real).
+      const keyGiftBox = giftBoxCC ? keyPool(giftBoxCC.pn, giftBoxCC.desc) : null;
+      const keyLowerBox = lowerBoxCC ? keyPool(lowerBoxCC.pn, lowerBoxCC.desc) : null;
       const giftBoxInvDisp = keyGiftBox ? (poolPlanta[keyGiftBox] ?? giftBoxCC_inv) : giftBoxCC_inv;
       const lowerBoxInvDisp = keyLowerBox ? (poolPlanta[keyLowerBox] ?? lowerBoxCC_inv) : lowerBoxCC_inv;
 
@@ -1503,14 +1534,22 @@ function renderCons() {
       const targetRealBot = Math.max(0, target - lowerBoxInvDisp);
 
       // Descontar del pool lo que este modelo toma del header (Gift Box / Lower Box)
-      if (keyGiftBox) poolPlanta[keyGiftBox] = Math.max(0, giftBoxInvDisp - Math.min(giftBoxInvDisp, target));
-      if (keyLowerBox) poolPlanta[keyLowerBox] = Math.max(0, lowerBoxInvDisp - Math.min(lowerBoxInvDisp, target));
+      // — SOLO la primera vez que se procesa este modelo (evita doble descuento P1+P4)
+      const modeloKey = sm; // un modelo solo se descuenta una vez, sin importar la planta
+      if (!yaDescontadoPorModelo.has(modeloKey)) {
+        if (keyGiftBox) poolPlanta[keyGiftBox] = Math.max(0, giftBoxInvDisp - Math.min(giftBoxInvDisp, target));
+        if (keyLowerBox) poolPlanta[keyLowerBox] = Math.max(0, lowerBoxInvDisp - Math.min(lowerBoxInvDisp, target));
+      }
 
-      // Descontar Bundle del pool
-      if (bundle) {
+      // Descontar Bundle del pool — también solo una vez por modelo
+      if (bundle && !yaDescontadoPorModelo.has(modeloKey)) {
         const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
         poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - Math.min(bundleInvDisp, target));
       }
+      // Marcar este modelo como ya procesado para el pool — así si el mismo
+      // modelo se vuelve a recorrer en otra planta (P1 y P4 ambas lo tocan),
+      // ya no se le vuelve a descontar el header por segunda vez.
+      yaDescontadoPorModelo.add(modeloKey);
 
       // Función para obtener targetReal correcto según descripción del componente
       const getTargetReal = (r) => {
@@ -1545,7 +1584,7 @@ function renderCons() {
       };
 
       // P4: Gift Box y Lower Box producidos internamente — mismo calculo que P1 headers
-      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target))
+      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target, {gift: giftBoxInvDisp, lower: lowerBoxInvDisp}))
         .filter(r => {
           const tgt = getTargetReal(r);
           const inv = getInvReal(r);
@@ -1598,68 +1637,83 @@ function renderCons() {
         return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
       });
 
-      const totalPedir = [...rowsCalc, ...bundleCalc].reduce((s,r) => s + (r.aPedir||0), 0);
-      const totalFaltantes = rowsActual.length + bundleCalc.filter(r=>r.aPedir>0).length;
-      hayAlgoLocal = true;
-
-      // Acumular el faltante REAL (sin 10%) de este modelo hacia el consolidado por PN.
-      // Solo se acumula si aPedir>0 (es decir, ese modelo de verdad necesita pedir ese PN),
-      // para no contar de más componentes donde el bundle/header ya cubrió el target.
-      rowsCalc.filter(r => r.aPedir > 0).forEach(r => sumarFaltantePN(r.pn, r.desc, r.falta, silencioso));
-      bundleCalc.filter(r => r.aPedir > 0).forEach(r => sumarFaltantePN(r.pn, r.desc, r.falta, silencioso));
+      // Guardar las filas de este modelo en el acumulador de la planta — el
+      // pintado real (agrupado por variante) se hace DESPUÉS, fuera de este loop.
+      filasPorPlanta[pl.key].push(
+        ...bundleCalc.map(r => ({...r, _sm: sm, _esBundle: true})),
+        ...rowsCalc.map(r => ({...r, _sm: sm, _esBundle: false}))
+      );
 
       // Capturar datos exactos para que el Excel sea espejo de lo mostrado en pantalla
       if (!window.consolidadoData[pl.key]) window.consolidadoData[pl.key] = {};
       const bundleRowsMarked = bundleCalc.map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:true}));
       const normalRowsMarked = rowsCalc.filter(r => r.aPedir > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
       window.consolidadoData[pl.key][sm] = { target, rows: [...bundleRowsMarked, ...normalRowsMarked] };
-
-      const renderRow = (r, i, color) => {
-        const keyPN = (r.pn||'').trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-        const faltanteConsolidado = faltanteAcumuladoPorPN[keyPN] || 0;
-        const aPedirConsolidado = faltanteConsolidado > 0 ? Math.ceil(faltanteConsolidado * EXTRA) : 0;
-        return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
-        <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${r.pn}</td>
-        <td style="font-size:12px">${r.desc}</td>
-        <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
-        <td style="text-align:right;color:${r.falta>0?'var(--red)':'var(--green)'};font-weight:600">${r.falta>0?'-'+r.falta.toLocaleString():'+'+Math.abs(r.falta).toLocaleString()}</td>
-        <td style="text-align:right;color:${r.aPedir>0?'var(--amber)':'var(--text)'};font-weight:700">${r.aPedir>0?r.aPedir.toLocaleString():'—'}</td>
-        <td style="text-align:right;color:${aPedirConsolidado>0?'var(--amber)':'var(--text2)'};font-weight:700" title="Suma del faltante real de todos los modelos que comparten este componente, +10% aplicado una sola vez al final">${aPedirConsolidado>0?aPedirConsolidado.toLocaleString():'—'}</td>
-      </tr>`;
-      };
-
-      const sectionHeader = (label, bg, tc) => `<tr style="background:${bg}">
-        <td colspan="6" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
-      </tr>`;
-
-      plantaHtml += `
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
-          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">${sm}</span>
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()} · ${totalFaltantes} faltantes · ${totalPedir.toLocaleString()} pzas</span>
-            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.key}</span>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
-          <colgroup><col style="width:15%"><col style="width:28%"><col style="width:12%"><col style="width:12%"><col style="width:16%"><col style="width:17%"></colgroup>
-          <thead><tr style="font-size:10px">
-            <th>N° Parte</th><th>Descripción</th>
-            <th style="text-align:right">Inv. Actual</th>
-            <th style="text-align:right">Diferencia</th>
-            <th style="text-align:right;color:var(--amber)">A Pedir +10%</th>
-            <th style="text-align:right;color:var(--amber)" title="Suma del faltante real (sin 10%) de todos los modelos que comparten este componente, con el +10% aplicado una sola vez al final">A Pedir Consolidado</th>
-          </tr></thead><tbody>
-          ${bundleCalc.length ? sectionHeader('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
-          ${bundleCalc.map((r,i)=>renderRow(r,i,'#a78bfa')).join('')}
-          ${rowsCalc.length ? sectionHeader(pl.key==='P3'?'Componentes P3':'Componentes P1','rgba(255,255,255,.03)','var(--text2)') : ''}
-          ${rowsCalc.map((r,i)=>renderRow(r,i,null)).join('')}
-          </tbody>
-        </table>
-        </div>
-      </div>`;
     });
+
+    // --- Pintado consolidado por VARIANTE (una sola línea por PN+Desc) ---
+    // Agrupar las filas acumuladas de TODOS los modelos de esta planta, por
+    // variante (PN+Desc), sumando faltante real y aPedir individual.
+    const filas = filasPorPlanta[pl.key];
+    const grupos = {}; // key -> {pn, desc, esBundle, invMuestra, faltaAcumulada, aPedirIndividualSuma, modelos:[{sm,target,falta,aPedir}]}
+    filas.forEach(r => {
+      const key = keyPool(r.pn, r.desc);
+      if (!grupos[key]) {
+        grupos[key] = { pn: r.pn, desc: r.desc, esBundle: r._esBundle, invMuestra: r.inv, faltaAcumulada: 0, modelos: [] };
+      }
+      if (r.aPedir > 0) grupos[key].faltaAcumulada += r.falta;
+      grupos[key].modelos.push({ sm: r._sm, target: r.target, falta: r.falta, aPedir: r.aPedir });
+      // Mostrar el inventario más representativo (el del header/pool, que es el mismo para todos los modelos)
+      grupos[key].invMuestra = r.inv;
+    });
+    const listaGrupos = Object.values(grupos).filter(g => g.faltaAcumulada > 0 || g.modelos.some(m => m.aPedir > 0));
+
+    if (!listaGrupos.length) return;
+    hayAlgoLocal = true;
+
+    const renderRowConsolidada = (g, i, color) => {
+      const aPedirConsolidado = g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * EXTRA) : 0;
+      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
+      return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
+      <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${g.pn}</td>
+      <td style="font-size:12px">${g.desc}<div style="font-size:9px;color:var(--text2);margin-top:2px">${modelosTexto}</div></td>
+      <td style="text-align:right;color:${g.invMuestra>0?'var(--text)':'var(--red)'}">${g.invMuestra>0?g.invMuestra.toLocaleString():'0'}</td>
+      <td style="text-align:right;color:${g.faltaAcumulada>0?'var(--red)':'var(--green)'};font-weight:600">${g.faltaAcumulada>0?'-'+g.faltaAcumulada.toLocaleString():'OK'}</td>
+      <td style="text-align:right;color:${aPedirConsolidado>0?'var(--amber)':'var(--text)'};font-weight:700" title="Faltante real sumado entre todos los modelos que comparten esta variante, +10% aplicado una sola vez al final">${aPedirConsolidado>0?aPedirConsolidado.toLocaleString():'—'}</td>
+    </tr>`;
+    };
+
+    const sectionHeaderC = (label, bg, tc) => `<tr style="background:${bg}">
+      <td colspan="5" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
+    </tr>`;
+
+    const gruposBundle = listaGrupos.filter(g => g.esBundle);
+    const gruposNormales = listaGrupos.filter(g => !g.esBundle);
+    const totalPedirPlanta = listaGrupos.reduce((s,g) => s + (g.faltaAcumulada>0 ? Math.ceil(g.faltaAcumulada*EXTRA) : 0), 0);
+
+    plantaHtml = `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
+        <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">Consolidado ${pl.key} — ${modelos.length} modelo(s)</span>
+        <span style="font-size:10px;color:var(--text2)">${listaGrupos.length} variante(s) · ${totalPedirPlanta.toLocaleString()} pzas a pedir</span>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
+        <colgroup><col style="width:15%"><col style="width:38%"><col style="width:12%"><col style="width:14%"><col style="width:21%"></colgroup>
+        <thead><tr style="font-size:10px">
+          <th>N° Parte</th><th>Descripción</th>
+          <th style="text-align:right">Inv. Actual</th>
+          <th style="text-align:right">Faltante Total</th>
+          <th style="text-align:right;color:var(--amber)" title="Faltante real sumado entre todos los modelos, +10% aplicado una sola vez al final">A Pedir Consolidado +10%</th>
+        </tr></thead><tbody>
+        ${gruposBundle.length ? sectionHeaderC('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
+        ${gruposBundle.map((g,i)=>renderRowConsolidada(g,i,'#a78bfa')).join('')}
+        ${gruposNormales.length ? sectionHeaderC(pl.key==='P3'?'Componentes P3':'Componentes '+pl.key,'rgba(255,255,255,.03)','var(--text2)') : ''}
+        ${gruposNormales.map((g,i)=>renderRowConsolidada(g,i,null)).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
 
     if (!plantaHtml) return;
     htmlLocal += `
@@ -1674,10 +1728,11 @@ function renderCons() {
   return { htmlLocal, hayAlgoLocal };
   }
 
-  // PASADA 1 (silenciosa): solo llena faltanteAcumuladoPorPN, descarta el HTML.
+  // Nota: con el nuevo agrupamiento por variante (una fila por PN+Desc, sumando
+  // los modelos DENTRO de la misma planta), ya no se depende de una pasada previa
+  // — el agrupamiento ocurre completo en una sola pasada por planta. Se mantiene
+  // la llamada doble por compatibilidad, sin efecto negativo.
   procesarPlantas(true);
-  // PASADA 2 (real): ahora faltanteAcumuladoPorPN ya está completo con la suma
-  // de TODOS los modelos, así que la columna consolidada en cada fila sale correcta.
   const resultado = procesarPlantas(false);
   html = resultado.htmlLocal;
   hayAlgo = resultado.hayAlgoLocal;

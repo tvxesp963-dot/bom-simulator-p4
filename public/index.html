@@ -1645,11 +1645,16 @@ function renderCons() {
         const tgt = isHeader ? target : getTargetReal(r);
         // Para diferencia usar inventario disponible del pool compartido (ya descontado entre modelos)
         const invParaDiff = isHeaderGift ? giftBoxInvDisp : isHeaderLower ? lowerBoxInvDisp : getInvReal(r);
-        // Para mostrar en columna inventario: header usa el disponible del pool; otros, el físico del IMS
+        // Para mostrar en columna inventario: header usa el disponible del pool; Chip Board
+        // Bottom Virgen/Ranurado también usan su pool en cascada (mismo criterio); otros, el físico del IMS
         const d3 = (r.desc||'').toUpperCase();
         const isHG = d3.includes('GIFT BOX') && !d3.includes('SHEET');
         const isHL = d3.includes('LOWER BOX') && !d3.includes('SHEET');
-        const invDisplay = isHG ? giftBoxInvDisp : isHL ? lowerBoxInvDisp : (r.inv || 0);
+        const isBotRanurado = d3.includes('CHIP BOARD BOTTOM') && d3.includes('RANURADO');
+        const isBotVirgen = d3.includes('CHIP BOARD BOTTOM') && (d3.includes('VIRGEN') || d3.includes('VIRGIN'));
+        const invDisplay = isHG ? giftBoxInvDisp : isHL ? lowerBoxInvDisp
+          : isBotRanurado ? botRanuradoInvDisp : isBotVirgen ? botVirgenInvDisp
+          : (r.inv || 0);
         const falta = tgt - invParaDiff;
         return {...r, inv: invDisplay, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
       });

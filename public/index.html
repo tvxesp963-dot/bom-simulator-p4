@@ -1305,6 +1305,10 @@ function renderSimTable() {
         const sheetDiff = sheetInvReal - targetSim2;
         const sheetOK = sheetDiff >= 0;
         if(skipFiltroNecesario || passFilter(s) || !sheetOK) rows.push(rowHTML(s, true, false, null, targetSim2, sheetInvReal));
+        // El "Requerido" mostrado (targetSim2) es solo para el semáforo visual.
+        // El consumo REAL del inventario físico compartido entre modelos es targetReal
+        // (igual que el Ranurado) — se corrige aquí para el pool multi-modelo.
+        s._reqReal = targetReal;
       } else if (esChipBoard) {
         const esRanurado = sDesc.includes('RANURADO') || sDesc.includes('GROOVING');
         const sInv = s.inv || 0;

@@ -266,6 +266,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </table>
       </div>
     </div>
+
+    <!-- COMPARACIÓN MULTI-MODELO -->
+    <div class="card" style="margin-top:1rem">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+        <span>📊 Analizar varios modelos</span>
+        <span id="multiCount" style="font-size:11px;color:var(--text2)"></span>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.7rem;flex-wrap:wrap">
+        <select class="select" id="multiModeloSel" style="flex:1;min-width:200px">
+          <option value="">— Agregar modelo a analizar —</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="agregarModeloMulti()">+ Agregar</button>
+      </div>
+      <div id="multiModelosWrap"></div>
+    </div>
   </div>
 </div>
 
@@ -584,6 +599,173 @@ function toggleTree(idx) {
 }
 
 // SIMULADOR
+// ── COMPARACIÓN MULTI-MODELO (no modifica lógica existente del Simulador) ──
+let multiModelosActivos = [];
+window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
+
+function agregarModeloMulti() {
+  const sel = document.getElementById('multiModeloSel');
+  const sm = (sel.value || '').trim();
+  if (!sm) return;
+  if (!multiModelosActivos.includes(sm)) {
+    multiModelosActivos.push(sm);
+    // Si el modelo no tiene target guardado, usar el target del BOM como default
+    if (simTargetsPorModelo[sm] === undefined) {
+      const bomTarget = BOM.find(r => r.sm === sm)?.target || 0;
+      simTargetsPorModelo[sm] = bomTarget;
+    }
+    // Prioridad default = siguiente número disponible (orden de llegada)
+    if (window.simPrioridadPorModelo[sm] === undefined) {
+      window.simPrioridadPorModelo[sm] = multiModelosActivos.length;
+    }
+  }
+  sel.value = '';
+  renderMultiModelos();
+}
+
+function quitarModeloMulti(sm) {
+  multiModelosActivos = multiModelosActivos.filter(m => m !== sm);
+  // Poner target en 0 para que el Consolidado deje de procesar este modelo
+  simTargetsPorModelo[sm] = 0;
+  renderMultiModelos();
+  if (typeof renderCons === 'function') renderCons();
+}
+
+function actualizarTargetMulti(sm, valor) {
+  simTargetsPorModelo[sm] = parseInt(valor) || 0;
+  renderMultiModelos();
+  if (typeof renderCons === 'function') renderCons();
+}
+
+function actualizarPrioridadMulti(sm, valor) {
+  window.simPrioridadPorModelo[sm] = parseInt(valor) || 999;
+  renderMultiModelos();
+  if (typeof renderCons === 'function') renderCons();
+}
+
+// Captura el HTML de detalle de un modelo reutilizando calcSim() de forma segura,
+// sin alterar la selección activa del Simulador principal
+function calcularDetalleModeloMulti(sm) {
+  const selPrincipal = document.getElementById('simModelo');
+  const targetPrincipal = document.getElementById('simTarget');
+  const smOriginal = selPrincipal.value;
+  const targetOriginal = targetPrincipal.value;
+
+  selPrincipal.value = sm;
+  targetPrincipal.value = simTargetsPorModelo[sm] || 0;
+  calcSim();
+  const html = document.getElementById('simTable').innerHTML;
+
+  // Restaurar el Simulador principal exactamente como estaba
+  selPrincipal.value = smOriginal;
+  targetPrincipal.value = targetOriginal;
+  calcSim();
+
+  return html;
+}
+
+function renderMultiModeloDetalle(sm) {
+  const tbody = document.getElementById('multiTable-' + sm.replace(/[^a-zA-Z0-9]/g, '_'));
+  if (!tbody) return;
+  tbody.innerHTML = calcularDetalleModeloMulti(sm);
+}
+
+// Calcula el detalle de TODOS los modelos activos en orden de PRIORIDAD,
+// descontando temporalmente el inventario de BOM conforme cada modelo lo consume
+// (mismo PN compartido entre modelos). Restaura BOM a su estado original al final.
+function calcularTodosMultiModeloConPool() {
+  const ordenados = [...multiModelosActivos].sort((a, b) => {
+    const pa = window.simPrioridadPorModelo[a] || 999;
+    const pb = window.simPrioridadPorModelo[b] || 999;
+    return pa - pb;
+  });
+
+  // Guardar inventario original de TODAS las filas del BOM para restaurar después
+  const invOriginal = new Map();
+  BOM.forEach(r => { if (!invOriginal.has(r)) invOriginal.set(r, r.inv); });
+
+  const resultados = {};
+  ordenados.forEach(sm => {
+    resultados[sm] = calcularDetalleModeloMulti(sm);
+    // Después de calcular este modelo, descontar del BOM (mismo PN) lo que este modelo tomó,
+    // para que el siguiente modelo (menor prioridad) vea el inventario ya reducido
+    const target = simTargetsPorModelo[sm] || 0;
+    const filasModelo = BOM.filter(r => r.sm === sm);
+    filasModelo.forEach(rowModelo => {
+      const pn = (rowModelo.pn||'').trim().toUpperCase();
+      const desc = (rowModelo.desc||'').trim().toUpperCase();
+      // Encontrar TODAS las filas de BOM (de cualquier modelo) con el mismo PN+desc (componente compartido)
+      BOM.forEach(r => {
+        if ((r.pn||'').trim().toUpperCase() === pn && (r.desc||'').trim().toUpperCase() === desc) {
+          const tomar = Math.min(r.inv || 0, target);
+          r.inv = Math.max(0, (r.inv || 0) - tomar);
+        }
+      });
+    });
+  });
+
+  // Restaurar inventario original del BOM (no dejar el descuento permanente)
+  invOriginal.forEach((inv, r) => { r.inv = inv; });
+
+  return { ordenados, resultados };
+}
+
+function renderMultiModelos() {
+  const wrap = document.getElementById('multiModelosWrap');
+  const countEl = document.getElementById('multiCount');
+  if (!wrap) return;
+  if (countEl) countEl.textContent = multiModelosActivos.length ? `${multiModelosActivos.length} modelo(s) activo(s)` : '';
+
+  if (!multiModelosActivos.length) {
+    wrap.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:12px">Agrega modelos arriba para analizarlos. Si comparten componentes, asigna prioridad para repartir el inventario disponible.</div>`;
+    return;
+  }
+
+  const { ordenados, resultados } = calcularTodosMultiModeloConPool();
+
+  wrap.innerHTML = ordenados.map((sm, idx) => {
+    const safeId = sm.replace(/[^a-zA-Z0-9]/g, '_');
+    return `
+      <div class="card" style="margin-top:.7rem;border:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <span style="font-size:10px;color:var(--text3);background:var(--bg2);border-radius:4px;padding:2px 6px">#${idx+1}</span>
+            <span style="font-weight:600;font-size:14px">${sm}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <label style="font-size:11px;color:var(--text2)">Prioridad</label>
+            <input class="input" type="number" style="width:60px" value="${window.simPrioridadPorModelo[sm] || 999}" onchange="actualizarPrioridadMulti('${sm.replace(/'/g, "\\'")}', this.value)" title="Modelo con prioridad menor toma el inventario compartido primero">
+            <label style="font-size:11px;color:var(--text2)">Target</label>
+            <input class="input" type="number" style="width:90px" value="${simTargetsPorModelo[sm] || 0}" onchange="actualizarTargetMulti('${sm.replace(/'/g, "\\'")}', this.value)">
+            <button class="btn btn-secondary btn-sm" onclick="quitarModeloMulti('${sm.replace(/'/g, "\\'")}')" title="Quitar del análisis">✕</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;font-size:12px">
+            <thead><tr>
+              <th style="width:110px">N° Parte</th>
+              <th>Descripción</th>
+              <th style="width:70px;text-align:center">Familia</th>
+              <th style="width:60px;text-align:center">Destino</th>
+              <th style="width:100px;text-align:right">Inventario</th>
+              <th style="width:100px;text-align:right">Requerido</th>
+              <th style="width:100px;text-align:right">Diferencia</th>
+              <th style="width:90px;text-align:center">Estado</th>
+            </tr></thead>
+            <tbody id="multiTable-${safeId}"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Pintar el detalle ya calculado (en orden de prioridad, con pool ya descontado)
+  ordenados.forEach(sm => {
+    const tbody = document.getElementById('multiTable-' + sm.replace(/[^a-zA-Z0-9]/g, '_'));
+    if (tbody) tbody.innerHTML = resultados[sm];
+  });
+}
+
 function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))].sort();
   const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))].sort();
@@ -599,6 +781,13 @@ function renderSim() {
   const smActual = sel.value;
   sel.innerHTML = '<option value="">— Seleccionar modelo —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
   if (smActual && modelos.includes(smActual)) sel.value = smActual;
+
+  // Poblar select de comparación multi-modelo (no afecta el select principal)
+  const selMulti = document.getElementById('multiModeloSel');
+  if (selMulti) {
+    selMulti.innerHTML = '<option value="">— Agregar modelo a analizar —</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  }
+  renderMultiModelos();
 
   document.getElementById('simEmpty').style.display = 'none';
   document.getElementById('simContent').style.display = 'block';
@@ -675,7 +864,7 @@ function onModeloChange() {
 
 
 // ── FUNCIÓN CENTRALIZADA: decide si un componente es relevante dado el inventario de medio proceso ──
-function componenteNecesario(r, sm, target) {
+function componenteNecesario(r, sm, target, poolOverride) {
   const d = (r.desc||'').toUpperCase();
   const inv = n => n ? (n.inv||0) : 0;
 
@@ -686,8 +875,18 @@ function componenteNecesario(r, sm, target) {
   const lowerBox  = BOM.find(x => x.sm===sm && (x.desc||'').toUpperCase().includes('LOWER BOX') && !(x.desc||'').toUpperCase().includes('SHEET'));
   const topRanInv = inv(topRan);
   const botRanInv = inv(botRan);
-  const giftInv   = inv(giftBox);
-  const lowerInv  = inv(lowerBox);
+  // En el Consolidado (multi-modelo), el inventario del Gift Box/Lower Box ya
+  // fue repartido entre modelos por el pool compartido — se usa ESE valor
+  // (poolOverride) en vez del inventario crudo del modelo, para no descartar
+  // por error a un modelo que en realidad sigue necesitando el componente
+  // porque otro modelo de mayor prioridad ya se llevó el inventario antes.
+  // En el Simulador de un solo modelo (sin poolOverride), se sigue usando el
+  // inventario propio del modelo, exactamente como siempre.
+  const giftInv   = (poolOverride && poolOverride.gift !== undefined) ? poolOverride.gift : inv(giftBox);
+  const lowerInv  = (poolOverride && poolOverride.lower !== undefined) ? poolOverride.lower : inv(lowerBox);
+  // Igual que Gift/Lower: en el Consolidado, el Ranurado Bottom ya viene
+  // repartido en cascada entre modelos — se usa ese valor en vez del crudo.
+  const botRanInvReal = (poolOverride && poolOverride.botRanurado !== undefined) ? poolOverride.botRanurado : botRanInv;
 
   // targetReal por grupo = target - lo ya producido en el header
   const targetRealTop = Math.max(0, target - giftInv);
@@ -696,7 +895,7 @@ function componenteNecesario(r, sm, target) {
   // Virgen TOP innecesario si Ranurado TOP cubre el targetReal del grupo
   if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= targetRealTop) return false;
   // Virgen BOT innecesario si Ranurado BOT cubre el targetReal del grupo
-  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInv >= targetRealBot) return false;
+  if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInvReal >= targetRealBot) return false;
   // Sheet Top Box innecesario si Gift Box cubre el target completo
   if (d.includes('SHEET TOP') && giftInv >= target) return false;
   // Gift Box innecesario si tiene inventario suficiente
@@ -1182,8 +1381,12 @@ function renderCons() {
     {key:'P4',    label:'P4 — Planta 4', sub:'Gift Box Top · Lower Box Bottom (S1-S4)', color:'rgba(0,188,212,.12)', bc:'rgba(0,188,212,.4)',   tc:'#00BCD4'},
     {key:'ALIBER',label:'ALIBER',        sub:'Pulp Tray · Data Cable · Ejection Pin',   color:'rgba(255,179,0,.1)',  bc:'rgba(255,179,0,.3)',   tc:'var(--amber)'}
   ];
-  // Obtener todos los modelos con su target
-  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+  // Obtener todos los modelos con su target, ordenados por PRIORIDAD (menor número = toma inventario compartido primero)
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean).sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
   const modeloTargets = {};
   modelos.forEach(sm => {
     modeloTargets[sm] = simTargetsPorModelo[sm] || 0;
@@ -1192,6 +1395,26 @@ function renderCons() {
   let html = '';
   let hayAlgo = false;
   window.consolidadoData = {};
+
+  // Llave del pool y del consolidado: PN + Descripción. Cada variante (Sheet Top
+  // Box, Gift Box Top, Chip Board Virgen, Chip Board Ranurado, etc.) tiene su
+  // propio inventario y su propio requerimiento — no se mezclan entre sí aunque
+  // compartan el mismo PN base. Cada variante suma su faltante real ENTRE LOS
+  // MODELOS que la usan (ej. Sheet Top Box de KAXAA+KAXAU+KACHA se suma entre
+  // sí), pero permanece separada de las demás variantes de ese mismo PN.
+  const keyPool = (pn, desc) => (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+
+  // Déficit consolidado por PN+Desc: suma del FALTANTE REAL (sin 10%) de
+  // cada modelo individual que usa este componente. El +10% se aplica
+  // UNA SOLA VEZ al final, sobre la suma — nunca antes, para no inflar
+  // cada modelo por separado y luego sumar montos ya con margen.
+  const faltanteAcumuladoPorPN = {};
+  const sumarFaltantePN = (pn, desc, faltaSinExtra, silencioso) => {
+    if (!silencioso) return; // solo se acumula en la pasada 1; la pasada 2 solo lee
+    if (!faltaSinExtra || faltaSinExtra <= 0) return;
+    const key = keyPool(pn, desc);
+    faltanteAcumuladoPorPN[key] = (faltanteAcumuladoPorPN[key] || 0) + faltaSinExtra;
+  };
 
   // Pool compartido de inventario — se descuenta conforme se asigna a modelos
   const poolCompartido = {};
@@ -1213,15 +1436,47 @@ function renderCons() {
     return poolCompartido[key] || 0;
   };
 
-  plantas.forEach(pl => {
-    // Resetear pool al inicio de cada planta para calcular independiente por planta
-    const poolPlanta = {};
-    BOM.forEach(r => {
-      if (!r.pn) return;
-      const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
-      if (poolPlanta[key] === undefined) poolPlanta[key] = r.inv || 0;
-    });
+  // Pool de inventario — GLOBAL a todas las plantas (P1, P3, P4, ALIBER).
+  // Antes se reiniciaba dentro de cada planta, lo que hacía que un mismo PN
+  // (ej. 46504A, que aparece tanto en P1 como en P4) se calculara con inventario
+  // "fresco" en cada planta por separado, en vez de un solo pool real compartido.
+  // Ahora se calcula UNA SOLA VEZ aquí y se va descontando conforme avanzan
+  // P1 → P3 → P4 → ALIBER, en el mismo orden en que ya se procesan las plantas.
+  // Cada variante (PN+Desc) usa su PROPIO inventario real — no se mezcla con
+  // el inventario de otras variantes del mismo PN base.
+  const poolPlantaGlobal = {};
+  BOM.forEach(r => {
+    if (!r.pn) return;
+    const key = keyPool(r.pn, r.desc);
+    if (poolPlantaGlobal[key] === undefined) poolPlantaGlobal[key] = r.inv || 0;
+  });
 
+  // Ejecuta el cálculo de todas las plantas/modelos. Es EXACTAMENTE la misma
+  // lógica de siempre (pool, prioridad, Bundle, etc.) sin ninguna modificación.
+  // Se ejecuta DOS VECES: la primera en modo silencioso (silencioso=true) solo
+  // para llenar faltanteAcumuladoPorPN con el faltante real de cada modelo;
+  // la segunda vez (real) ya pinta el HTML usando ese acumulado completo.
+  function procesarPlantas(silencioso) {
+    let htmlLocal = '';
+    let hayAlgoLocal = false;
+    // El pool parte de una copia fresca del inventario real en CADA pasada completa
+    // (pasada 1 silenciosa, pasada 2 real) — así ambas pasadas calculan exactamente
+    // lo mismo. Pero DENTRO de una misma pasada, el pool YA NO se reinicia por
+    // planta: se comparte y se va descontando de forma continua P1 → P3 → P4 → ALIBER.
+    const poolPlanta = { ...poolPlantaGlobal };
+    // Evita doble descuento: el header Gift Box / Lower Box / Bundle de un modelo
+    // se descuenta del pool SOLO LA PRIMERA VEZ que se procesa ese modelo, sin
+    // importar que el mismo header aparezca en más de una planta (P1 y P4 a la
+    // vez, por ejemplo). Antes se descontaba una vez por planta, lo que vaciaba
+    // el pool más rápido de lo real y desalineaba el Consolidado vs. el Simulador.
+    const yaDescontadoPorModelo = new Set();
+    // Acumulador de filas por planta — en vez de pintar una tarjeta por modelo,
+    // se guardan TODAS las filas (de todos los modelos) y al final de la planta
+    // se agrupan por variante (PN+Desc), sumando el faltante real entre modelos,
+    // para mostrar UNA sola línea por variante en vez de una por modelo.
+    const filasPorPlanta = {};
+    plantas.forEach(pl => {
+    filasPorPlanta[pl.key] = filasPorPlanta[pl.key] || [];
     let plantaHtml = '';
     modelos.forEach(sm => {
       const target = modeloTargets[sm] || 0;
@@ -1236,14 +1491,25 @@ function renderCons() {
       const giftBoxCC_inv = giftBoxCC ? (giftBoxCC.inv||0) : 0;
       const lowerBoxCC_inv = lowerBoxCC ? (lowerBoxCC.inv||0) : 0;
 
-      // GH90 para P3: Bundle (ensamble padre) y MANUAL BUNDLE (insumo con inventario real en P3)
+      // GH90 para P3: Bundle (ensamble padre, header terminado) y MANUAL BUNDLE (insumo con inventario real en P3)
       const bundleRows = pl.key === 'P3'
         ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'))
         : [];
 
+      // Header real del Bundle (terminado, sin "MANUAL") — su inventario decide si ya está cubierto, igual que el Simulador
+      const bundleHeaderRow = bundleRows.find(r => (r.desc||'').toUpperCase() === 'BUNDLE' || ((r.desc||'').toUpperCase().includes('BUNDLE') && !(r.desc||'').toUpperCase().includes('MANUAL')));
+      const bundleHeaderInvDisp = bundleHeaderRow ? (poolPlanta[(bundleHeaderRow.pn||'').trim().toUpperCase()+'||'+(bundleHeaderRow.desc||'').trim().toUpperCase()] ?? (bundleHeaderRow.inv||0)) : 0;
+
       // MANUAL BUNDLE es el que tiene el inventario real de avance en P3 (Bundle header normalmente vive en IMS P4 = 0)
       const bundle = bundleRows.find(r => (r.desc||'').toUpperCase().includes('MANUAL BUNDLE')) || bundleRows[0];
       const bundleInvDisp = bundle ? (poolPlanta[(bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase()] ?? (bundle.inv||0)) : 0;
+
+      // Si el HEADER del Bundle (terminado) ya cubre el target, NADA de este grupo se pide (ni MANUAL BUNDLE ni sus componentes)
+      if (pl.key === 'P3' && bundleHeaderRow && bundleHeaderInvDisp >= target && target > 0) {
+        const keyH = (bundleHeaderRow.pn||'').trim().toUpperCase()+'||'+(bundleHeaderRow.desc||'').trim().toUpperCase();
+        poolPlanta[keyH] = Math.max(0, (poolPlanta[keyH]||0) - target);
+        return;
+      }
 
       if (pl.key === 'P3' && bundle && bundleInvDisp >= target) {
         const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
@@ -1255,17 +1521,56 @@ function renderCons() {
       // P3: necesitaProducir = target - bundle inv
       const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundleInvDisp) : target;
 
-      // P1: targetReal por grupo usando header (Gift Box / Lower Box)
-      // Gift Box group targetReal
-      const targetRealTop = Math.max(0, target - giftBoxCC_inv);
-      // Lower Box group targetReal
-      const targetRealBot = Math.max(0, target - lowerBoxCC_inv);
+      // Pool compartido para headers (Gift Box / Lower Box): el inventario disponible se descuenta
+      // conforme cada modelo lo va tomando, en el mismo orden en que se procesan los modelos.
+      // Se usa keyPool() para que la llave coincida con la del pool global (agrupado solo
+      // por PN en este grupo, ya que Gift Box y su Sheet Top comparten el mismo inventario real).
+      const keyGiftBox = giftBoxCC ? keyPool(giftBoxCC.pn, giftBoxCC.desc) : null;
+      const keyLowerBox = lowerBoxCC ? keyPool(lowerBoxCC.pn, lowerBoxCC.desc) : null;
+      const giftBoxInvDisp = keyGiftBox ? (poolPlanta[keyGiftBox] ?? giftBoxCC_inv) : giftBoxCC_inv;
+      const lowerBoxInvDisp = keyLowerBox ? (poolPlanta[keyLowerBox] ?? lowerBoxCC_inv) : lowerBoxCC_inv;
 
-      // Descontar Bundle del pool
-      if (bundle) {
+      // Pool en cascada para Chip Board BOTTOM (Virgen y Ranurado por separado —
+      // son dos etapas distintas del mismo material, cada una con su propia
+      // cantidad, confirmado con Octavio: no se mezclan entre sí). El remanente
+      // que deja Prioridad 1 después de cubrir su target pasa a Prioridad 2,
+      // y lo que sobre de ahí pasa a Prioridad 3 — misma cascada que Gift Box.
+      const botVirC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('VIRGEN'));
+      const keyBotVirgen = botVirC ? keyPool(botVirC.pn, botVirC.desc) : null;
+      const keyBotRanurado = botRanC ? keyPool(botRanC.pn, botRanC.desc) : null;
+      const botVirgenInvDisp = keyBotVirgen ? (poolPlanta[keyBotVirgen] ?? (botVirC.inv||0)) : (botVirC ? (botVirC.inv||0) : 0);
+      const botRanuradoInvDisp = keyBotRanurado ? (poolPlanta[keyBotRanurado] ?? botRanCC) : botRanCC;
+
+      // P1: targetReal por grupo usando header (Gift Box / Lower Box) — usando inventario YA disponible del pool
+      // Gift Box group targetReal
+      const targetRealTop = Math.max(0, target - giftBoxInvDisp);
+      // Lower Box group targetReal
+      const targetRealBot = Math.max(0, target - lowerBoxInvDisp);
+
+      // Descontar del pool lo que este modelo toma del header (Gift Box / Lower Box)
+      // — SOLO la primera vez que se procesa este modelo (evita doble descuento P1+P4)
+      const modeloKey = sm; // un modelo solo se descuenta una vez, sin importar la planta
+      if (!yaDescontadoPorModelo.has(modeloKey)) {
+        if (keyGiftBox) poolPlanta[keyGiftBox] = Math.max(0, giftBoxInvDisp - Math.min(giftBoxInvDisp, target));
+        if (keyLowerBox) poolPlanta[keyLowerBox] = Math.max(0, lowerBoxInvDisp - Math.min(lowerBoxInvDisp, target));
+        // Chip Board Bottom: el target real de cada etapa ya considera lo que
+        // cubre la otra (Virgen resta lo que Ranurado ya cubre) — se descuenta
+        // contra ese target real de cada etapa, no contra el target completo.
+        const targetRealBotParaDescuento = Math.max(0, target - lowerBoxInvDisp);
+        if (keyBotRanurado) poolPlanta[keyBotRanurado] = Math.max(0, botRanuradoInvDisp - Math.min(botRanuradoInvDisp, targetRealBotParaDescuento));
+        const targetVirgenDescuento = Math.max(0, targetRealBotParaDescuento - botRanuradoInvDisp);
+        if (keyBotVirgen) poolPlanta[keyBotVirgen] = Math.max(0, botVirgenInvDisp - Math.min(botVirgenInvDisp, targetVirgenDescuento));
+      }
+
+      // Descontar Bundle del pool — también solo una vez por modelo
+      if (bundle && !yaDescontadoPorModelo.has(modeloKey)) {
         const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
         poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - Math.min(bundleInvDisp, target));
       }
+      // Marcar este modelo como ya procesado para el pool — así si el mismo
+      // modelo se vuelve a recorrer en otra planta (P1 y P4 ambas lo tocan),
+      // ya no se le vuelve a descontar el header por segunda vez.
+      yaDescontadoPorModelo.add(modeloKey);
 
       // Función para obtener targetReal correcto según descripción del componente
       const getTargetReal = (r) => {
@@ -1275,7 +1580,7 @@ function renderCons() {
         // Chip Board: Ranurado usa targetReal completo; Virgen resta lo que Ranurado ya cubre
         const esVirgenChip = (d.includes('VIRGEN') || d.includes('VIRGIN'));
         if (d.includes('CHIP BOARD TOP')) return esVirgenChip ? Math.max(0, targetRealTop - topRanCC) : targetRealTop;
-        if (d.includes('CHIP BOARD BOTTOM')) return esVirgenChip ? Math.max(0, targetRealBot - botRanCC) : targetRealBot;
+        if (d.includes('CHIP BOARD BOTTOM')) return esVirgenChip ? Math.max(0, targetRealBot - botRanuradoInvDisp) : targetRealBot;
         // Sheet usa target completo (la diferencia se calcula con inv real = fisico + ya producido)
         if (d.includes('SHEET TOP') || d.includes('SHEET LOWER')) return target;
         if (pl.key === 'P3') return necesitaProducir;
@@ -1287,15 +1592,24 @@ function renderCons() {
       };
 
       // Sheet: inventario real = físico + ya incorporado en header
+      // Header (Gift Box/Lower Box): usar inventario del pool compartido (ya descontado entre modelos)
       const getInvReal = (r) => {
         const d = (r.desc||'').toUpperCase();
-        if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxCC_inv; }
-        if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxCC_inv; }
+        const isHeaderGift = d.includes('GIFT BOX') && !d.includes('SHEET');
+        const isHeaderLower = d.includes('LOWER BOX') && !d.includes('SHEET');
+        if (isHeaderGift) return giftBoxInvDisp;
+        if (isHeaderLower) return lowerBoxInvDisp;
+        if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxInvDisp; }
+        if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxInvDisp; }
+        // Chip Board Bottom: usar el pool en cascada (remanente entre modelos),
+        // no el inventario crudo de cada modelo por separado.
+        if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO')) return botRanuradoInvDisp;
+        if (d.includes('CHIP BOARD BOTTOM') && (d.includes('VIRGEN') || d.includes('VIRGIN'))) return botVirgenInvDisp;
         return r.inv||0;
       };
 
       // P4: Gift Box y Lower Box producidos internamente — mismo calculo que P1 headers
-      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target))
+      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target, {gift: giftBoxInvDisp, lower: lowerBoxInvDisp, botRanurado: botRanuradoInvDisp}))
         .filter(r => {
           const tgt = getTargetReal(r);
           const inv = getInvReal(r);
@@ -1308,11 +1622,15 @@ function renderCons() {
             const tgtGrupo = esTop ? targetRealTop : targetRealBot;
             const grupoKey = esTop ? 'CHIP BOARD TOP' : 'CHIP BOARD BOTTOM';
             const ranurado = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(grupoKey) && ((b.desc||'').toUpperCase().includes('RANURADO') || (b.desc||'').toUpperCase().includes('GROOVING')));
-            const ranuradoInv = ranurado ? (ranurado.inv||0) : 0;
+            // Bottom usa el pool en cascada (botRanuradoInvDisp); Top sigue igual que antes (sin tocar, por instrucción de Octavio)
+            const ranuradoInv = esTop ? (ranurado ? (ranurado.inv||0) : 0) : botRanuradoInvDisp;
             // Virgen: excluir si ranurado solo cubre (no se necesita procesar)
             if (esVirgen && ranuradoInv >= tgtGrupo) return false;
-            // Ranurado: nunca se compra aparte — si hay faltante, se cubre comprando Virgen (que se ranura)
-            if (esRanurado && ranuradoInv < tgtGrupo) return false;
+            // Ranurado: nunca se compra aparte — si hay faltante, se cubre comprando
+            // Virgen (que se ranura). Pero la fila debe SEGUIR VISIBLE mostrando su
+            // inventario/diferencia real; solo se le quita el "A Pedir" propio más
+            // adelante (no se oculta la fila por completo, eso ocultaba el remanente
+            // real disponible al usuario).
           }
           return inv < tgt;
         });
@@ -1324,15 +1642,28 @@ function renderCons() {
       const rowsCalc = rowsActual.map(r => {
         const d2 = (r.desc||'').toUpperCase();
         // Solo el header exacto (no Sheet Lower Box que también contiene LOWER BOX)
-        const isHeader = (d2.includes('GIFT BOX') && !d2.includes('SHEET')) || 
-                         (d2.includes('LOWER BOX') && !d2.includes('SHEET'));
+        const isHeaderGift = d2.includes('GIFT BOX') && !d2.includes('SHEET');
+        const isHeaderLower = d2.includes('LOWER BOX') && !d2.includes('SHEET');
+        const isHeader = isHeaderGift || isHeaderLower;
         const tgt = isHeader ? target : getTargetReal(r);
-        // Para diferencia usar inventario real (fisico + ya producido en header)
-        const invParaDiff = isHeader ? (r.inv||0) : getInvReal(r);
-        // Para mostrar en columna inventario: siempre el fisico del IMS
-        const invDisplay = r.inv || 0;
+        // Para diferencia usar inventario disponible del pool compartido (ya descontado entre modelos)
+        const invParaDiff = isHeaderGift ? giftBoxInvDisp : isHeaderLower ? lowerBoxInvDisp : getInvReal(r);
+        // Para mostrar en columna inventario: header usa el disponible del pool; Chip Board
+        // Bottom Virgen/Ranurado también usan su pool en cascada (mismo criterio); otros, el físico del IMS
+        const d3 = (r.desc||'').toUpperCase();
+        const isHG = d3.includes('GIFT BOX') && !d3.includes('SHEET');
+        const isHL = d3.includes('LOWER BOX') && !d3.includes('SHEET');
+        const isBotRanurado = d3.includes('CHIP BOARD BOTTOM') && d3.includes('RANURADO');
+        const isBotVirgen = d3.includes('CHIP BOARD BOTTOM') && (d3.includes('VIRGEN') || d3.includes('VIRGIN'));
+        const invDisplay = isHG ? giftBoxInvDisp : isHL ? lowerBoxInvDisp
+          : isBotRanurado ? botRanuradoInvDisp : isBotVirgen ? botVirgenInvDisp
+          : (r.inv || 0);
         const falta = tgt - invParaDiff;
-        return {...r, inv: invDisplay, falta: falta, aPedir: falta > 0 ? Math.ceil(falta * EXTRA) : 0};
+        // Chip Board Bottom Ranurado: visible siempre con su inventario/diferencia
+        // real, pero NUNCA tiene "A Pedir" propio — el faltante de Ranurado se
+        // cubre comprando Virgen (que luego se ranura), no se compra Ranurado aparte.
+        const sinPedirPropio = isBotRanurado;
+        return {...r, inv: invDisplay, falta: falta, aPedir: (!sinPedirPropio && falta > 0) ? Math.ceil(falta * EXTRA) : 0};
       });
       const bundleCalc = bundleRows.map(r => {
         const esManualB = (r.desc||'').toUpperCase().includes('MANUAL BUNDLE');
@@ -1344,58 +1675,102 @@ function renderCons() {
         return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
       });
 
-      const totalPedir = [...rowsCalc, ...bundleCalc].reduce((s,r) => s + (r.aPedir||0), 0);
-      const totalFaltantes = rowsActual.length + bundleCalc.filter(r=>r.aPedir>0).length;
-      hayAlgo = true;
+      // Guardar las filas de este modelo en el acumulador de la planta — el
+      // pintado real (agrupado por variante) se hace DESPUÉS, fuera de este loop.
+      filasPorPlanta[pl.key].push(
+        ...bundleCalc.map(r => ({...r, _sm: sm, _esBundle: true})),
+        ...rowsCalc.map(r => ({...r, _sm: sm, _esBundle: false}))
+      );
 
       // Capturar datos exactos para que el Excel sea espejo de lo mostrado en pantalla
       if (!window.consolidadoData[pl.key]) window.consolidadoData[pl.key] = {};
       const bundleRowsMarked = bundleCalc.map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:true}));
       const normalRowsMarked = rowsCalc.filter(r => r.aPedir > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
       window.consolidadoData[pl.key][sm] = { target, rows: [...bundleRowsMarked, ...normalRowsMarked] };
-
-      const renderRow = (r, i, color) => `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
-        <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${r.pn}</td>
-        <td style="font-size:12px">${r.desc}</td>
-        <td style="text-align:right;color:${r.inv>0?'var(--text)':'var(--red)'}">${r.inv>0?r.inv.toLocaleString():'0'}</td>
-        <td style="text-align:right;color:${r.falta>0?'var(--red)':'var(--green)'};font-weight:600">${r.falta>0?'-'+r.falta.toLocaleString():'+'+Math.abs(r.falta).toLocaleString()}</td>
-        <td style="text-align:right;color:${r.aPedir>0?'var(--amber)':'var(--text)'};font-weight:700">${r.aPedir>0?r.aPedir.toLocaleString():'—'}</td>
-      </tr>`;
-
-      const sectionHeader = (label, bg, tc) => `<tr style="background:${bg}">
-        <td colspan="5" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
-      </tr>`;
-
-      plantaHtml += `
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
-          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">${sm}</span>
-          <div style="display:flex;align-items:center;gap:.5rem">
-            <span style="font-size:10px;color:var(--text2)">Target: ${target.toLocaleString()} · ${totalFaltantes} faltantes · ${totalPedir.toLocaleString()} pzas</span>
-            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.key}</span>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-        <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
-          <colgroup><col style="width:18%"><col style="width:34%"><col style="width:14%"><col style="width:14%"><col style="width:20%"></colgroup>
-          <thead><tr style="font-size:10px">
-            <th>N° Parte</th><th>Descripción</th>
-            <th style="text-align:right">Inv. Actual</th>
-            <th style="text-align:right">Diferencia</th>
-            <th style="text-align:right;color:var(--amber)">A Pedir +10%</th>
-          </tr></thead><tbody>
-          ${bundleCalc.length ? sectionHeader('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
-          ${bundleCalc.map((r,i)=>renderRow(r,i,'#a78bfa')).join('')}
-          ${rowsCalc.length ? sectionHeader(pl.key==='P3'?'Componentes P3':'Componentes P1','rgba(255,255,255,.03)','var(--text2)') : ''}
-          ${rowsCalc.map((r,i)=>renderRow(r,i,null)).join('')}
-          </tbody>
-        </table>
-        </div>
-      </div>`;
     });
 
+    // --- Pintado consolidado por VARIANTE (una sola línea por PN+Desc) ---
+    // Agrupar las filas acumuladas de TODOS los modelos de esta planta, por
+    // variante (PN+Desc), sumando faltante real y aPedir individual.
+    const filas = filasPorPlanta[pl.key];
+    const grupos = {}; // key -> {pn, desc, esBundle, invMuestra, faltaAcumulada, faltaMostrada, modelos:[{sm,target,falta,aPedir}]}
+    filas.forEach(r => {
+      const key = keyPool(r.pn, r.desc);
+      if (!grupos[key]) {
+        grupos[key] = { pn: r.pn, desc: r.desc, esBundle: r._esBundle, invMuestra: r.inv, faltaAcumulada: 0, faltaMostrada: 0, modelos: [] };
+      }
+      if (r.aPedir > 0) grupos[key].faltaAcumulada += r.falta;
+      // faltaMostrada: faltante real informativo, independiente de si genera
+      // pedido propio — así Chip Board Bottom Ranurado puede mostrar su
+      // diferencia real aunque su "A Pedir" siempre sea 0 por diseño.
+      if (r.falta > 0) grupos[key].faltaMostrada += r.falta;
+      grupos[key].modelos.push({ sm: r._sm, target: r.target, falta: r.falta, aPedir: r.aPedir });
+      // Mostrar el inventario más representativo (el del header/pool, que es el mismo para todos los modelos)
+      grupos[key].invMuestra = r.inv;
+    });
+    // Chip Board Bottom Ranurado siempre tiene aPedir=0 por diseño (su faltante
+    // se cubre con Virgen), pero debe seguir VISIBLE para mostrar su inventario/
+    // diferencia real — se incluye aunque no tenga aPedir>0, mientras tenga un
+    // faltante real (falta>0) que valga la pena mostrar informativamente.
+    const esSiempreVisibleInformativo = (g) => {
+      const d = (g.desc||'').toUpperCase();
+      return d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO');
+    };
+    const listaGrupos = Object.values(grupos).filter(g =>
+      g.faltaAcumulada > 0 || g.modelos.some(m => m.aPedir > 0) ||
+      (esSiempreVisibleInformativo(g) && g.modelos.some(m => m.falta > 0))
+    );
+
+    if (!listaGrupos.length) return;
+    hayAlgoLocal = true;
+
+    const renderRowConsolidada = (g, i, color) => {
+      const aPedirConsolidado = g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * EXTRA) : 0;
+      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
+      const esRanuradoInfo = (g.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (g.desc||'').toUpperCase().includes('RANURADO');
+      return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
+      <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${g.pn}</td>
+      <td style="font-size:12px">${g.desc}${esRanuradoInfo?'<div style="font-size:9px;color:var(--text2);margin-top:1px">(no se compra aparte — su faltante se cubre con Virgen)</div>':''}<div style="font-size:9px;color:var(--text2);margin-top:2px">${modelosTexto}</div></td>
+      <td style="text-align:right;color:${g.invMuestra>0?'var(--text)':'var(--red)'}">${g.invMuestra>0?g.invMuestra.toLocaleString():'0'}</td>
+      <td style="text-align:right;color:${g.faltaMostrada>0?'var(--red)':'var(--green)'};font-weight:600">${g.faltaMostrada>0?'-'+g.faltaMostrada.toLocaleString():'OK'}</td>
+      <td style="text-align:right;color:${aPedirConsolidado>0?'var(--amber)':'var(--text)'};font-weight:700" title="Faltante real sumado entre todos los modelos que comparten esta variante, +10% aplicado una sola vez al final">${esRanuradoInfo?'N/R':(aPedirConsolidado>0?aPedirConsolidado.toLocaleString():'—')}</td>
+    </tr>`;
+    };
+
+    const sectionHeaderC = (label, bg, tc) => `<tr style="background:${bg}">
+      <td colspan="5" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td>
+    </tr>`;
+
+    const gruposBundle = listaGrupos.filter(g => g.esBundle);
+    const gruposNormales = listaGrupos.filter(g => !g.esBundle);
+    const totalPedirPlanta = listaGrupos.reduce((s,g) => s + (g.faltaAcumulada>0 ? Math.ceil(g.faltaAcumulada*EXTRA) : 0), 0);
+
+    plantaHtml = `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
+        <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">Consolidado ${pl.key} — ${modelos.length} modelo(s)</span>
+        <span style="font-size:10px;color:var(--text2)">${listaGrupos.length} variante(s) · ${totalPedirPlanta.toLocaleString()} pzas a pedir</span>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
+        <colgroup><col style="width:15%"><col style="width:38%"><col style="width:12%"><col style="width:14%"><col style="width:21%"></colgroup>
+        <thead><tr style="font-size:10px">
+          <th>N° Parte</th><th>Descripción</th>
+          <th style="text-align:right">Inv. Actual</th>
+          <th style="text-align:right">Faltante Total</th>
+          <th style="text-align:right;color:var(--amber)" title="Faltante real sumado entre todos los modelos, +10% aplicado una sola vez al final">A Pedir Consolidado +10%</th>
+        </tr></thead><tbody>
+        ${gruposBundle.length ? sectionHeaderC('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
+        ${gruposBundle.map((g,i)=>renderRowConsolidada(g,i,'#a78bfa')).join('')}
+        ${gruposNormales.length ? sectionHeaderC(pl.key==='P3'?'Componentes P3':'Componentes '+pl.key,'rgba(255,255,255,.03)','var(--text2)') : ''}
+        ${gruposNormales.map((g,i)=>renderRowConsolidada(g,i,null)).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+
     if (!plantaHtml) return;
-    html += `
+    htmlLocal += `
     <div style="margin-bottom:1.25rem">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
         <span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.label}</span>
@@ -1404,6 +1779,17 @@ function renderCons() {
       ${plantaHtml}
     </div>`;
   });
+  return { htmlLocal, hayAlgoLocal };
+  }
+
+  // Nota: con el nuevo agrupamiento por variante (una fila por PN+Desc, sumando
+  // los modelos DENTRO de la misma planta), ya no se depende de una pasada previa
+  // — el agrupamiento ocurre completo en una sola pasada por planta. Se mantiene
+  // la llamada doble por compatibilidad, sin efecto negativo.
+  procesarPlantas(true);
+  const resultado = procesarPlantas(false);
+  html = resultado.htmlLocal;
+  hayAlgo = resultado.hayAlgoLocal;
 
   if (!hayAlgo) {
     const anyTarget = modelos.some(sm => (simTargetsPorModelo[sm]||0) > 0);

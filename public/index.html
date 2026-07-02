@@ -1718,7 +1718,7 @@ function renderCons() {
         // real, pero NUNCA tiene "A Pedir" propio — el faltante de Ranurado se
         // cubre comprando Virgen (que luego se ranura), no se compra Ranurado aparte.
         const sinPedirPropio = isBotRanurado;
-        return {...r, inv: invDisplay, falta: falta, aPedir: (!sinPedirPropio && falta > 0) ? Math.ceil(falta * EXTRA) : 0};
+        return {...r, inv: invDisplay, falta: falta, aPedir: (!sinPedirPropio && falta > 0) ? Math.ceil(falta * 11 / 10) : 0};
       });
       const bundleCalc = bundleRows.map(r => {
         const esManualB = (r.desc||'').toUpperCase().includes('MANUAL BUNDLE');
@@ -1726,7 +1726,7 @@ function renderCons() {
         const invPropio = esManualB ? bundleInvDisp : (r.inv || 0);
         const faltaPropia = Math.max(0, target - invPropio);
         // Solo MANUAL BUNDLE aporta al total a pedir — es el insumo que realmente se compra/produce, evita doble conteo del mismo faltante
-        const aPedirReal = esManualB && invPropio < target ? Math.ceil(faltaPropia * EXTRA) : 0;
+        const aPedirReal = esManualB && invPropio < target ? Math.ceil(faltaPropia * 11 / 10) : 0;
         return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
       });
 
@@ -1763,13 +1763,16 @@ function renderCons() {
       // Mostrar el inventario más representativo (el del header/pool, que es el mismo para todos los modelos)
       grupos[key].invMuestra = r.inv;
     });
-    // Chip Board Bottom Ranurado siempre tiene aPedir=0 por diseño (su faltante
-    // se cubre con Virgen), pero debe seguir VISIBLE para mostrar su inventario/
-    // diferencia real — se incluye aunque no tenga aPedir>0, mientras tenga un
+    // Chip Board Bottom Ranurado y el Bundle terminado (header) siempre tienen
+    // aPedir=0 por diseño (su faltante se cubre con otro insumo: Virgen o
+    // MANUAL BUNDLE), pero deben seguir VISIBLES para mostrar su diferencia
+    // real — se incluyen aunque no tengan aPedir>0, mientras tengan un
     // faltante real (falta>0) que valga la pena mostrar informativamente.
     const esSiempreVisibleInformativo = (g) => {
       const d = (g.desc||'').toUpperCase();
-      return d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO');
+      const esChipBotRanurado = d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO');
+      const esBundleHeader = g.esBundle && d === 'BUNDLE';
+      return esChipBotRanurado || esBundleHeader;
     };
     const listaGrupos = Object.values(grupos).filter(g =>
       g.faltaAcumulada > 0 || g.modelos.some(m => m.aPedir > 0) ||
@@ -1780,7 +1783,7 @@ function renderCons() {
     hayAlgoLocal = true;
 
     const renderRowConsolidada = (g, i, color) => {
-      const aPedirConsolidado = g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * EXTRA) : 0;
+      const aPedirConsolidado = g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * 11 / 10) : 0;
       const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
       const esRanuradoInfo = (g.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (g.desc||'').toUpperCase().includes('RANURADO');
       return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
@@ -1798,7 +1801,7 @@ function renderCons() {
 
     const gruposBundle = listaGrupos.filter(g => g.esBundle);
     const gruposNormales = listaGrupos.filter(g => !g.esBundle);
-    const totalPedirPlanta = listaGrupos.reduce((s,g) => s + (g.faltaAcumulada>0 ? Math.ceil(g.faltaAcumulada*EXTRA) : 0), 0);
+    const totalPedirPlanta = listaGrupos.reduce((s,g) => s + (g.faltaAcumulada>0 ? Math.ceil(g.faltaAcumulada*11/10) : 0), 0);
 
     plantaHtml = `
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">

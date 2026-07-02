@@ -1497,6 +1497,16 @@ function renderCons() {
     // vez, por ejemplo). Antes se descontaba una vez por planta, lo que vaciaba
     // el pool más rápido de lo real y desalineaba el Consolidado vs. el Simulador.
     const yaDescontadoPorModelo = new Set();
+    // Bundle se descuenta del pool de forma independiente al header (Gift/Lower),
+    // porque solo se toca en la planta P3 — se rastrea aparte para que sí se
+    // descuente aunque P1 (que no toca Bundle) se procese primero.
+    const yaDescontadoBundlePorModelo = new Set();
+    // Cachea, la PRIMERA vez que se procesa cada modelo, el inventario disponible
+    // (Gift Box, Lower Box, Chip Board Bottom, Bundle) ANTES de descontarlo — así
+    // todas las plantas (P1, P3, P4, ALIBER) que toquen el mismo modelo muestran
+    // el mismo número, en vez de que la planta que se procesa después vea el
+    // inventario ya descontado por la planta anterior y muestre 0 de más.
+    const invDispPorModelo = {};
     // Acumulador de filas por planta — en vez de pintar una tarjeta por modelo,
     // se guardan TODAS las filas (de todos los modelos) y al final de la planta
     // se agrupan por variante (PN+Desc), sumando el faltante real entre modelos,
@@ -1538,11 +1548,12 @@ function renderCons() {
         return;
       }
 
-      if (pl.key === 'P3' && bundle && bundleInvDisp >= target) {
-        const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
-        poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - target);
-        return;
-      }
+      // NOTA: se eliminó el atajo que saltaba TODO el grupo Bundle cuando
+      // MANUAL BUNDLE (el insumo) cubría el target — ese atajo ocultaba el
+      // faltante real de componentes individuales como Manual box / Manual pad,
+      // que deben evaluarse siempre de forma independiente (igual que el
+      // Simulador). El descuento del pool de MANUAL BUNDLE se sigue haciendo
+      // correctamente más abajo, una sola vez por modelo.
 
       // targetReal para cada grupo = target - lo ya producido (header inv)
       // P3: necesitaProducir = target - Bundle terminado (header), igual que el Simulador (bundleTargetReal).
@@ -1557,8 +1568,6 @@ function renderCons() {
       // por PN en este grupo, ya que Gift Box y su Sheet Top comparten el mismo inventario real).
       const keyGiftBox = giftBoxCC ? keyPool(giftBoxCC.pn, giftBoxCC.desc) : null;
       const keyLowerBox = lowerBoxCC ? keyPool(lowerBoxCC.pn, lowerBoxCC.desc) : null;
-      const giftBoxInvDisp = keyGiftBox ? (poolPlanta[keyGiftBox] ?? giftBoxCC_inv) : giftBoxCC_inv;
-      const lowerBoxInvDisp = keyLowerBox ? (poolPlanta[keyLowerBox] ?? lowerBoxCC_inv) : lowerBoxCC_inv;
 
       // Pool en cascada para Chip Board BOTTOM (Virgen y Ranurado por separado —
       // son dos etapas distintas del mismo material, cada una con su propia
@@ -1568,8 +1577,19 @@ function renderCons() {
       const botVirC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('VIRGEN'));
       const keyBotVirgen = botVirC ? keyPool(botVirC.pn, botVirC.desc) : null;
       const keyBotRanurado = botRanC ? keyPool(botRanC.pn, botRanC.desc) : null;
-      const botVirgenInvDisp = keyBotVirgen ? (poolPlanta[keyBotVirgen] ?? (botVirC.inv||0)) : (botVirC ? (botVirC.inv||0) : 0);
-      const botRanuradoInvDisp = keyBotRanurado ? (poolPlanta[keyBotRanurado] ?? botRanCC) : botRanCC;
+
+      if (!invDispPorModelo[sm]) {
+        invDispPorModelo[sm] = {
+          giftBoxInvDisp: keyGiftBox ? (poolPlanta[keyGiftBox] ?? giftBoxCC_inv) : giftBoxCC_inv,
+          lowerBoxInvDisp: keyLowerBox ? (poolPlanta[keyLowerBox] ?? lowerBoxCC_inv) : lowerBoxCC_inv,
+          botVirgenInvDisp: keyBotVirgen ? (poolPlanta[keyBotVirgen] ?? (botVirC.inv||0)) : (botVirC ? (botVirC.inv||0) : 0),
+          botRanuradoInvDisp: keyBotRanurado ? (poolPlanta[keyBotRanurado] ?? botRanCC) : botRanCC
+        };
+      }
+      const giftBoxInvDisp = invDispPorModelo[sm].giftBoxInvDisp;
+      const lowerBoxInvDisp = invDispPorModelo[sm].lowerBoxInvDisp;
+      const botVirgenInvDisp = invDispPorModelo[sm].botVirgenInvDisp;
+      const botRanuradoInvDisp = invDispPorModelo[sm].botRanuradoInvDisp;
 
       // P1: targetReal por grupo usando header (Gift Box / Lower Box) — usando inventario YA disponible del pool
       // Gift Box group targetReal
@@ -1592,10 +1612,15 @@ function renderCons() {
         if (keyBotVirgen) poolPlanta[keyBotVirgen] = Math.max(0, botVirgenInvDisp - Math.min(botVirgenInvDisp, targetVirgenDescuento));
       }
 
-      // Descontar Bundle del pool — también solo una vez por modelo
-      if (bundle && !yaDescontadoPorModelo.has(modeloKey)) {
+      // Descontar Bundle del pool — se rastrea con su propio set (yaDescontadoBundlePorModelo)
+      // porque Bundle solo se toca en la planta P3; antes usaba el mismo set que
+      // Gift/Lower Box, y como P1 se procesa primero y ya marcaba el modelo como
+      // "descontado", el descuento de Bundle nunca se ejecutaba y no se repartía
+      // en cascada entre modelos.
+      if (bundle && !yaDescontadoBundlePorModelo.has(modeloKey)) {
         const keyB = (bundle.pn||'').trim().toUpperCase()+'||'+(bundle.desc||'').trim().toUpperCase();
         poolPlanta[keyB] = Math.max(0, (poolPlanta[keyB]||0) - Math.min(bundleInvDisp, target));
+        yaDescontadoBundlePorModelo.add(modeloKey);
       }
       // Marcar este modelo como ya procesado para el pool — así si el mismo
       // modelo se vuelve a recorrer en otra planta (P1 y P4 ambas lo tocan),

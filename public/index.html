@@ -685,25 +685,38 @@ function calcularTodosMultiModeloConPool() {
   const invOriginal = new Map();
   BOM.forEach(r => { if (!invOriginal.has(r)) invOriginal.set(r, r.inv); });
 
+  // Forzar modo 'todos' temporalmente para que TODOS los componentes calculen
+  // su Requerido real (r._reqReal), sin que el filtro de la vista oculte alguno
+  const simFiltroOriginal = simFiltro;
+  simFiltro = 'todos';
+
   const resultados = {};
   ordenados.forEach(sm => {
     resultados[sm] = calcularDetalleModeloMulti(sm);
     // Después de calcular este modelo, descontar del BOM (mismo PN) lo que este modelo tomó,
-    // para que el siguiente modelo (menor prioridad) vea el inventario ya reducido
+    // para que el siguiente modelo (menor prioridad) vea el inventario ya reducido.
+    // Se usa el Requerido REAL de cada componente (r._reqReal, el mismo número que se
+    // muestra en la columna "Requerido" de la tabla) en vez del Target plano del modelo,
+    // porque cada componente (Ranurado, Virgen, Sheet, Pulp Tray, etc.) necesita una
+    // cantidad distinta — no todos necesitan el Target completo.
     const target = simTargetsPorModelo[sm] || 0;
     const filasModelo = BOM.filter(r => r.sm === sm);
     filasModelo.forEach(rowModelo => {
       const pn = (rowModelo.pn||'').trim().toUpperCase();
       const desc = (rowModelo.desc||'').trim().toUpperCase();
+      const reqReal = (rowModelo._reqReal !== undefined) ? rowModelo._reqReal : target;
       // Encontrar TODAS las filas de BOM (de cualquier modelo) con el mismo PN+desc (componente compartido)
       BOM.forEach(r => {
         if ((r.pn||'').trim().toUpperCase() === pn && (r.desc||'').trim().toUpperCase() === desc) {
-          const tomar = Math.min(r.inv || 0, target);
+          const tomar = Math.min(r.inv || 0, reqReal);
           r.inv = Math.max(0, (r.inv || 0) - tomar);
         }
       });
     });
   });
+
+  // Restaurar el filtro original de la vista
+  simFiltro = simFiltroOriginal;
 
   // Restaurar inventario original del BOM (no dejar el descuento permanente)
   invOriginal.forEach((inv, r) => { r.inv = inv; });
@@ -1104,6 +1117,9 @@ function renderSimTable() {
 
   const rowHTML = (r, isSubComponent=false, poolOK=false, vcTag=null, targetOverride=null, invOverride=null, noRequerido=false) => {
     const tgt = targetOverride !== null ? targetOverride : target;
+    // Guardar el "Requerido" real de ESTE componente (el mismo número que se muestra en pantalla)
+    // para que el pool compartido multi-modelo lo use en vez del Target plano del modelo.
+    if (r) r._reqReal = noRequerido ? 0 : tgt;
     const invForDiff = invOverride !== null ? invOverride : r.inv;
     // Strip, Bundle Level1 y MANUAL BUNDLE muestran diferencia real; otros GH90 muestran —
     const esStripDiff = r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('STRIP');

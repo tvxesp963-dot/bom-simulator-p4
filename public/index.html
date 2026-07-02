@@ -1545,8 +1545,11 @@ function renderCons() {
       }
 
       // targetReal para cada grupo = target - lo ya producido (header inv)
-      // P3: necesitaProducir = target - bundle inv
-      const necesitaProducir = pl.key === 'P3' && bundle ? Math.max(0, target - bundleInvDisp) : target;
+      // P3: necesitaProducir = target - Bundle terminado (header), igual que el Simulador (bundleTargetReal).
+      // OJO: se usa bundleHeaderInvDisp (Bundle terminado), NO bundleInvDisp (MANUAL BUNDLE),
+      // porque MANUAL BUNDLE suele tener inventario alto y ocultaba el faltante real de
+      // componentes como Manual box / Manual pad / TMB T&C.
+      const necesitaProducir = pl.key === 'P3' && bundleHeaderRow ? Math.max(0, target - bundleHeaderInvDisp) : target;
 
       // Pool compartido para headers (Gift Box / Lower Box): el inventario disponible se descuenta
       // conforme cada modelo lo va tomando, en el mismo orden en que se procesan los modelos.

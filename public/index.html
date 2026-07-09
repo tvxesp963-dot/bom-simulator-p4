@@ -2517,8 +2517,32 @@ function crearUsuarioBom() {
     secondApp.delete();
     cargarUsuariosBom();
   }).catch(function(e) {
-    var msg = e.code === 'auth/email-already-in-use' ? 'Ese correo ya existe en el sistema' : e.message;
-    st.textContent = '❌ Error: ' + msg;
+    if (e.code === 'auth/email-already-in-use') {
+      // La cuenta de login ya existe en Firebase; probablemente solo falta su autorización en la tabla.
+      db.collection('usuarios_bom').where('email', '==', email).get().then(function(snap) {
+        if (!snap.empty) {
+          st.textContent = 'ℹ️ Ese correo ya existe y ya está autorizado. Revisa la tabla de arriba.';
+          st.style.color = 'var(--amber)';
+          secondApp.delete();
+          return;
+        }
+        db.collection('usuarios_bom').add({email: email, nombre: nombre, rol: rol, activo: true, createdAt: new Date()}).then(function() {
+          st.textContent = '✅ La cuenta ya existía en Firebase; se agregó su autorización como ' + (rol === 'admin' ? 'Admin' : 'Lectura') + '.';
+          st.style.color = 'var(--green)';
+          document.getElementById('nuBomEmail').value = '';
+          document.getElementById('nuBomNombre').value = '';
+          document.getElementById('nuBomPass').value = '';
+          secondApp.delete();
+          cargarUsuariosBom();
+        }).catch(function(e2) {
+          st.textContent = '❌ Error al autorizar: ' + e2.message;
+          st.style.color = 'var(--red)';
+          secondApp.delete();
+        });
+      });
+      return;
+    }
+    st.textContent = '❌ Error: ' + e.message;
     st.style.color = 'var(--red)';
     secondApp.delete();
   });

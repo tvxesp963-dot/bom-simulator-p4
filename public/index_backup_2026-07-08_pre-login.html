@@ -7,7 +7,6 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
 :root{--bg:#080c18;--bg2:#0e1325;--bg3:#141929;--bg4:#1c2238;--accent:#4da6ff;--accent2:#1a6fd4;--accent3:#0d4a99;--green:#00e676;--green2:#00b85a;--red:#ff4444;--amber:#ffb300;--cyan:#00e5ff;--purple:#b388ff;--teal:#00bcd4;--text:#dde3f5;--text2:#7a88b8;--text3:#3d4d77;--border:#1e2a4a;--border2:#263558;}
@@ -131,18 +130,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </head>
 <body>
 
-<!-- ===== LOGIN OVERLAY ===== -->
-<div id="loginOverlay" style="position:fixed;inset:0;z-index:9999;background:#0b0e14;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">
-  <div style="font-size:22px;font-weight:700;color:#fff">📋 BOM SIMULATOR</div>
-  <div style="font-size:12px;color:#8a93a6;margin-top:-10px">Planta 4 · Eunsung Samsung</div>
-  <div style="display:flex;flex-direction:column;gap:10px;width:260px;margin-top:10px">
-    <input id="loginUser" type="email" placeholder="Correo" style="padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1f2b;color:#fff;font-size:14px">
-    <input id="loginPass" type="password" placeholder="Contraseña" style="padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1f2b;color:#fff;font-size:14px" onkeydown="if(event.key==='Enter')checkLogin()">
-    <button onclick="checkLogin()" style="padding:10px 12px;border-radius:8px;border:none;background:#1A4F9C;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Ingresar</button>
-    <div id="loginErr" style="display:none;color:#ff4444;font-size:12px;text-align:center">Usuario o contraseña incorrectos</div>
-  </div>
-</div>
-
 <div class="topbar">
   <div style="display:flex;align-items:center;gap:8px">
     <div class="tb-logo">📋 BOM SIMULATOR</div>
@@ -152,7 +139,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
-    <button class="btn btn-secondary btn-sm" onclick="doLogoutBom()">⏏ Salir</button>
   </div>
 </div>
 
@@ -2364,84 +2350,9 @@ document.getElementById('semanaRef').value=`Semana ${_wn}`;
 
 // ── IMS + ADMIN BOM ──
 var db = null;
-var auth = null;
 var imsInventario = {};
 var imsPrecios = {};
 var adminAuthed = false;
-
-// ── LOGIN: Firebase Authentication (igual que el MES) ──
-// Los usuarios se crean en Firebase Console > Authentication > Add user,
-// y se autorizan agregando su correo en la colección "usuarios_bom" de Firestore.
-function checkLogin() {
-  var email = document.getElementById('loginUser').value.trim().toLowerCase();
-  var pass  = document.getElementById('loginPass').value;
-  var err = document.getElementById('loginErr');
-  err.style.display = 'none';
-  if (!auth) { err.textContent = 'Firebase no conectado, recarga la página.'; err.style.display = 'block'; return; }
-  firebase.auth().signInWithEmailAndPassword(email, pass).catch(function() {
-    err.textContent = 'Usuario o contraseña incorrectos';
-    err.style.display = 'block';
-  });
-}
-
-function doLogoutBom() {
-  firebase.auth().signOut();
-}
-
-// Crear usuario desde el panel Admin sin cerrar la sesión actual (misma técnica del MES)
-function crearUsuarioBom() {
-  var email = document.getElementById('nuBomEmail').value.trim().toLowerCase();
-  var nombre = document.getElementById('nuBomNombre').value.trim();
-  var pass = document.getElementById('nuBomPass').value;
-  var st = document.getElementById('nuBomStatus');
-  if (!email || !pass || pass.length < 6) {
-    st.textContent = '⚠️ Completa correo y contraseña (mín. 6 caracteres)';
-    st.style.color = 'var(--amber)';
-    return;
-  }
-  st.textContent = '⏳ Creando...';
-  st.style.color = 'var(--text2)';
-  var cfg = {apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"};
-  var secondApp = firebase.initializeApp(cfg, "secondApp_" + Date.now());
-  secondApp.auth().createUserWithEmailAndPassword(email, pass).then(function() {
-    return secondApp.auth().signOut();
-  }).then(function() {
-    return db.collection('usuarios_bom').add({email: email, nombre: nombre, activo: true, createdAt: new Date()});
-  }).then(function() {
-    st.textContent = '✅ Usuario "' + (nombre || email) + '" creado. Ya puede iniciar sesión.';
-    st.style.color = 'var(--green)';
-    document.getElementById('nuBomEmail').value = '';
-    document.getElementById('nuBomNombre').value = '';
-    document.getElementById('nuBomPass').value = '';
-    secondApp.delete();
-  }).catch(function(e) {
-    var msg = e.code === 'auth/email-already-in-use' ? 'Ese correo ya existe en el sistema' : e.message;
-    st.textContent = '❌ Error: ' + msg;
-    st.style.color = 'var(--red)';
-    secondApp.delete();
-  });
-}
-
-function iniciarAuthListener() {
-  firebase.auth().onAuthStateChanged(function(user) {
-    var overlay = document.getElementById('loginOverlay');
-    var err = document.getElementById('loginErr');
-    if (!user) { overlay.style.display = 'flex'; return; }
-    db.collection('usuarios_bom').where('email', '==', user.email.toLowerCase()).get().then(function(snap) {
-      if (snap.empty) {
-        err.textContent = 'Tu correo no está autorizado para este sistema.';
-        err.style.display = 'block';
-        firebase.auth().signOut();
-        return;
-      }
-      overlay.style.display = 'none';
-    }).catch(function() {
-      err.textContent = 'Error verificando acceso, intenta de nuevo.';
-      err.style.display = 'block';
-      firebase.auth().signOut();
-    });
-  });
-}
 
 function initIMS() {
   try {
@@ -2449,8 +2360,6 @@ function initIMS() {
     var cfg = {apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"};
     if (!firebase.apps.length) firebase.initializeApp(cfg);
     db = firebase.firestore();
-    auth = firebase.auth();
-    iniciarAuthListener();
     return true;
   } catch(e) { return false; }
 }
@@ -3409,19 +3318,6 @@ window.addEventListener('DOMContentLoaded', function() {
         <button class="btn btn-primary btn-sm" onclick="document.getElementById('adminFileInput').value='';document.getElementById('adminFileInput').click()">📁 Seleccionar archivo</button>
       </div>
       <div id="adminUploadStatus" style="margin-top:.75rem;font-size:13px"></div>
-    </div>
-    <div class="card" style="margin-top:1rem;background:rgba(77,166,255,.06);border-color:rgba(77,166,255,.25)">
-      <div class="card-title" style="color:#4da6ff">👤 Crear Usuario de Solo Lectura</div>
-      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
-        Crea el acceso completo (login + autorización) sin salir de tu sesión de admin.
-      </div>
-      <div style="display:grid;gap:.5rem;max-width:340px">
-        <input id="nuBomEmail" type="email" placeholder="Correo" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
-        <input id="nuBomNombre" type="text" placeholder="Nombre (opcional)" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
-        <input id="nuBomPass" type="password" placeholder="Contraseña (mín. 6)" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
-        <button class="btn btn-primary btn-sm" onclick="crearUsuarioBom()">➕ Crear Usuario</button>
-      </div>
-      <div id="nuBomStatus" style="margin-top:.6rem;font-size:12px"></div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(0,230,118,.06);border-color:rgba(0,230,118,.25)">
       <div class="card-title" style="color:#00e676">🔄 Crear Partes Nuevas en IMS</div>

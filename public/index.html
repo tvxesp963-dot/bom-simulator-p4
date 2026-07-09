@@ -2151,16 +2151,20 @@ function exportarSimuladorExcel() {
   const sm = document.getElementById('simModelo').value;
   if (!sm) { alert('Selecciona un modelo primero.'); return; }
   const tbody = document.getElementById('simTable');
-  const headers = ['N° Parte','Descripción','Familia','Destino','Inventario','Requerido','Diferencia','Precio USD','Estado'];
+  const headers = ['Level','Part No.','Description','Inventory','Price'];
   const data = [headers];
   tbody.querySelectorAll('tr').forEach(tr => {
     const tds = tr.querySelectorAll('td');
-    if (tds.length < headers.length) return; // salta filas separadoras de sección
-    data.push(Array.from(tds).map(td => td.innerText.trim()));
+    if (tds.length < 9) return; // salta filas separadoras de sección
+    const pnRaw = tds[0].innerText.trim();
+    const esSub = pnRaw.indexOf('└─') === 0;
+    const pn = esSub ? pnRaw.replace('└─', '').trim() : pnRaw;
+    const level = esSub ? 2 : 1;
+    data.push([level, pn, tds[1].innerText.trim(), tds[4].innerText.trim(), tds[7].innerText.trim()]);
   });
   if (data.length <= 1) { alert('No hay datos para exportar.'); return; }
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{wch:16},{wch:42},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
+  ws['!cols'] = [{wch:8},{wch:16},{wch:42},{wch:12},{wch:12}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sm.substring(0,31));
   const fecha = new Date().toISOString().slice(0,10);

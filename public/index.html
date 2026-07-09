@@ -135,11 +135,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <div id="loginOverlay" style="position:fixed;inset:0;z-index:9999;background:#0b0e14;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">
   <div style="font-size:22px;font-weight:700;color:#fff">📋 BOM SIMULATOR</div>
   <div style="font-size:12px;color:#8a93a6;margin-top:-10px">Planta 4 · Eunsung Samsung</div>
-  <div style="display:flex;flex-direction:column;gap:10px;width:260px;margin-top:10px">
+  <div id="loginUserBox" style="display:flex;flex-direction:column;gap:10px;width:260px;margin-top:10px">
     <input id="loginUser" type="email" placeholder="Correo" style="padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1f2b;color:#fff;font-size:14px">
     <input id="loginPass" type="password" placeholder="Contraseña" style="padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1f2b;color:#fff;font-size:14px" onkeydown="if(event.key==='Enter')checkLogin()">
     <button onclick="checkLogin()" style="padding:10px 12px;border-radius:8px;border:none;background:#1A4F9C;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Ingresar</button>
     <div id="loginErr" style="display:none;color:#ff4444;font-size:12px;text-align:center">Usuario o contraseña incorrectos</div>
+    <div onclick="mostrarLoginAdmin()" style="text-align:center;font-size:11px;color:#8a93a6;cursor:pointer;margin-top:6px;text-decoration:underline">¿Eres administrador? Entra aquí</div>
+  </div>
+  <div id="loginAdminBox" style="display:none;flex-direction:column;gap:10px;width:260px;margin-top:10px">
+    <input id="loginAdminPass" type="password" placeholder="Contraseña de Admin" style="padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1f2b;color:#fff;font-size:14px" onkeydown="if(event.key==='Enter')checkLoginAdmin()">
+    <button onclick="checkLoginAdmin()" style="padding:10px 12px;border-radius:8px;border:none;background:#FFBA00;color:#111;font-size:14px;font-weight:600;cursor:pointer">Entrar como Admin</button>
+    <div id="loginAdminErr" style="display:none;color:#ff4444;font-size:12px;text-align:center">Contraseña incorrecta</div>
+    <div onclick="document.getElementById('loginAdminBox').style.display='none';document.getElementById('loginUserBox').style.display='flex'" style="text-align:center;font-size:11px;color:#8a93a6;cursor:pointer;margin-top:6px;text-decoration:underline">← Volver</div>
   </div>
 </div>
 
@@ -2388,6 +2395,31 @@ function doLogoutBom() {
   firebase.auth().signOut();
 }
 
+function mostrarLoginAdmin() {
+  document.getElementById('loginUserBox').style.display = 'none';
+  document.getElementById('loginAdminBox').style.display = 'flex';
+}
+
+// Acceso directo de admin desde el login, sin pasar por Firebase Auth.
+// Resuelve el arranque inicial: el admin no depende de tener ya un usuario
+// creado en Firebase para poder entrar y crear el primer usuario.
+function checkLoginAdmin() {
+  var pass = document.getElementById('loginAdminPass').value;
+  var err = document.getElementById('loginAdminErr');
+  if (pass === 'BomP4!2026') {
+    adminAuthed = true;
+    document.getElementById('loginOverlay').style.display = 'none';
+    if (!db) initIMS();
+    goTab('admin');
+    document.getElementById('adminLock').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'block';
+    cargarBomActivo();
+  } else {
+    err.style.display = 'block';
+    document.getElementById('loginAdminPass').value = '';
+  }
+}
+
 // Crear usuario desde el panel Admin sin cerrar la sesión actual (misma técnica del MES)
 function crearUsuarioBom() {
   var email = document.getElementById('nuBomEmail').value.trim().toLowerCase();
@@ -2424,6 +2456,7 @@ function crearUsuarioBom() {
 
 function iniciarAuthListener() {
   firebase.auth().onAuthStateChanged(function(user) {
+    if (adminAuthed) return; // el admin ya entró por su propia contraseña, no tocar el overlay
     var overlay = document.getElementById('loginOverlay');
     var err = document.getElementById('loginErr');
     if (!user) { overlay.style.display = 'flex'; return; }

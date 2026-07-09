@@ -2444,6 +2444,7 @@ function resetPassBom() {
 function crearUsuarioBom() {
   var email = document.getElementById('nuBomEmail').value.trim().toLowerCase();
   var nombre = document.getElementById('nuBomNombre').value.trim();
+  var rol = document.getElementById('nuBomRol').value;
   var pass = document.getElementById('nuBomPass').value;
   var st = document.getElementById('nuBomStatus');
   if (!email || !pass || pass.length < 6) {
@@ -2458,9 +2459,9 @@ function crearUsuarioBom() {
   secondApp.auth().createUserWithEmailAndPassword(email, pass).then(function() {
     return secondApp.auth().signOut();
   }).then(function() {
-    return db.collection('usuarios_bom').add({email: email, nombre: nombre, activo: true, createdAt: new Date()});
+    return db.collection('usuarios_bom').add({email: email, nombre: nombre, rol: rol, activo: true, createdAt: new Date()});
   }).then(function() {
-    st.textContent = '✅ Usuario "' + (nombre || email) + '" creado. Ya puede iniciar sesión.';
+    st.textContent = '✅ Usuario "' + (nombre || email) + '" creado como ' + (rol === 'admin' ? 'Admin' : 'Lectura') + '. Ya puede iniciar sesión.';
     st.style.color = 'var(--green)';
     document.getElementById('nuBomEmail').value = '';
     document.getElementById('nuBomNombre').value = '';
@@ -2503,9 +2504,16 @@ function renderUsuariosBom() {
       : '<span style="color:var(--green)">● Activo</span>';
     var fecha = '';
     try { fecha = u.createdAt && u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString('es-MX') : ''; } catch(e) {}
+    var rolActual = u.rol === 'admin' ? 'admin' : 'lectura';
+    var rolSelect = '<select onchange="cambiarRolUsuarioBom(\'' + u.docId + '\',this.value)" style="font-size:10px;padding:.2rem .4rem;border-radius:5px;background:' +
+      (rolActual === 'admin' ? 'rgba(255,186,0,.12);border:1px solid rgba(255,186,0,.4);color:#FFBA00' : 'rgba(77,166,255,.12);border:1px solid rgba(77,166,255,.4);color:#4da6ff') + '">' +
+      '<option value="lectura"' + (rolActual === 'lectura' ? ' selected' : '') + '>👁️ Lectura</option>' +
+      '<option value="admin"' + (rolActual === 'admin' ? ' selected' : '') + '>🔑 Admin</option>' +
+      '</select>';
     return '<tr style="border-bottom:1px solid var(--border)">' +
       '<td style="padding:.5rem;font-size:12px">' + u.email + '</td>' +
       '<td style="padding:.5rem;font-size:12px">' + (u.nombre || '-') + '<br><span style="font-size:10px;color:var(--text2)">' + fecha + '</span></td>' +
+      '<td style="padding:.5rem;font-size:12px;text-align:center">' + rolSelect + '</td>' +
       '<td style="padding:.5rem;font-size:12px;text-align:center">' + estado + '</td>' +
       '<td style="padding:.5rem;font-size:12px;text-align:center">' +
         '<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:.3rem .5rem" onclick="toggleUsuarioBom(\'' + u.docId + '\',' + (u.activo !== false) + ')">' + (u.activo === false ? 'Activar' : 'Desactivar') + '</button> ' +
@@ -2515,9 +2523,14 @@ function renderUsuariosBom() {
   cont.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border)">' +
     '<th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">CORREO</th>' +
     '<th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">NOMBRE</th>' +
+    '<th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">PERMISO</th>' +
     '<th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">ESTADO</th>' +
     '<th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">ACCIONES</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function cambiarRolUsuarioBom(docId, nuevoRol) {
+  db.collection('usuarios_bom').doc(docId).update({rol: nuevoRol}).then(cargarUsuariosBom);
 }
 
 function toggleUsuarioBom(docId, activoActual) {
@@ -2543,7 +2556,17 @@ function iniciarAuthListener() {
         return;
       }
       overlay.style.display = 'none';
-      activarModoSoloSimulador();
+      if (snap.docs[0].data().rol === 'admin') {
+        adminAuthed = true;
+        if (!db) initIMS();
+        document.getElementById('adminLock').style.display = 'none';
+        document.getElementById('adminPanel').style.display = 'block';
+        cargarBomActivo();
+        cargarUsuariosBom();
+        var bp3 = document.getElementById('btnPublicar'); if (bp3) bp3.style.display = '';
+      } else {
+        activarModoSoloSimulador();
+      }
     }).catch(function() {
       err.textContent = 'Error verificando acceso, intenta de nuevo.';
       err.style.display = 'block';
@@ -3545,6 +3568,10 @@ window.addEventListener('DOMContentLoaded', function() {
       <div style="display:grid;gap:.5rem;max-width:340px">
         <input id="nuBomEmail" type="email" placeholder="Correo" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
         <input id="nuBomNombre" type="text" placeholder="Nombre (opcional)" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
+        <select id="nuBomRol" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
+          <option value="lectura">👁️ Lectura (solo ver Simulador)</option>
+          <option value="admin">🔑 Admin (acceso completo)</option>
+        </select>
         <input id="nuBomPass" type="password" placeholder="Contraseña (mín. 6)" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
         <button class="btn btn-primary btn-sm" onclick="crearUsuarioBom()">➕ Crear Usuario</button>
       </div>

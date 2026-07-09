@@ -2151,9 +2151,11 @@ function renderProd() {
 // EXPORT
 // Exporta exactamente lo que está en pantalla en la pestaña Simulador
 // (espejo del DOM, no recalcula nada, para que nunca se desalinee con la vista)
-// Incluye el modelo principal (si hay uno seleccionado) y todos los modelos
-// activos en "Analizar Varios Modelos", cada uno como una hoja separada.
-function construirHojaModeloExcel(tbody) {
+function exportarSimuladorExcel() {
+  if (!BOM.length) { alert('Primero carga o selecciona un BOM.'); return; }
+  const sm = document.getElementById('simModelo').value;
+  if (!sm) { alert('Selecciona un modelo primero.'); return; }
+  const tbody = document.getElementById('simTable');
   const headers = ['Level','Part No.','Description','Inventory','Price'];
   const data = [headers];
   tbody.querySelectorAll('tr').forEach(tr => {
@@ -2165,7 +2167,7 @@ function construirHojaModeloExcel(tbody) {
     const level = esSub ? 2 : 1;
     data.push([level, pn, tds[1].innerText.trim(), tds[4].innerText.trim(), tds[7].innerText.trim()]);
   });
-  if (data.length <= 1) return null;
+  if (data.length <= 1) { alert('No hay datos para exportar.'); return; }
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [{wch:8},{wch:16},{wch:42},{wch:12},{wch:12}];
   const borderThin = {
@@ -2188,41 +2190,10 @@ function construirHojaModeloExcel(tbody) {
       };
     }
   }
-  return ws;
-}
-
-function exportarSimuladorExcel() {
-  if (!BOM.length) { alert('Primero carga o selecciona un BOM.'); return; }
-  const smPrincipal = document.getElementById('simModelo').value;
-  const hojas = []; // {nombre, ws}
-  const nombresUsados = {};
-  const nombreUnico = (base) => {
-    const limpio = base.replace(/[:\\/?*\[\]]/g, '-');
-    let n = limpio.substring(0,31), i = 2;
-    while (nombresUsados[n]) { n = (limpio.substring(0,28) + '_' + i).substring(0,31); i++; }
-    nombresUsados[n] = true;
-    return n;
-  };
-
-  if (smPrincipal) {
-    const ws = construirHojaModeloExcel(document.getElementById('simTable'));
-    if (ws) hojas.push({ nombre: nombreUnico(smPrincipal), ws });
-  }
-  (typeof multiModelosActivos !== 'undefined' ? multiModelosActivos : []).forEach(sm => {
-    const safeId = sm.replace(/[^a-zA-Z0-9]/g, '_');
-    const tbody = document.getElementById('multiTable-' + safeId);
-    if (!tbody) return;
-    const ws = construirHojaModeloExcel(tbody);
-    if (ws) hojas.push({ nombre: nombreUnico(sm), ws });
-  });
-
-  if (!hojas.length) { alert('Selecciona un modelo o agrega modelos en "Analizar Varios Modelos" antes de exportar.'); return; }
-
   const wb = XLSX.utils.book_new();
-  hojas.forEach(h => XLSX.utils.book_append_sheet(wb, h.ws, h.nombre));
+  XLSX.utils.book_append_sheet(wb, ws, sm.substring(0,31));
   const fecha = new Date().toISOString().slice(0,10);
-  const nombreArchivo = hojas.length === 1 ? ('BOM_Simulador_' + hojas[0].nombre + '_' + fecha + '.xlsx') : ('BOM_Simulador_Multi_' + fecha + '.xlsx');
-  XLSX.writeFile(wb, nombreArchivo);
+  XLSX.writeFile(wb, 'BOM_Simulador_' + sm + '_' + fecha + '.xlsx');
 }
 
 function exportarExcel() {

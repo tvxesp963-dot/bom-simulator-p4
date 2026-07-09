@@ -856,7 +856,11 @@ function filtrarPorGH90() {
 function limpiarFiltrosSim() {
   document.getElementById('simFiltroGH90').value = '';
   filtrarPorGH90();
+  document.getElementById('simModelo').value = '';
+  document.getElementById('simModelo').dataset.prev = '';
+  document.getElementById('simTarget').value = '';
   if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
+  calcSim();
 }
 
 
@@ -881,7 +885,8 @@ function refrescarPlan() {
   if (!confirm('¿Limpiar el target de ' + sm + '?')) return;
   delete simTargetsPorModelo[sm];
   try { localStorage.setItem('simTargets_p4', JSON.stringify(simTargetsPorModelo)); } catch(e){}
-  document.getElementById('simTarget').value = 0;
+  document.getElementById('simTarget').value = '';
+  document.getElementById('simModelo').value = '';
   document.getElementById('simModelo').dataset.prev = '';
   calcSim();
 }

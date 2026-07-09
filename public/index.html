@@ -2414,6 +2414,7 @@ function checkLoginAdmin() {
     document.getElementById('adminLock').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
     cargarBomActivo();
+    cargarUsuariosBom();
   } else {
     err.style.display = 'block';
     document.getElementById('loginAdminPass').value = '';
@@ -2463,12 +2464,67 @@ function crearUsuarioBom() {
     document.getElementById('nuBomNombre').value = '';
     document.getElementById('nuBomPass').value = '';
     secondApp.delete();
+    cargarUsuariosBom();
   }).catch(function(e) {
     var msg = e.code === 'auth/email-already-in-use' ? 'Ese correo ya existe en el sistema' : e.message;
     st.textContent = '❌ Error: ' + msg;
     st.style.color = 'var(--red)';
     secondApp.delete();
   });
+}
+
+var USUARIOS_BOM_CACHE = [];
+
+function cargarUsuariosBom() {
+  var cont = document.getElementById('usuariosBomTabla');
+  if (!cont || !db) return;
+  db.collection('usuarios_bom').orderBy('createdAt', 'desc').get().then(function(snap) {
+    USUARIOS_BOM_CACHE = snap.docs.map(function(d) { return Object.assign({docId: d.id}, d.data()); });
+    renderUsuariosBom();
+  }).catch(function() {
+    cont.innerHTML = '<div style="color:var(--text2);font-size:12px;padding:1rem;text-align:center">No se pudo cargar la lista de usuarios.</div>';
+  });
+}
+
+function renderUsuariosBom() {
+  var cont = document.getElementById('usuariosBomTabla');
+  var titulo = document.getElementById('usuariosBomTitulo');
+  if (!cont) return;
+  if (titulo) titulo.textContent = '👥 Usuarios (' + USUARIOS_BOM_CACHE.length + ')';
+  if (!USUARIOS_BOM_CACHE.length) {
+    cont.innerHTML = '<div style="color:var(--text2);font-size:12px;padding:1rem;text-align:center">Aún no hay usuarios creados.</div>';
+    return;
+  }
+  var rows = USUARIOS_BOM_CACHE.map(function(u) {
+    var estado = u.activo === false
+      ? '<span style="color:var(--red)">● Inactivo</span>'
+      : '<span style="color:var(--green)">● Activo</span>';
+    var fecha = '';
+    try { fecha = u.createdAt && u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString('es-MX') : ''; } catch(e) {}
+    return '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:.5rem;font-size:12px">' + u.email + '</td>' +
+      '<td style="padding:.5rem;font-size:12px">' + (u.nombre || '-') + '<br><span style="font-size:10px;color:var(--text2)">' + fecha + '</span></td>' +
+      '<td style="padding:.5rem;font-size:12px;text-align:center">' + estado + '</td>' +
+      '<td style="padding:.5rem;font-size:12px;text-align:center">' +
+        '<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:.3rem .5rem" onclick="toggleUsuarioBom(\'' + u.docId + '\',' + (u.activo !== false) + ')">' + (u.activo === false ? 'Activar' : 'Desactivar') + '</button> ' +
+        '<button class="btn btn-sm" style="font-size:10px;padding:.3rem .5rem;background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.4);color:#ff4444" onclick="eliminarUsuarioBom(\'' + u.docId + '\',\'' + u.email + '\')">✕</button>' +
+      '</td></tr>';
+  }).join('');
+  cont.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border)">' +
+    '<th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">CORREO</th>' +
+    '<th style="text-align:left;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">NOMBRE</th>' +
+    '<th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">ESTADO</th>' +
+    '<th style="text-align:center;padding:.5rem;color:var(--text2);font-weight:600;font-size:11px">ACCIONES</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function toggleUsuarioBom(docId, activoActual) {
+  db.collection('usuarios_bom').doc(docId).update({activo: !activoActual}).then(cargarUsuariosBom);
+}
+
+function eliminarUsuarioBom(docId, email) {
+  if (!confirm('¿Eliminar el acceso de "' + email + '"?\\n\\nEsto quita su autorización para entrar. Su cuenta de correo/contraseña en Firebase Authentication no se borra (eso sí requiere hacerlo desde la consola).')) return;
+  db.collection('usuarios_bom').doc(docId).delete().then(cargarUsuariosBom);
 }
 
 function iniciarAuthListener() {
@@ -2478,8 +2534,8 @@ function iniciarAuthListener() {
     var err = document.getElementById('loginErr');
     if (!user) { overlay.style.display = 'flex'; return; }
     db.collection('usuarios_bom').where('email', '==', user.email.toLowerCase()).get().then(function(snap) {
-      if (snap.empty) {
-        err.textContent = 'Tu correo no está autorizado para este sistema.';
+      if (snap.empty || snap.docs[0].data().activo === false) {
+        err.textContent = snap.empty ? 'Tu correo no está autorizado para este sistema.' : 'Tu cuenta está desactivada. Contacta al administrador.';
         err.style.display = 'block';
         firebase.auth().signOut();
         return;
@@ -2697,6 +2753,7 @@ function checkAdminKey() {
     document.getElementById('adminLock').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
     cargarBomActivo();
+    cargarUsuariosBom();
   } else {
     document.getElementById('adminKeyErr').style.display = 'block';
     document.getElementById('adminKey').value = '';
@@ -3461,9 +3518,12 @@ window.addEventListener('DOMContentLoaded', function() {
       <div id="adminUploadStatus" style="margin-top:.75rem;font-size:13px"></div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(77,166,255,.06);border-color:rgba(77,166,255,.25)">
-      <div class="card-title" style="color:#4da6ff">👤 Crear Usuario de Solo Lectura</div>
-      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
-        Crea el acceso completo (login + autorización) sin salir de tu sesión de admin.
+      <div class="card-title" style="color:#4da6ff" id="usuariosBomTitulo">👥 Usuarios (0)</div>
+      <div id="usuariosBomTabla" style="margin-bottom:1rem;max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <div style="color:var(--text2);font-size:12px;padding:1rem;text-align:center">⏳ Cargando...</div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.08)">
+        Crear nuevo usuario — acceso completo (login + autorización) sin salir de tu sesión de admin.
       </div>
       <div style="display:grid;gap:.5rem;max-width:340px">
         <input id="nuBomEmail" type="email" placeholder="Correo" style="background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">

@@ -331,7 +331,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="top-actions">
       <span style="font-size:12px;color:var(--text2)" id="prodTitle"></span>
       <div style="display:flex;gap:.5rem;margin-left:auto">
-        <button class="btn btn-primary btn-sm" id="btnPublicar" onclick="publicarPlan()">📤 Publicar Plan al MES</button>
+        <button class="btn btn-primary btn-sm" id="btnPublicar" onclick="publicarPlan()" style="display:none">📤 Publicar Plan al MES</button>
         <button class="btn btn-success btn-sm" onclick="exportarExcel()">📊 Descargar Excel</button>
       </div>
     </div>
@@ -351,6 +351,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 let BOM = [], workbook = null, simFiltro = 'todos', simTargetsPorModelo = {};
 
 function goTab(n) {
+  if (modoSoloSimulador && n !== 'sim') return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + n).classList.add('active');
@@ -2415,6 +2416,7 @@ function checkLoginAdmin() {
     document.getElementById('adminPanel').style.display = 'block';
     cargarBomActivo();
     cargarUsuariosBom();
+    var bp = document.getElementById('btnPublicar'); if (bp) bp.style.display = '';
   } else {
     err.style.display = 'block';
     document.getElementById('loginAdminPass').value = '';
@@ -2541,12 +2543,25 @@ function iniciarAuthListener() {
         return;
       }
       overlay.style.display = 'none';
+      activarModoSoloSimulador();
     }).catch(function() {
       err.textContent = 'Error verificando acceso, intenta de nuevo.';
       err.style.display = 'block';
       firebase.auth().signOut();
     });
   });
+}
+
+// Por el momento, los usuarios de solo lectura solo pueden ver la pestaña Simulador.
+// Las demás (Consolidado, Producir/Ranurar, Admin) quedan ocultas hasta que se revisen.
+var modoSoloSimulador = false;
+function activarModoSoloSimulador() {
+  modoSoloSimulador = true;
+  ['tab-cons', 'tab-prod', 'tab-admin'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  goTab('sim');
 }
 
 function initIMS() {
@@ -2754,6 +2769,7 @@ function checkAdminKey() {
     document.getElementById('adminPanel').style.display = 'block';
     cargarBomActivo();
     cargarUsuariosBom();
+    var bp2 = document.getElementById('btnPublicar'); if (bp2) bp2.style.display = '';
   } else {
     document.getElementById('adminKeyErr').style.display = 'block';
     document.getElementById('adminKey').value = '';
@@ -2872,6 +2888,7 @@ function autoCargarBOM() {
 
 // ── PUBLICAR PLAN AL MES ──
 async function publicarPlan() {
+  if (!adminAuthed) { alert('Solo el administrador puede publicar el plan al MES.'); return; }
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm]||0) > 0);
   if (!conTarget.length) { alert('Ingresa el target de al menos un modelo antes de publicar.'); return; }

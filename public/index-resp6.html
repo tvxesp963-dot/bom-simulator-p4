@@ -2165,26 +2165,6 @@ function exportarSimuladorExcel() {
   if (data.length <= 1) { alert('No hay datos para exportar.'); return; }
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [{wch:8},{wch:16},{wch:42},{wch:12},{wch:12}];
-  const borderThin = {
-    top:{style:'thin',color:{rgb:'BBBBBB'}}, bottom:{style:'thin',color:{rgb:'BBBBBB'}},
-    left:{style:'thin',color:{rgb:'BBBBBB'}}, right:{style:'thin',color:{rgb:'BBBBBB'}}
-  };
-  const range = XLSX.utils.decode_range(ws['!ref']);
-  for (let R = range.s.r; R <= range.e.r; R++) {
-    const isHeader = R === 0;
-    const isLevel1 = !isHeader && data[R][0] === 1;
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const addr = XLSX.utils.encode_cell({r:R, c:C});
-      const cell = ws[addr];
-      if (!cell) continue;
-      cell.s = {
-        font: { bold: isHeader || isLevel1, color:{rgb:'000000'} },
-        fill: isLevel1 ? {patternType:'solid', fgColor:{rgb:'D9E1F2'}} : {patternType:'none'},
-        alignment: { horizontal: C===0 ? 'center' : (C>=3 ? 'right' : 'left'), vertical:'center' },
-        border: borderThin
-      };
-    }
-  }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sm.substring(0,31));
   const fecha = new Date().toISOString().slice(0,10);

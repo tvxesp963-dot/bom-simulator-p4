@@ -2421,6 +2421,23 @@ function checkLoginAdmin() {
 }
 
 // Crear usuario desde el panel Admin sin cerrar la sesión actual (misma técnica del MES)
+function resetPassBom() {
+  var email = document.getElementById('resetBomEmail').value.trim().toLowerCase();
+  var st = document.getElementById('resetBomStatus');
+  if (!email) { st.textContent = '⚠️ Escribe el correo'; st.style.color = 'var(--amber)'; return; }
+  st.textContent = '⏳ Enviando...';
+  st.style.color = 'var(--text2)';
+  firebase.auth().sendPasswordResetEmail(email).then(function() {
+    st.textContent = '✅ Correo enviado a ' + email + '. Debe revisar su bandeja (y spam).';
+    st.style.color = 'var(--green)';
+    document.getElementById('resetBomEmail').value = '';
+  }).catch(function(e) {
+    var msg = e.code === 'auth/user-not-found' ? 'Ese correo no existe en el sistema' : e.message;
+    st.textContent = '❌ Error: ' + msg;
+    st.style.color = 'var(--red)';
+  });
+}
+
 function crearUsuarioBom() {
   var email = document.getElementById('nuBomEmail').value.trim().toLowerCase();
   var nombre = document.getElementById('nuBomNombre').value.trim();
@@ -3455,6 +3472,14 @@ window.addEventListener('DOMContentLoaded', function() {
         <button class="btn btn-primary btn-sm" onclick="crearUsuarioBom()">➕ Crear Usuario</button>
       </div>
       <div id="nuBomStatus" style="margin-top:.6rem;font-size:12px"></div>
+      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.08)">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:.5rem">¿Ya existe pero olvidaron la contraseña? Envíale un correo para que la restablezca:</div>
+        <div style="display:flex;gap:.5rem;max-width:340px">
+          <input id="resetBomEmail" type="email" placeholder="Correo del usuario" style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem .6rem;color:var(--text);font-size:12px">
+          <button class="btn btn-secondary btn-sm" onclick="resetPassBom()">🔑 Enviar</button>
+        </div>
+        <div id="resetBomStatus" style="margin-top:.5rem;font-size:12px"></div>
+      </div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(0,230,118,.06);border-color:rgba(0,230,118,.25)">
       <div class="card-title" style="color:#00e676">🔄 Crear Partes Nuevas en IMS</div>

@@ -1560,6 +1560,13 @@ function renderCons() {
       const bundleRows = pl.key === 'P3'
         ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'))
         : [];
+      // Strip (GH90 Ensamble) pertenece a P1 y se excluye del filtro general de
+      // familia GH90 (más abajo, en la definición de 'rows'), igual que el
+      // Bundle en P3. Se agrega aquí por separado para que sí aparezca en el
+      // Consolidado — antes se omitía por completo.
+      const stripRows = pl.key === 'P1'
+        ? BOM.filter(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('STRIP'))
+        : [];
 
       // Header real del Bundle (terminado, sin "MANUAL") — su inventario decide si ya está cubierto, igual que el Simulador
       const bundleHeaderRow = bundleRows.find(r => (r.desc||'').toUpperCase() === 'BUNDLE' || ((r.desc||'').toUpperCase().includes('BUNDLE') && !(r.desc||'').toUpperCase().includes('MANUAL')));
@@ -1720,7 +1727,7 @@ function renderCons() {
 
       const rowsActual = rows;
 
-      if (!rowsActual.length && !bundleRows.filter(r=>r.inv<target).length) return;
+      if (!rowsActual.length && !bundleRows.filter(r=>r.inv<target).length && !stripRows.filter(r=>r.inv<target).length) return;
 
       const rowsCalc = rowsActual.map(r => {
         const d2 = (r.desc||'').toUpperCase();
@@ -1757,19 +1764,29 @@ function renderCons() {
         const aPedirReal = esManualB && invPropio < target ? Math.ceil(faltaPropia * 11 / 10) : 0;
         return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
       });
+      // Strip: mismo criterio simple que un componente normal — inventario
+      // real contra el target del modelo, +10% si hace falta.
+      const stripCalc = stripRows.map(r => {
+        const invPropio = r.inv || 0;
+        const faltaPropia = Math.max(0, target - invPropio);
+        const aPedirReal = invPropio < target ? Math.ceil(faltaPropia * 11 / 10) : 0;
+        return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
+      });
 
       // Guardar las filas de este modelo en el acumulador de la planta — el
       // pintado real (agrupado por variante) se hace DESPUÉS, fuera de este loop.
       filasPorPlanta[pl.key].push(
         ...bundleCalc.map(r => ({...r, _sm: sm, _esBundle: true})),
+        ...stripCalc.map(r => ({...r, _sm: sm, _esBundle: false})),
         ...rowsCalc.map(r => ({...r, _sm: sm, _esBundle: false}))
       );
 
       // Capturar datos exactos para que el Excel sea espejo de lo mostrado en pantalla
       if (!window.consolidadoData[pl.key]) window.consolidadoData[pl.key] = {};
       const bundleRowsMarked = bundleCalc.map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:true}));
+      const stripRowsMarked = stripCalc.filter(r => r.aPedir > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
       const normalRowsMarked = rowsCalc.filter(r => r.aPedir > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
-      window.consolidadoData[pl.key][sm] = { target, rows: [...bundleRowsMarked, ...normalRowsMarked] };
+      window.consolidadoData[pl.key][sm] = { target, rows: [...bundleRowsMarked, ...stripRowsMarked, ...normalRowsMarked] };
     });
 
     // --- Pintado consolidado por VARIANTE (una sola línea por PN+Desc) ---

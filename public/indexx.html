@@ -907,16 +907,6 @@ function onModeloChange() {
 
 
 // ── FUNCIÓN CENTRALIZADA: decide si un componente es relevante dado el inventario de medio proceso ──
-// Calcula la cantidad final a pedir aplicando el margen extra escalonado:
-// +10% para faltantes normales, pero +1% cuando el faltante supera 100,000
-// (un 10% sobre cantidades muy grandes es un colchón excesivo).
-// Usa multiplicación/división entera (11/10, 101/100) en vez de *1.10 para
-// evitar errores de punto flotante de JS (ej. 47700*1.1 = 52470.00000000001).
-function calcularAPedir(falta) {
-  if (!falta || falta <= 0) return 0;
-  return falta > 100000 ? Math.ceil(falta * 101 / 100) : Math.ceil(falta * 11 / 10);
-}
-
 function componenteNecesario(r, sm, target, poolOverride) {
   const d = (r.desc||'').toUpperCase();
   const inv = n => n ? (n.inv||0) : 0;
@@ -1784,7 +1774,7 @@ function renderCons() {
         // real, pero NUNCA tienen "A Pedir" propio — el faltante de Ranurado se
         // cubre comprando Virgen (que luego se ranura), no se compra Ranurado aparte.
         const sinPedirPropio = isBotRanurado || isTopRanurado;
-        return {...r, inv: invDisplay, falta: falta, aPedir: (!sinPedirPropio && falta > 0) ? calcularAPedir(falta) : 0};
+        return {...r, inv: invDisplay, falta: falta, aPedir: (!sinPedirPropio && falta > 0) ? Math.ceil(falta * 11 / 10) : 0};
       });
       const bundleCalc = bundleRows.map(r => {
         const esManualB = (r.desc||'').toUpperCase().includes('MANUAL BUNDLE');
@@ -1792,7 +1782,7 @@ function renderCons() {
         const invPropio = esManualB ? bundleInvDisp : (r.inv || 0);
         const faltaPropia = Math.max(0, target - invPropio);
         // Solo MANUAL BUNDLE aporta al total a pedir — es el insumo que realmente se compra/produce, evita doble conteo del mismo faltante
-        const aPedirReal = esManualB && invPropio < target ? calcularAPedir(faltaPropia) : 0;
+        const aPedirReal = esManualB && invPropio < target ? Math.ceil(faltaPropia * 11 / 10) : 0;
         return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
       });
       // Strip: mismo criterio simple que un componente normal — inventario
@@ -1800,7 +1790,7 @@ function renderCons() {
       const stripCalc = stripRows.map(r => {
         const invPropio = r.inv || 0;
         const faltaPropia = Math.max(0, target - invPropio);
-        const aPedirReal = invPropio < target ? calcularAPedir(faltaPropia) : 0;
+        const aPedirReal = invPropio < target ? Math.ceil(faltaPropia * 11 / 10) : 0;
         return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
       });
 
@@ -1839,33 +1829,28 @@ function renderCons() {
       // Mostrar el inventario más representativo (el del header/pool, que es el mismo para todos los modelos)
       grupos[key].invMuestra = r.inv;
     });
-    // El Bundle terminado (header) siempre tiene aPedir=0 por diseño (su
-    // faltante se cubre con MANUAL BUNDLE), pero debe seguir VISIBLE para
-    // mostrar su diferencia real informativamente.
-    // Chip Board Top/Bottom Ranurado: por instrucción de Octavio, ya NO se
-    // muestran en el Consolidado — solo importa la cantidad final de Virgen
-    // a pedir (que ya internamente resta el inventario de Ranurado antes de
-    // calcularse). El dato de Ranurado se sigue usando en el cálculo, solo
-    // se deja de desplegar la fila.
+    // Chip Board Bottom Ranurado y el Bundle terminado (header) siempre tienen
+    // aPedir=0 por diseño (su faltante se cubre con otro insumo: Virgen o
+    // MANUAL BUNDLE), pero deben seguir VISIBLES para mostrar su diferencia
+    // real — se incluyen aunque no tengan aPedir>0, mientras tengan un
+    // faltante real (falta>0) que valga la pena mostrar informativamente.
     const esSiempreVisibleInformativo = (g) => {
       const d = (g.desc||'').toUpperCase();
+      const esChipBotRanurado = d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO');
+      const esChipTopRanurado = d.includes('CHIP BOARD TOP') && d.includes('RANURADO');
       const esBundleHeader = g.esBundle && d === 'BUNDLE';
-      return esBundleHeader;
+      return esChipBotRanurado || esChipTopRanurado || esBundleHeader;
     };
-    const esChipRanurado = (g) => {
-      const d = (g.desc||'').toUpperCase();
-      return d.includes('RANURADO') && (d.includes('CHIP BOARD TOP') || d.includes('CHIP BOARD BOTTOM'));
-    };
-    const listaGrupos = Object.values(grupos).filter(g => !esChipRanurado(g) && (
+    const listaGrupos = Object.values(grupos).filter(g =>
       g.faltaAcumulada > 0 || g.modelos.some(m => m.aPedir > 0) ||
       (esSiempreVisibleInformativo(g) && g.modelos.some(m => m.falta > 0))
-    ));
+    );
 
     if (!listaGrupos.length) return;
     hayAlgoLocal = true;
 
     const renderRowConsolidada = (g, i, color) => {
-      const aPedirConsolidado = g.faltaAcumulada > 0 ? calcularAPedir(g.faltaAcumulada) : 0;
+      const aPedirConsolidado = g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * 11 / 10) : 0;
       const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
       const esRanuradoInfo = ((g.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') || (g.desc||'').toUpperCase().includes('CHIP BOARD TOP')) && (g.desc||'').toUpperCase().includes('RANURADO');
       return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
@@ -1883,7 +1868,7 @@ function renderCons() {
 
     const gruposBundle = listaGrupos.filter(g => g.esBundle);
     const gruposNormales = listaGrupos.filter(g => !g.esBundle);
-    const totalPedirPlanta = listaGrupos.reduce((s,g) => s + (g.faltaAcumulada>0 ? calcularAPedir(g.faltaAcumulada) : 0), 0);
+    const totalPedirPlanta = listaGrupos.reduce((s,g) => s + (g.faltaAcumulada>0 ? Math.ceil(g.faltaAcumulada*11/10) : 0), 0);
 
     plantaHtml = `
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
@@ -2353,10 +2338,10 @@ function exportarExcel() {
       const g = grupos[key];
       const d = (g.desc||'').toUpperCase();
       const esRanuradoInfo = (d.includes('CHIP BOARD BOTTOM') || d.includes('CHIP BOARD TOP')) && d.includes('RANURADO');
-      const aPedir = esRanuradoInfo ? 0 : (g.faltaAcumulada > 0 ? calcularAPedir(g.faltaAcumulada) : 0);
+      const aPedir = esRanuradoInfo ? 0 : (g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * 11 / 10) : 0);
       const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
       return { pn:g.pn, desc:g.desc, inv:g.inv, falta:g.faltaMostrada, aPedir, isBundle:g.isBundle, esRanuradoInfo, modelosTexto };
-    }).filter(r => !r.esRanuradoInfo && (r.falta > 0 || r.aPedir > 0));
+    }).filter(r => r.falta > 0 || r.aPedir > 0);
   };
 
   // ══════════════════════════════════════════

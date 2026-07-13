@@ -1612,28 +1612,19 @@ function renderCons() {
       const botVirC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('VIRGEN'));
       const keyBotVirgen = botVirC ? keyPool(botVirC.pn, botVirC.desc) : null;
       const keyBotRanurado = botRanC ? keyPool(botRanC.pn, botRanC.desc) : null;
-      // Chip Board TOP: mismo criterio en cascada que Bottom — Ranurado nunca se
-      // compra aparte, su inventario resta de lo que Virgen necesita cubrir.
-      const topVirC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('VIRGEN'));
-      const keyTopVirgen = topVirC ? keyPool(topVirC.pn, topVirC.desc) : null;
-      const keyTopRanurado = topRanC ? keyPool(topRanC.pn, topRanC.desc) : null;
 
       if (!invDispPorModelo[sm]) {
         invDispPorModelo[sm] = {
           giftBoxInvDisp: keyGiftBox ? (poolPlanta[keyGiftBox] ?? giftBoxCC_inv) : giftBoxCC_inv,
           lowerBoxInvDisp: keyLowerBox ? (poolPlanta[keyLowerBox] ?? lowerBoxCC_inv) : lowerBoxCC_inv,
           botVirgenInvDisp: keyBotVirgen ? (poolPlanta[keyBotVirgen] ?? (botVirC.inv||0)) : (botVirC ? (botVirC.inv||0) : 0),
-          botRanuradoInvDisp: keyBotRanurado ? (poolPlanta[keyBotRanurado] ?? botRanCC) : botRanCC,
-          topVirgenInvDisp: keyTopVirgen ? (poolPlanta[keyTopVirgen] ?? (topVirC.inv||0)) : (topVirC ? (topVirC.inv||0) : 0),
-          topRanuradoInvDisp: keyTopRanurado ? (poolPlanta[keyTopRanurado] ?? topRanCC) : topRanCC
+          botRanuradoInvDisp: keyBotRanurado ? (poolPlanta[keyBotRanurado] ?? botRanCC) : botRanCC
         };
       }
       const giftBoxInvDisp = invDispPorModelo[sm].giftBoxInvDisp;
       const lowerBoxInvDisp = invDispPorModelo[sm].lowerBoxInvDisp;
       const botVirgenInvDisp = invDispPorModelo[sm].botVirgenInvDisp;
       const botRanuradoInvDisp = invDispPorModelo[sm].botRanuradoInvDisp;
-      const topVirgenInvDisp = invDispPorModelo[sm].topVirgenInvDisp;
-      const topRanuradoInvDisp = invDispPorModelo[sm].topRanuradoInvDisp;
 
       // P1: targetReal por grupo usando header (Gift Box / Lower Box) — usando inventario YA disponible del pool
       // Gift Box group targetReal
@@ -1654,11 +1645,6 @@ function renderCons() {
         if (keyBotRanurado) poolPlanta[keyBotRanurado] = Math.max(0, botRanuradoInvDisp - Math.min(botRanuradoInvDisp, targetRealBotParaDescuento));
         const targetVirgenDescuento = Math.max(0, targetRealBotParaDescuento - botRanuradoInvDisp);
         if (keyBotVirgen) poolPlanta[keyBotVirgen] = Math.max(0, botVirgenInvDisp - Math.min(botVirgenInvDisp, targetVirgenDescuento));
-        // Chip Board Top: mismo patrón — Ranurado cubre primero, Virgen cubre el remanente.
-        const targetRealTopParaDescuento = Math.max(0, target - giftBoxInvDisp);
-        if (keyTopRanurado) poolPlanta[keyTopRanurado] = Math.max(0, topRanuradoInvDisp - Math.min(topRanuradoInvDisp, targetRealTopParaDescuento));
-        const targetVirgenDescuentoTop = Math.max(0, targetRealTopParaDescuento - topRanuradoInvDisp);
-        if (keyTopVirgen) poolPlanta[keyTopVirgen] = Math.max(0, topVirgenInvDisp - Math.min(topVirgenInvDisp, targetVirgenDescuentoTop));
       }
 
       // Descontar Bundle del pool — se rastrea con su propio set (yaDescontadoBundlePorModelo)
@@ -1683,7 +1669,7 @@ function renderCons() {
         if (d.includes('GIFT BOX') || d.includes('LOWER BOX')) return target;
         // Chip Board: Ranurado usa targetReal completo; Virgen resta lo que Ranurado ya cubre
         const esVirgenChip = (d.includes('VIRGEN') || d.includes('VIRGIN'));
-        if (d.includes('CHIP BOARD TOP')) return esVirgenChip ? Math.max(0, targetRealTop - topRanuradoInvDisp) : targetRealTop;
+        if (d.includes('CHIP BOARD TOP')) return esVirgenChip ? Math.max(0, targetRealTop - topRanCC) : targetRealTop;
         if (d.includes('CHIP BOARD BOTTOM')) return esVirgenChip ? Math.max(0, targetRealBot - botRanuradoInvDisp) : targetRealBot;
         // Sheet usa target completo (la diferencia se calcula con inv real = fisico + ya producido)
         if (d.includes('SHEET TOP') || d.includes('SHEET LOWER')) return target;
@@ -1705,9 +1691,6 @@ function renderCons() {
         if (isHeaderLower) return lowerBoxInvDisp;
         if (d.includes('SHEET TOP')) {  return (r.inv||0) + giftBoxInvDisp; }
         if (d.includes('SHEET LOWER')) {  return (r.inv||0) + lowerBoxInvDisp; }
-        // Chip Board Top: mismo criterio en cascada que Bottom.
-        if (d.includes('CHIP BOARD TOP') && d.includes('RANURADO')) return topRanuradoInvDisp;
-        if (d.includes('CHIP BOARD TOP') && (d.includes('VIRGEN') || d.includes('VIRGIN'))) return topVirgenInvDisp;
         // Chip Board Bottom: usar el pool en cascada (remanente entre modelos),
         // no el inventario crudo de cada modelo por separado.
         if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO')) return botRanuradoInvDisp;
@@ -1729,8 +1712,8 @@ function renderCons() {
             const tgtGrupo = esTop ? targetRealTop : targetRealBot;
             const grupoKey = esTop ? 'CHIP BOARD TOP' : 'CHIP BOARD BOTTOM';
             const ranurado = BOM.find(b => b.sm===sm && (b.desc||'').toUpperCase().includes(grupoKey) && ((b.desc||'').toUpperCase().includes('RANURADO') || (b.desc||'').toUpperCase().includes('GROOVING')));
-            // Bottom y Top usan el pool en cascada (remanente compartido entre modelos)
-            const ranuradoInv = esTop ? topRanuradoInvDisp : botRanuradoInvDisp;
+            // Bottom usa el pool en cascada (botRanuradoInvDisp); Top sigue igual que antes (sin tocar, por instrucción de Octavio)
+            const ranuradoInv = esTop ? (ranurado ? (ranurado.inv||0) : 0) : botRanuradoInvDisp;
             // Virgen: excluir si ranurado solo cubre (no se necesita procesar)
             if (esVirgen && ranuradoInv >= tgtGrupo) return false;
             // Ranurado: nunca se compra aparte — si hay faltante, se cubre comprando
@@ -1762,17 +1745,14 @@ function renderCons() {
         const isHL = d3.includes('LOWER BOX') && !d3.includes('SHEET');
         const isBotRanurado = d3.includes('CHIP BOARD BOTTOM') && d3.includes('RANURADO');
         const isBotVirgen = d3.includes('CHIP BOARD BOTTOM') && (d3.includes('VIRGEN') || d3.includes('VIRGIN'));
-        const isTopRanurado = d3.includes('CHIP BOARD TOP') && d3.includes('RANURADO');
-        const isTopVirgen = d3.includes('CHIP BOARD TOP') && (d3.includes('VIRGEN') || d3.includes('VIRGIN'));
         const invDisplay = isHG ? giftBoxInvDisp : isHL ? lowerBoxInvDisp
           : isBotRanurado ? botRanuradoInvDisp : isBotVirgen ? botVirgenInvDisp
-          : isTopRanurado ? topRanuradoInvDisp : isTopVirgen ? topVirgenInvDisp
           : (r.inv || 0);
         const falta = tgt - invParaDiff;
-        // Chip Board Bottom/Top Ranurado: visible siempre con su inventario/diferencia
-        // real, pero NUNCA tienen "A Pedir" propio — el faltante de Ranurado se
+        // Chip Board Bottom Ranurado: visible siempre con su inventario/diferencia
+        // real, pero NUNCA tiene "A Pedir" propio — el faltante de Ranurado se
         // cubre comprando Virgen (que luego se ranura), no se compra Ranurado aparte.
-        const sinPedirPropio = isBotRanurado || isTopRanurado;
+        const sinPedirPropio = isBotRanurado;
         return {...r, inv: invDisplay, falta: falta, aPedir: (!sinPedirPropio && falta > 0) ? Math.ceil(falta * 11 / 10) : 0};
       });
       const bundleCalc = bundleRows.map(r => {
@@ -1804,8 +1784,8 @@ function renderCons() {
       // Capturar datos exactos para que el Excel sea espejo de lo mostrado en pantalla
       if (!window.consolidadoData[pl.key]) window.consolidadoData[pl.key] = {};
       const bundleRowsMarked = bundleCalc.map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:true}));
-      const stripRowsMarked = stripCalc.filter(r => r.aPedir > 0 || r.falta > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
-      const normalRowsMarked = rowsCalc.filter(r => r.aPedir > 0 || r.falta > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
+      const stripRowsMarked = stripCalc.filter(r => r.aPedir > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
+      const normalRowsMarked = rowsCalc.filter(r => r.aPedir > 0).map(r => ({pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, esBundle:false}));
       window.consolidadoData[pl.key][sm] = { target, rows: [...bundleRowsMarked, ...stripRowsMarked, ...normalRowsMarked] };
     });
 
@@ -1836,9 +1816,8 @@ function renderCons() {
     const esSiempreVisibleInformativo = (g) => {
       const d = (g.desc||'').toUpperCase();
       const esChipBotRanurado = d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO');
-      const esChipTopRanurado = d.includes('CHIP BOARD TOP') && d.includes('RANURADO');
       const esBundleHeader = g.esBundle && d === 'BUNDLE';
-      return esChipBotRanurado || esChipTopRanurado || esBundleHeader;
+      return esChipBotRanurado || esBundleHeader;
     };
     const listaGrupos = Object.values(grupos).filter(g =>
       g.faltaAcumulada > 0 || g.modelos.some(m => m.aPedir > 0) ||
@@ -1851,7 +1830,7 @@ function renderCons() {
     const renderRowConsolidada = (g, i, color) => {
       const aPedirConsolidado = g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * 11 / 10) : 0;
       const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
-      const esRanuradoInfo = ((g.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') || (g.desc||'').toUpperCase().includes('CHIP BOARD TOP')) && (g.desc||'').toUpperCase().includes('RANURADO');
+      const esRanuradoInfo = (g.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (g.desc||'').toUpperCase().includes('RANURADO');
       return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
       <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${g.pn}</td>
       <td style="font-size:12px">${g.desc}${esRanuradoInfo?'<div style="font-size:9px;color:var(--text2);margin-top:1px">(no se compra aparte — su faltante se cubre con Virgen)</div>':''}<div style="font-size:9px;color:var(--text2);margin-top:2px">${modelosTexto}</div></td>
@@ -2312,35 +2291,18 @@ function exportarExcel() {
   const PROD_BG='E8F0FE';
   const VC_BG='FFF3CD';
 
-  // ── Agrupar por variante (PN+Desc), igual que el Consolidado en pantalla ──
-  const keyPoolX = (pn, desc) => (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+  // ── Leer filas directo de lo ya calculado en pantalla (espejo exacto) ──
   const getRows = (plKey) => {
+    const result = [];
     const datosPlanta = window.consolidadoData[plKey] || {};
-    const grupos = {};
-    const ordenGrupos = []; // conserva el orden de aparición (respeta prioridad de modelos)
     modelos.forEach(sm => {
       const datosModelo = datosPlanta[sm];
       if (!datosModelo) return;
       datosModelo.rows.forEach(r => {
-        const key = keyPoolX(r.pn, r.desc);
-        if (!grupos[key]) {
-          grupos[key] = { pn:r.pn, desc:r.desc, isBundle:!!r.esBundle, inv:r.inv, faltaAcumulada:0, faltaMostrada:0, modelos:[] };
-          ordenGrupos.push(key);
-        }
-        if (r.aPedir > 0) grupos[key].faltaAcumulada += r.falta;
-        if (r.falta > 0) grupos[key].faltaMostrada += r.falta;
-        grupos[key].modelos.push({ sm, falta:r.falta });
-        grupos[key].inv = r.inv; // mismo inventario para todos los modelos de esta variante
+        result.push({sm, pn:r.pn, desc:r.desc, inv:r.inv, falta:r.falta, aPedir:r.aPedir, tgt:datosModelo.target, isBundle:!!r.esBundle});
       });
     });
-    return ordenGrupos.map(key => {
-      const g = grupos[key];
-      const d = (g.desc||'').toUpperCase();
-      const esRanuradoInfo = (d.includes('CHIP BOARD BOTTOM') || d.includes('CHIP BOARD TOP')) && d.includes('RANURADO');
-      const aPedir = esRanuradoInfo ? 0 : (g.faltaAcumulada > 0 ? Math.ceil(g.faltaAcumulada * 11 / 10) : 0);
-      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
-      return { pn:g.pn, desc:g.desc, inv:g.inv, falta:g.faltaMostrada, aPedir, isBundle:g.isBundle, esRanuradoInfo, modelosTexto };
-    }).filter(r => r.falta > 0 || r.aPedir > 0);
+    return result;
   };
 
   // ══════════════════════════════════════════
@@ -2353,13 +2315,13 @@ function exportarExcel() {
 
   // Fila 1 — Título
   push([c('CONSOLIDADO DE MATERIALES A PEDIR — POR PLANTA — P4 BOM',true,TITLE_FG,TITLE_BG,'center',14),
-        ...Array(7).fill(c('',false,TITLE_FG,TITLE_BG))]);
-  merges.push({s:{r:R(),c:0},e:{r:R(),c:7}});
+        ...Array(9).fill(c('',false,TITLE_FG,TITLE_BG))]);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:9}});
 
   // Fila 2 — Subtítulo
   push([c(`Fecha: ${fecha}  |  Solo materiales con faltante  |  Orden: P1 → P3 → ALIBER`,false,SUB_FG,SUB_BG,'center',10),
-        ...Array(7).fill(c('',false,SUB_FG,SUB_BG))]);
-  merges.push({s:{r:R(),c:0},e:{r:R(),c:7}});
+        ...Array(9).fill(c('',false,SUB_FG,SUB_BG))]);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:9}});
 
   // Fila 3 — Targets de producción diaria
   const dias = parseInt(document.getElementById('simDias')?.value) || 5;
@@ -2370,15 +2332,16 @@ function exportarExcel() {
     c('TARGETS DE PRODUCCIÓN DIARIA',true,'FFFFFF','243F60','left',9), c('',false,null,'243F60'),
     c(`S1/S2 — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
     c(`S3/S4 — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
+    c('',false,null,null), c('',false,null,null),
     c(`VC/Zhongke — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'7B4F00','center',9), c('',false,null,'7B4F00'),
   ]);
   merges.push({s:{r:R(),c:0},e:{r:R(),c:1}});
   merges.push({s:{r:R(),c:2},e:{r:R(),c:3}});
   merges.push({s:{r:R(),c:4},e:{r:R(),c:5}});
-  merges.push({s:{r:R(),c:6},e:{r:R(),c:7}});
-  push(Array(8).fill(c(''))); // espacio
+  merges.push({s:{r:R(),c:8},e:{r:R(),c:9}});
+  push(Array(10).fill(c(''))); // espacio
 
-  const COLS = ['No.','N° Parte','Descripción','Modelos (faltante por modelo)','Inv. Actual','Faltante Total','A Pedir Consolidado +10%','Notas BOM'];
+  const COLS = ['No.','Fecha','Ensamble (Strip Code)','Modelo / Target Semana','Número de Parte','Descripción','Inventario Actual','Cantidad a Pedir','Recibido / Enviado','Notas BOM'];
   const plantasCfg = [
     {key:'P1',    label:'PLANTA 1  (P1)', sub:'Chip Boards · Sheets · Strip',            bg:P1_BG,  fg:P1_FG},
     {key:'P3',    label:'PLANTA 3  (P3)', sub:'Bundles · Inserts · QSG',                 bg:P3_BG,  fg:P3_FG},
@@ -2400,72 +2363,75 @@ function exportarExcel() {
     push([
       c(`► ${pl.label}`,true,pl.fg,pl.bg,'left',11),
       c(pl.sub,false,pl.fg,pl.bg,'left',9),
-      ...Array(4).fill(c('',false,pl.fg,pl.bg)),
+      ...Array(6).fill(c('',false,pl.fg,pl.bg)),
       c(`TOTAL PLANTA: ${totPlanta.toLocaleString()} pzas`,true,pl.fg,pl.bg,'right',10),
       c('',false,pl.fg,pl.bg),
     ]);
     merges.push({s:{r:R(),c:0},e:{r:R(),c:0}});
-    merges.push({s:{r:R(),c:1},e:{r:R(),c:5}});
-    merges.push({s:{r:R(),c:6},e:{r:R(),c:7}});
+    merges.push({s:{r:R(),c:1},e:{r:R(),c:7}});
+    merges.push({s:{r:R(),c:8},e:{r:R(),c:9}});
 
     // Sub-header columnas
     push(COLS.map(h => c(h,true,HDR_FG,HDR_BG,'center',9,true)));
 
-    // Filas datos — una por variante (PN+Desc), sumando todos los modelos que la comparten
+    // Filas datos
     rows.forEach((row,i) => {
       const bg = i%2===1 ? ALT_BG : null;
       const esHeaderBundle = row.isBundle && !(row.desc||'').toUpperCase().includes('MANUAL');
-      const pBg = row.esRanuradoInfo ? OK_BG : row.aPedir>0 ? PEDIR_BG : esHeaderBundle ? PEDIR_BG : OK_BG;
-      const pFg = row.esRanuradoInfo ? OK_FG : row.aPedir>0 ? PEDIR_FG : esHeaderBundle ? PEDIR_FG : OK_FG;
-      const nota = row.esRanuradoInfo ? 'N/R — no se compra aparte, se cubre con Virgen'
-        : row.aPedir>0 ? `${pl.key} PEDIR ${row.aPedir.toLocaleString()}`
-        : esHeaderBundle ? `${pl.key} PRODUCIR ${row.falta.toLocaleString()}` : 'OK';
+      const pBg = row.aPedir>0 ? PEDIR_BG : esHeaderBundle ? PEDIR_BG : OK_BG;
+      const pFg = row.aPedir>0 ? PEDIR_FG : esHeaderBundle ? PEDIR_FG : OK_FG;
+      const nota = row.aPedir>0 ? `${pl.key} PEDIR ${row.aPedir.toLocaleString()}` : esHeaderBundle ? `${pl.key} PRODUCIR ${row.falta.toLocaleString()}` : 'OK';
       const pnBg = row.isBundle ? BUNDLE_BG : bg;
       const pnFg = row.isBundle ? 'FFFFFF' : '1A4F9C';
       push([
         n(noGlobal++,false,null,bg,'center'),
+        c('',false,null,bg),
+        c(row.sm,false,'1A4F9C',bg),
+        c(`(target:${row.tgt.toLocaleString()})`,false,'555555',bg),
         c(row.pn,true,pnFg,pnBg),
         c(row.desc,false,null,bg),
-        c(row.modelosTexto,false,'555555',bg,'left',8,true),
         n(row.inv,false,null,bg),
-        n(row.falta,false,row.falta>0?'CC0000':'1A6B3C',bg),
-        n(row.esRanuradoInfo?0:row.aPedir,true,pFg,pBg),
-        c(nota,true,pFg,pBg,'left',9,true),
+        n(row.aPedir,true,pFg,pBg),
+        c('',false,null,bg),
+        c(nota,true,pFg,pBg),
       ]);
     });
 
     // Total planta
     push([
-      ...Array(3).fill(c('',false,pl.fg,pl.bg)),
+      ...Array(4).fill(c('',false,pl.fg,pl.bg)),
       c(`TOTAL ${pl.label}`,true,pl.fg,pl.bg,'right'),
       c('',false,pl.fg,pl.bg),
       c('',false,pl.fg,pl.bg),
       n(totPlanta,true,pl.fg,pl.bg),
       c('',false,pl.fg,pl.bg),
+      c('',false,pl.fg,pl.bg),
     ]);
     merges.push({s:{r:R(),c:0},e:{r:R(),c:3}});
-    merges.push({s:{r:R(),c:4},e:{r:R(),c:5}});
-    push(Array(8).fill(c(''))); // espacio
+    merges.push({s:{r:R(),c:4},e:{r:R(),c:6}});
+    push(Array(10).fill(c(''))); // espacio
   });
 
   // Total General
   push([
-    ...Array(3).fill(c('',true,TOT_FG,TOT_BG)),
+    ...Array(4).fill(c('',true,TOT_FG,TOT_BG)),
     c('TOTAL GENERAL A PEDIR',true,TOT_FG,TOT_BG,'right'),
     c('',false,TOT_FG,TOT_BG),
-    n(totalGen,true,TOT_FG,TOT_BG),
-    c(Object.entries(totPorPlanta).map(([k,v])=>`${k}: ${v.toLocaleString()}`).join('  |  '),true,TOT_FG,TOT_BG,'center'),
     c('',false,TOT_FG,TOT_BG),
+    n(totalGen,true,TOT_FG,TOT_BG),
+    c('',false,TOT_FG,TOT_BG),
+    c(Object.entries(totPorPlanta).map(([k,v])=>`${k}: ${v.toLocaleString()}`).join('  |  '),true,TOT_FG,TOT_BG,'center'),
   ]);
   merges.push({s:{r:R(),c:0},e:{r:R(),c:3}});
-  merges.push({s:{r:R(),c:6},e:{r:R(),c:7}});
+  merges.push({s:{r:R(),c:4},e:{r:R(),c:6}});
+  merges.push({s:{r:R(),c:8},e:{r:R(),c:9}});
 
   // Construir ws1
   const ws1 = {};
   aoa.forEach((row,ri) => row.forEach((cell,ci) => { if(cell) ws1[XLSX.utils.encode_cell({r:ri,c:ci})]=cell; }));
-  ws1['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length,c:7}});
+  ws1['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoa.length,c:9}});
   ws1['!merges'] = merges;
-  ws1['!cols'] = [{wch:5},{wch:15},{wch:26},{wch:38},{wch:12},{wch:13},{wch:16},{wch:32}];
+  ws1['!cols'] = [{wch:5},{wch:10},{wch:18},{wch:20},{wch:14},{wch:28},{wch:13},{wch:13},{wch:13},{wch:22}];
   ws1['!rows'] = [{hpt:28},{hpt:18},{hpt:22}];
   XLSX.utils.book_append_sheet(wb, ws1, 'Consolidado Pedidos');
 

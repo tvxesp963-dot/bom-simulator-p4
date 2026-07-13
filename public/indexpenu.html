@@ -927,17 +927,16 @@ function componenteNecesario(r, sm, target, poolOverride) {
   // inventario propio del modelo, exactamente como siempre.
   const giftInv   = (poolOverride && poolOverride.gift !== undefined) ? poolOverride.gift : inv(giftBox);
   const lowerInv  = (poolOverride && poolOverride.lower !== undefined) ? poolOverride.lower : inv(lowerBox);
-  // Igual que Gift/Lower: en el Consolidado, el Ranurado Bottom y Top ya vienen
-  // repartidos en cascada entre modelos — se usa ese valor en vez del crudo.
+  // Igual que Gift/Lower: en el Consolidado, el Ranurado Bottom ya viene
+  // repartido en cascada entre modelos — se usa ese valor en vez del crudo.
   const botRanInvReal = (poolOverride && poolOverride.botRanurado !== undefined) ? poolOverride.botRanurado : botRanInv;
-  const topRanInvReal = (poolOverride && poolOverride.topRanurado !== undefined) ? poolOverride.topRanurado : topRanInv;
 
   // targetReal por grupo = target - lo ya producido en el header
   const targetRealTop = Math.max(0, target - giftInv);
   const targetRealBot = Math.max(0, target - lowerInv);
 
   // Virgen TOP innecesario si Ranurado TOP cubre el targetReal del grupo
-  if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInvReal >= targetRealTop) return false;
+  if (d.includes('CHIP BOARD TOP') && d.includes('VIRGEN') && topRanInv >= targetRealTop) return false;
   // Virgen BOT innecesario si Ranurado BOT cubre el targetReal del grupo
   if (d.includes('CHIP BOARD BOTTOM') && d.includes('VIRGEN') && botRanInvReal >= targetRealBot) return false;
   // Sheet Top Box innecesario si Gift Box cubre el target completo
@@ -1717,7 +1716,7 @@ function renderCons() {
       };
 
       // P4: Gift Box y Lower Box producidos internamente — mismo calculo que P1 headers
-      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target, {gift: giftBoxInvDisp, lower: lowerBoxInvDisp, botRanurado: botRanuradoInvDisp, topRanurado: topRanuradoInvDisp}))
+      const rows = BOM.filter(r => r.sm === sm && getDestino(r) === pl.key && r.familia !== 'GH90' && componenteNecesario(r, sm, target, {gift: giftBoxInvDisp, lower: lowerBoxInvDisp, botRanurado: botRanuradoInvDisp}))
         .filter(r => {
           const tgt = getTargetReal(r);
           const inv = getInvReal(r);

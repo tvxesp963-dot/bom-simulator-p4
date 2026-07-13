@@ -2225,7 +2225,12 @@ function exportarSimuladorExcel() {
     const ws = construirHojaModeloExcel(document.getElementById('simTable'));
     if (ws) hojas.push({ nombre: nombreUnico(smPrincipal), ws });
   }
-  (typeof multiModelosActivos !== 'undefined' ? multiModelosActivos : []).forEach(sm => {
+  const modelosOrdenPrioridad = (typeof multiModelosActivos !== 'undefined' ? [...multiModelosActivos] : []).sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
+  modelosOrdenPrioridad.forEach(sm => {
     const safeId = sm.replace(/[^a-zA-Z0-9]/g, '_');
     const tbody = document.getElementById('multiTable-' + safeId);
     if (!tbody) return;
@@ -2250,7 +2255,11 @@ function exportarExcel() {
   const semana = document.getElementById('semanaRef').value;
   const EXTRA  = 1.10;
   const fecha  = new Date().toLocaleDateString('es-MX');
-  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean).sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
   const wb = XLSX.utils.book_new();
 
   // ── Helpers de estilo ──

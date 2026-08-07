@@ -3081,7 +3081,6 @@ function adminCargarBOM(file) {
 
 function autoCargarBOM() {
   if (!db) return;
-  if (BOM && BOM.length) return; // ya hay un BOM cargado manualmente en esta sesión, no lo pises
   db.collection('bom_simulator_p4').doc('bom_activo').get().then(function(doc) {
     if (!doc.exists) return;
     var d=doc.data(); BOM=JSON.parse(d.bom);

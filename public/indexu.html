@@ -301,10 +301,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           <option value="">— Agregar modelo a analizar —</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="agregarModeloMulti()">+ Agregar</button>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('inputPlanMulti').click()">📥 Cargar plan desde Excel</button>
-        <input type="file" id="inputPlanMulti" accept=".xlsx,.xls" style="display:none" onchange="cargarPlanMultiExcel(this.files[0])">
       </div>
-      <div id="planMultiStatus" style="font-size:11px;color:var(--text2);margin:-.4rem 0 .6rem"></div>
       <div id="multiModelosWrap"></div>
     </div>
   </div>
@@ -648,62 +645,6 @@ function agregarModeloMulti() {
   }
   sel.value = '';
   renderMultiModelos();
-}
-
-function cargarPlanMultiExcel(file) {
-  if (!file) return;
-  const statusEl = document.getElementById('planMultiStatus');
-  statusEl.textContent = '⏳ Leyendo archivo...';
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const filas = XLSX.utils.sheet_to_json(ws, { defval: '' });
-
-      const modelosBOM = [...new Set(BOM.map(r => r.sm))];
-      let agregados = 0, noEncontrados = [];
-
-      filas.forEach((fila, idx) => {
-        // Acepta encabezados en español o inglés, con o sin mayúsculas/acentos
-        const claves = Object.keys(fila);
-        const buscar = (nombres) => {
-          const k = claves.find(c => nombres.includes(c.trim().toLowerCase()));
-          return k ? fila[k] : undefined;
-        };
-        let sm = String(buscar(['modelo', 'sm', 'model']) || '').trim();
-        const target = parseInt(buscar(['target', 'cantidad', 'qty'])) || 0;
-        const prioridad = parseInt(buscar(['prioridad', 'priority']));
-
-        if (!sm) return;
-        // Coincidencia exacta o, si no existe, la más parecida por si faltan espacios/mayúsculas
-        if (!modelosBOM.includes(sm)) {
-          const match = modelosBOM.find(m => m.toLowerCase() === sm.toLowerCase());
-          if (match) sm = match;
-        }
-        if (!modelosBOM.includes(sm)) {
-          noEncontrados.push(sm);
-          return;
-        }
-
-        if (!multiModelosActivos.includes(sm)) multiModelosActivos.push(sm);
-        simTargetsPorModelo[sm] = target;
-        window.simPrioridadPorModelo[sm] = isNaN(prioridad) ? (idx + 1) : prioridad;
-        agregados++;
-      });
-
-      renderMultiModelos();
-      if (typeof renderCons === 'function') renderCons();
-
-      let msg = `✅ ${agregados} modelo(s) cargado(s) desde Excel.`;
-      if (noEncontrados.length) msg += ` ⚠️ No encontrados en el BOM actual: ${noEncontrados.join(', ')}`;
-      statusEl.textContent = msg;
-    } catch (err) {
-      statusEl.textContent = '❌ Error leyendo el archivo: ' + err.message;
-    }
-    document.getElementById('inputPlanMulti').value = '';
-  };
-  reader.readAsArrayBuffer(file);
 }
 
 function quitarModeloMulti(sm) {

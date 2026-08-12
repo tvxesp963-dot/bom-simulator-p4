@@ -3431,8 +3431,9 @@ async function obtenerProduccionRealASSY1() {
   return produccion;
 }
 
-function calcularPlanSemanal(produccionReal) {
+function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
   produccionReal = produccionReal || {};
+  materialCapPorModelo = materialCapPorModelo || {};
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
@@ -3446,13 +3447,16 @@ function calcularPlanSemanal(produccionReal) {
     if (!fecha || isNaN(fecha)) sinFecha.push(sm);
     const target = simTargetsPorModelo[sm] || 0;
     const producido = produccionReal[sm] || 0;
+    const cap = materialCapPorModelo[sm];
     return {
       sm,
       target,
       producidoReal: producido,
       prioridad: (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999,
       fechaEntrega: fecha,
-      restante: Math.max(0, target - producido) // solo se planifica lo que YA NO se produjo
+      restante: Math.max(0, target - producido), // solo se planifica lo que YA NO se produjo
+      materialCap: (cap === undefined || cap === null || !isFinite(cap)) ? Infinity : cap, // tope por material disponible
+      materialUsado: 0
     };
   }).filter(it => it.fechaEntrega);
 
@@ -3497,15 +3501,19 @@ function calcularPlanSemanal(produccionReal) {
       for (const it of activos) {
         if (capacidadRestante <= 0) break;
         if (it.restante <= 0) continue;
-        const toma = Math.min(it.restante, capacidadRestante);
+        const dispMaterial = Math.max(0, it.materialCap - it.materialUsado);
+        if (dispMaterial <= 0) continue; // sin material suficiente: su lugar lo toma el siguiente en prioridad
+        const toma = Math.min(it.restante, capacidadRestante, dispMaterial);
         if (toma > 0) {
           asignaciones.push({ sm: it.sm, qty: toma });
           it.restante -= toma;
+          it.materialUsado += toma;
           capacidadRestante -= toma;
           huboAvance = true;
         }
       }
-      dias.push({ fecha: fechaDia, asignaciones, usoCapacidad: CAPACIDAD_DIARIA_ASSY1 - capacidadRestante });
+      const usoCapacidad = asignaciones.reduce((s, a) => s + a.qty, 0);
+      dias.push({ fecha: fechaDia, asignaciones, usoCapacidad });
     }
 
     const itemsSemana = activos.map(it => ({
@@ -3564,7 +3572,18 @@ async function renderPlanSemanal() {
   wrap.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text2);font-size:12px">⏳ Leyendo producción real de ASSY1 desde el MES...</div>`;
 
   const produccionReal = await obtenerProduccionRealASSY1();
-  const { semanas, sinFecha } = calcularPlanSemanal(produccionReal);
+
+  // Prioridad + material se evalúan ANTES de repartir por día, para que el plan
+  // respete la prioridad pero limite lo planificado a lo que el material alcanza.
+  const conTargetOrdenado = conTarget.slice().sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
+  const faltantesPorModelo = calcularFaltantesPorModeloPlan(conTargetOrdenado);
+  const materialCapPorModelo = window._planMaterialCapPorModelo || {};
+
+  const { semanas, sinFecha } = calcularPlanSemanal(produccionReal, materialCapPorModelo);
   const btnPub = document.getElementById('btnPublicarPlanSemanal');
   if (btnPub) btnPub.style.display = (adminAuthed && semanas.length) ? 'inline-flex' : 'none';
 
@@ -3591,9 +3610,6 @@ async function renderPlanSemanal() {
     const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
     return pa - pb;
   });
-
-  // Evalúa TODOS los modelos del plan (no solo los agregados a "Analizar varios modelos")
-  const faltantesPorModelo = calcularFaltantesPorModeloPlan(modelosPlan);
 
   // ── TABLA 1: PLAN REQUERIDO (qué necesita cada modelo, según lo YA producido en ASSY1) ──
   const filasPlan = modelosPlan.map(sm => {
@@ -3767,11 +3783,13 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
 
   const faltantes = {};
   const pickList = []; // { modelo, prioridad, etiqueta, pn, desc, requerido, disponible, ok }
+  const materialCapPorModelo = {}; // modelo -> máx. unidades producibles según material disponible (en orden de prioridad)
 
   modelosOrdenados.forEach(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     calcularDetalleModeloMulti(sm); // dispara calcSim() y deja _reqReal calculado en cada fila del BOM de este modelo
     const items = [];
+    const disponiblesEsteModelo = [];
 
     obtener4MaterialesEnsamble(sm).forEach(m => {
       if (!m.row) return; // este modelo no tiene ese material (p.ej. no todos usan Bundle)
@@ -3785,8 +3803,14 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
         modelo: sm, prioridad, etiqueta: m.etiqueta, pn: m.row.pn, desc: m.row.desc || '',
         requerido, disponible, ok
       });
+      disponiblesEsteModelo.push(disponible);
       if (!ok) items.push({ pn: m.row.pn, desc: m.row.desc || '', falta });
     });
+
+    // El modelo solo puede producir hasta donde alcance el material más restrictivo
+    // de sus 4 componentes de ensamble (Strip/Top/Bot/Bundle), en este punto de la
+    // cascada de prioridad (ya con lo que los modelos de mayor prioridad tomaron antes).
+    materialCapPorModelo[sm] = disponiblesEsteModelo.length ? Math.min(...disponiblesEsteModelo) : Infinity;
 
     faltantes[sm] = items;
 
@@ -3816,6 +3840,7 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
   window._planFaltantesPorModelo = faltantes;
   window._planPickList = pickList;
   window._planModelosOrdenados = modelosOrdenados;
+  window._planMaterialCapPorModelo = materialCapPorModelo;
 
   return faltantes;
 }
@@ -3860,7 +3885,17 @@ window.descargarMaterialesPlan = descargarMaterialesPlan;
 async function publicarPlanSemanal() {
   if (!adminAuthed) { alert('Solo el administrador puede publicar el plan al MES.'); return; }
   const produccionReal = await obtenerProduccionRealASSY1();
-  const { semanas, sinFecha } = calcularPlanSemanal(produccionReal);
+
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+  const conTargetOrdenado = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0).sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
+  calcularFaltantesPorModeloPlan(conTargetOrdenado);
+  const materialCapPorModelo = window._planMaterialCapPorModelo || {};
+
+  const { semanas, sinFecha } = calcularPlanSemanal(produccionReal, materialCapPorModelo);
   if (!semanas.length) { alert('No hay plan semanal para publicar. Asigna fecha de entrega a los modelos.'); return; }
   let msg = '¿Publicar el Plan Semanal al MES?';
   if (sinFecha.length) msg += `\n\nAviso: estos modelos no tienen fecha y NO se incluirán: ${sinFecha.join(', ')}`;

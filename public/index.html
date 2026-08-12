@@ -3644,32 +3644,30 @@ async function renderPlanSemanal() {
         </div>`;
     }).join('');
 
-  // ── TABLA 2: DETALLE DIARIO (cuánto se produce cada día en ASSY1) ──
-  const filasDias = [];
-  semanas.forEach(sem => {
-    sem.dias.forEach(d => {
-      if (!d.asignaciones.length) return;
-      d.asignaciones.forEach(a => {
-        const falts = faltantesPorModelo[a.sm] || [];
-        const matBadge = falts.length
-          ? `<span style="background:rgba(255,68,68,.15);color:var(--red);padding:3px 12px;border-radius:999px;font-size:11px;font-weight:700">⚠ Falta</span>`
-          : `<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-size:11px;font-weight:700">✓ OK</span>`;
-        const nombreDia = d.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
-        filasDias.push(`
-          <tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:10px 8px;color:var(--text2)">${nombreDia}</td>
-            <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${a.sm}</td>
-            <td style="padding:10px 8px;text-align:right;font-weight:700">${a.qty.toLocaleString()}</td>
-            <td style="padding:10px 8px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td>
-            <td style="padding:10px 8px;text-align:center">${matBadge}</td>
-          </tr>`);
-      });
-    });
-  });
+  // ── TABLA 2: DETALLE DIARIO como matriz (días en columnas, línea ASSY1 en fila) ──
+  const todosLosDias = semanas.flatMap(sem => sem.dias); // ya vienen en orden cronológico
+  const colHeadersDias = todosLosDias.map(d =>
+    `${(d.fecha.getMonth() + 1)}/${d.fecha.getDate()}(${d.fecha.toLocaleDateString('es-MX', { weekday: 'short' })})`
+  );
+
+  const celdasASSY1 = todosLosDias.map(d => {
+    if (!d.asignaciones.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
+    const partes = d.asignaciones.map(a => {
+      const falts = faltantesPorModelo[a.sm] || [];
+      const alerta = falts.length ? ' ⚠' : '';
+      return `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:12px">${a.qty.toLocaleString()}${alerta}</div>`;
+    }).join('<div style="height:6px"></div>');
+    return `<td style="padding:8px 6px;background:rgba(0,188,212,.08);text-align:center">${partes}</td>`;
+  }).join('');
+
+  const celdasTotal = todosLosDias.map(d =>
+    `<td style="padding:8px 6px;text-align:center;font-weight:700;background:rgba(0,230,118,.12);color:#00e676">${d.usoCapacidad > 0 ? d.usoCapacidad.toLocaleString() : '—'}</td>`
+  ).join('');
 
   const thStyle = 'text-align:left;padding:10px 8px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)';
   const thRight = thStyle.replace('text-align:left', 'text-align:right');
   const thCenter = thStyle.replace('text-align:left', 'text-align:center');
+  const thDia = thCenter + ';white-space:nowrap';
 
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
@@ -3700,15 +3698,22 @@ async function renderPlanSemanal() {
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>
-          <th style="${thStyle}">Día</th>
-          <th style="${thStyle}">Modelo</th>
-          <th style="${thRight}">A producir</th>
-          <th style="${thRight}">Uso capacidad</th>
-          <th style="${thCenter}">Material</th>
+          <th style="${thStyle};position:sticky;left:0;background:#0d1220">Línea</th>
+          ${colHeadersDias.map(c => `<th style="${thDia}">${c}</th>`).join('')}
         </tr></thead>
-        <tbody>${filasDias.join('')}</tbody>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 6px;font-weight:700;position:sticky;left:0;background:#0d1220">ASSY1</td>
+            ${celdasASSY1}
+          </tr>
+          <tr>
+            <td style="padding:8px 6px;font-weight:700;text-transform:uppercase;font-size:11px;color:var(--text2);position:sticky;left:0;background:#0d1220">Total</td>
+            ${celdasTotal}
+          </tr>
+        </tbody>
       </table>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad diaria ASSY1: ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u.</div>
     </div>
   `;
 }

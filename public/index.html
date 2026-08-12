@@ -3693,7 +3693,10 @@ async function renderPlanSemanal() {
     </div>
     ${alertasMateriales}
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.8rem">🗓️ Detalle diario · Línea ASSY1</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">🗓️ Detalle diario · Línea ASSY1</div>
+        <button class="btn btn-success btn-sm" onclick="descargarMaterialesPlan()">📥 Descargar materiales a pedir</button>
+      </div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>
@@ -3765,8 +3768,47 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
   simFiltro = simFiltroOriginal;
   invOriginal.forEach((inv, r) => { r.inv = inv; });
 
+  // Se guarda para que el botón de descarga en "Detalle diario" pueda exportarlo
+  // sin tener que recalcular todo de nuevo.
+  window._planFaltantesPorModelo = faltantes;
+
   return faltantes;
 }
+
+// Arma y descarga un Excel con el listado consolidado de materiales que hacen falta
+// (agrupado por N° de parte) para que el almacén pueda prepararlos y entregarlos
+// según el Plan Semanal mostrado en pantalla.
+function descargarMaterialesPlan() {
+  const faltantes = window._planFaltantesPorModelo || {};
+  const consolidado = {}; // key = pn||desc -> { pn, desc, falta, modelos:[] }
+
+  Object.keys(faltantes).forEach(sm => {
+    (faltantes[sm] || []).forEach(item => {
+      const key = item.pn + '||' + item.desc;
+      if (!consolidado[key]) consolidado[key] = { pn: item.pn, desc: item.desc, falta: 0, modelos: [] };
+      consolidado[key].falta += item.falta;
+      consolidado[key].modelos.push(sm + ' (' + item.falta.toLocaleString() + ')');
+    });
+  });
+
+  const filas = Object.values(consolidado).sort((a, b) => b.falta - a.falta);
+
+  if (!filas.length) {
+    alert('No hay faltantes de material registrados para este plan — nada que descargar.');
+    return;
+  }
+
+  const rows = [['N° Parte', 'Descripción', 'Cantidad a pedir', 'Modelos que lo requieren']];
+  filas.forEach(f => rows.push([f.pn, f.desc, f.falta, f.modelos.join(' · ')]));
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 16 }, { wch: 40 }, { wch: 16 }, { wch: 50 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Materiales a Pedir');
+  const fecha = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `Materiales_a_Pedir_Plan_Semanal_${fecha}.xlsx`);
+}
+window.descargarMaterialesPlan = descargarMaterialesPlan;
 
 async function publicarPlanSemanal() {
   if (!adminAuthed) { alert('Solo el administrador puede publicar el plan al MES.'); return; }

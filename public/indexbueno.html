@@ -168,7 +168,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="tab" id="tab-sim" onclick="goTab('sim')" class="tab active">⚡ Simulador</div>
   <div class="tab" id="tab-cons" onclick="goTab('cons')">📦 Consolidado Pedidos</div>
   <div class="tab" id="tab-prod" onclick="goTab('prod')">🔧 Producir / Ranurar</div>
-  <div class="tab" id="tab-plan" onclick="goTab('plan')">📅 Plan Semanal</div>
   
   <div class="tab" id="tab-admin" onclick="goTab('admin')" style="color:#FFBA00">⚙️ Admin BOM</div>
 </div>
@@ -344,23 +343,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
 </div>
 
-<!-- PLAN SEMANAL -->
-<div class="page" id="page-plan">
-  <div id="planEmpty" class="empty" style="padding:4rem">
-    <div class="empty-icon">📅</div><div class="empty-title">Sin datos</div>
-    <button class="btn btn-primary" style="margin-top:1rem" onclick="goTab('upload')">📥 Cargar BOM</button>
-  </div>
-  <div id="planContent" style="display:none">
-    <div class="top-actions">
-      <span style="font-size:12px;color:var(--text2)">Plan semanal de ensamble — ASSY1, capacidad 13,000 u/día (L-V)</span>
-      <div style="display:flex;gap:.5rem;margin-left:auto">
-        <button class="btn btn-primary btn-sm" id="btnPublicarPlanSemanal" onclick="publicarPlanSemanal()" style="display:none">📤 Publicar Plan Semanal al MES</button>
-      </div>
-    </div>
-    <div id="planSemanalWrap"></div>
-  </div>
-</div>
-
 <!-- ASSY1 -->
   <div id="assyContent" style="display:none">
     <div class="sh">Capacidad ASSY1 — ranking por % de sub-componentes con inventario &gt; 0</div>
@@ -378,7 +360,6 @@ function goTab(n) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + n).classList.add('active');
   document.getElementById('tab-' + n).classList.add('active');
-  if (n === 'plan' && typeof renderPlanSemanal === 'function') renderPlanSemanal();
 }
 
 // DRAG & DROP
@@ -648,7 +629,6 @@ function toggleTree(idx) {
 // ── COMPARACIÓN MULTI-MODELO (no modifica lógica existente del Simulador) ──
 let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
-window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
 
 function agregarModeloMulti() {
   const sel = document.getElementById('multiModeloSel');
@@ -677,7 +657,7 @@ function cargarPlanMultiExcel(file) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const wb = XLSX.read(e.target.result, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const filas = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
@@ -694,7 +674,6 @@ function cargarPlanMultiExcel(file) {
         let sm = String(buscar(['modelo', 'sm', 'model']) || '').trim();
         const target = parseInt(buscar(['target', 'cantidad', 'qty'])) || 0;
         const prioridad = parseInt(buscar(['prioridad', 'priority']));
-        const fechaRaw = buscar(['fecha entrega', 'fecha_entrega', 'entrega', 'delivery date', 'fecha']);
 
         if (!sm) return;
         // Coincidencia exacta o, si no existe, la más parecida por si faltan espacios/mayúsculas
@@ -710,14 +689,6 @@ function cargarPlanMultiExcel(file) {
         if (!multiModelosActivos.includes(sm)) multiModelosActivos.push(sm);
         simTargetsPorModelo[sm] = target;
         window.simPrioridadPorModelo[sm] = isNaN(prioridad) ? (idx + 1) : prioridad;
-
-        if (fechaRaw) {
-          let fd = (fechaRaw instanceof Date) ? fechaRaw : new Date(fechaRaw);
-          if (!isNaN(fd)) {
-            window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
-            window.simFechaEntregaPorModelo[sm] = fd.toISOString().split('T')[0];
-          }
-        }
         agregados++;
       });
 
@@ -753,13 +724,6 @@ function actualizarPrioridadMulti(sm, valor) {
   window.simPrioridadPorModelo[sm] = parseInt(valor) || 999;
   renderMultiModelos();
   if (typeof renderCons === 'function') renderCons();
-}
-
-function actualizarFechaMulti(sm, valor) {
-  window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
-  window.simFechaEntregaPorModelo[sm] = valor || null;
-  var pagePlan = document.getElementById('page-plan');
-  if (pagePlan && pagePlan.classList.contains('active') && typeof renderPlanSemanal === 'function') renderPlanSemanal();
 }
 
 // Captura el HTML de detalle de un modelo reutilizando calcSim() de forma segura,
@@ -869,8 +833,6 @@ function renderMultiModelos() {
             <input class="input" type="number" style="width:60px" value="${window.simPrioridadPorModelo[sm] || 999}" onchange="actualizarPrioridadMulti('${sm.replace(/'/g, "\\'")}', this.value)" title="Modelo con prioridad menor toma el inventario compartido primero">
             <label style="font-size:11px;color:var(--text2)">Target</label>
             <input class="input" type="number" style="width:90px" value="${simTargetsPorModelo[sm] || 0}" onchange="actualizarTargetMulti('${sm.replace(/'/g, "\\'")}', this.value)">
-            <label style="font-size:11px;color:var(--text2)">Entrega</label>
-            <input class="input" type="date" style="width:135px" value="${(window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || ''}" onchange="actualizarFechaMulti('${sm.replace(/'/g, "\\'")}', this.value)">
             <button class="btn btn-secondary btn-sm" onclick="quitarModeloMulti('${sm.replace(/'/g, "\\'")}')" title="Quitar del análisis">✕</button>
           </div>
         </div>
@@ -3383,282 +3345,6 @@ async function publicarPlan() {
   }
 }
 window.publicarPlan = publicarPlan;
-
-// ══════════════════════════════════════════
-// PLAN SEMANAL DE ENSAMBLE (ASSY1)
-// ══════════════════════════════════════════
-const CAPACIDAD_DIARIA_ASSY1 = 13000;
-const DIAS_SEMANA_LABORAL = 5; // Lunes a Viernes
-
-function lunesDeSemana(fecha) {
-  const d = new Date(fecha);
-  d.setHours(0,0,0,0);
-  const day = d.getDay(); // 0=Domingo..6=Sábado
-  const diff = (day === 0 ? -6 : 1 - day);
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
-function formatFechaCorta(d) {
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
-}
-
-function numeroSemanaISO(d) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-}
-
-function calcularPlanSemanal() {
-  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
-  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
-  const fechas = window.simFechaEntregaPorModelo || {};
-  const sinFecha = [];
-
-  const items = conTarget.map(sm => {
-    const fechaStr = fechas[sm];
-    const fecha = fechaStr ? new Date(fechaStr + 'T00:00:00') : null;
-    if (!fecha || isNaN(fecha)) sinFecha.push(sm);
-    return {
-      sm,
-      target: simTargetsPorModelo[sm] || 0,
-      prioridad: (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999,
-      fechaEntrega: fecha,
-      restante: simTargetsPorModelo[sm] || 0
-    };
-  }).filter(it => it.fechaEntrega);
-
-  if (!items.length) return { semanas: [], sinFecha };
-
-  let semanaActual = items.reduce((min, it) => {
-    const l = lunesDeSemana(it.fechaEntrega);
-    return (!min || l < min) ? l : min;
-  }, null);
-
-  const semanas = [];
-  let semanasSinAvance = 0;
-  const MAX_SEMANAS = 26; // límite de seguridad para evitar loops infinitos
-
-  for (let i = 0; i < MAX_SEMANAS; i++) {
-    const activos = items.filter(it => lunesDeSemana(it.fechaEntrega) <= semanaActual && it.restante > 0);
-
-    if (!activos.length) {
-      const quedaAlgo = items.some(it => it.restante > 0);
-      if (!quedaAlgo) break;
-      const siguientes = items.filter(it => lunesDeSemana(it.fechaEntrega) > semanaActual);
-      if (!siguientes.length) break;
-      semanaActual = siguientes.reduce((min, it) => {
-        const l = lunesDeSemana(it.fechaEntrega);
-        return (!min || l < min) ? l : min;
-      }, null);
-      continue;
-    }
-
-    activos.sort((a, b) => a.prioridad - b.prioridad);
-
-    const dias = [];
-    let huboAvance = false;
-    for (let d = 0; d < DIAS_SEMANA_LABORAL; d++) {
-      const fechaDia = new Date(semanaActual);
-      fechaDia.setDate(fechaDia.getDate() + d);
-      let capacidadRestante = CAPACIDAD_DIARIA_ASSY1;
-      const asignaciones = [];
-      for (const it of activos) {
-        if (capacidadRestante <= 0) break;
-        if (it.restante <= 0) continue;
-        const toma = Math.min(it.restante, capacidadRestante);
-        if (toma > 0) {
-          asignaciones.push({ sm: it.sm, qty: toma });
-          it.restante -= toma;
-          capacidadRestante -= toma;
-          huboAvance = true;
-        }
-      }
-      dias.push({ fecha: fechaDia, asignaciones, usoCapacidad: CAPACIDAD_DIARIA_ASSY1 - capacidadRestante });
-    }
-
-    const itemsSemana = activos.map(it => ({
-      sm: it.sm,
-      prioridad: it.prioridad,
-      target: it.target,
-      qtySemana: dias.reduce((sum, d) => sum + (d.asignaciones.find(a => a.sm === it.sm)?.qty || 0), 0),
-      producidoAcum: it.target - it.restante,
-      pendiente: it.restante
-    })).filter(x => x.qtySemana > 0);
-
-    if (itemsSemana.length) {
-      semanas.push({
-        semanaLunes: new Date(semanaActual),
-        numeroSemana: numeroSemanaISO(semanaActual),
-        items: itemsSemana,
-        dias
-      });
-    }
-
-    if (!huboAvance) {
-      semanasSinAvance++;
-      if (semanasSinAvance > 2) break;
-    } else {
-      semanasSinAvance = 0;
-    }
-
-    const proxLunes = new Date(semanaActual);
-    proxLunes.setDate(proxLunes.getDate() + 7);
-    semanaActual = proxLunes;
-  }
-
-  return { semanas, sinFecha };
-}
-
-function togglePlanDia(idx) {
-  const el = document.getElementById('diaWrap' + idx);
-  const btn = document.getElementById('btnDia' + idx);
-  if (!el || !btn) return;
-  const abierto = el.style.display === 'block';
-  el.style.display = abierto ? 'none' : 'block';
-  btn.textContent = abierto ? 'Ver desglose diario' : 'Ocultar desglose diario';
-}
-window.togglePlanDia = togglePlanDia;
-
-function renderPlanSemanal() {
-  const wrap = document.getElementById('planSemanalWrap');
-  const empty = document.getElementById('planEmpty');
-  const content = document.getElementById('planContent');
-  if (!wrap) return;
-
-  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
-  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
-
-  if (!conTarget.length) {
-    if (empty) empty.style.display = 'block';
-    if (content) content.style.display = 'none';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-  if (content) content.style.display = 'block';
-
-  const { semanas, sinFecha } = calcularPlanSemanal();
-  const btnPub = document.getElementById('btnPublicarPlanSemanal');
-  if (btnPub) btnPub.style.display = (adminAuthed && semanas.length) ? 'inline-flex' : 'none';
-
-  let avisoHtml = '';
-  if (sinFecha.length) {
-    avisoHtml = `<div style="padding:.6rem .8rem;background:rgba(255,186,0,.1);border:1px solid rgba(255,186,0,.3);border-radius:8px;color:#FFBA00;font-size:12px;margin-bottom:1rem">⚠ Sin fecha de entrega asignada (no aparecen en el plan): ${sinFecha.join(', ')}. Asígnala en la tarjeta del modelo o cárgala vía Excel.</div>`;
-  }
-
-  if (!semanas.length) {
-    wrap.innerHTML = avisoHtml + `<div class="empty" style="padding:2rem"><div class="empty-title">Asigna fecha de entrega a los modelos para generar el plan semanal</div></div>`;
-    return;
-  }
-
-  wrap.innerHTML = avisoHtml + semanas.map((sem, idx) => {
-    const capSemana = CAPACIDAD_DIARIA_ASSY1 * DIAS_SEMANA_LABORAL;
-    const finSemana = new Date(sem.semanaLunes); finSemana.setDate(finSemana.getDate() + 4);
-    const label = `Semana ${sem.numeroSemana} (${formatFechaCorta(sem.semanaLunes)} - ${formatFechaCorta(finSemana)})`;
-
-    const filas = sem.items.map(it => {
-      const pendStyle = it.pendiente > 0
-        ? 'background:rgba(255,186,0,.15);color:#FFBA00'
-        : 'background:rgba(0,230,118,.15);color:#00e676';
-      return `
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:8px 4px">${it.prioridad}</td>
-          <td style="padding:8px 4px">${it.sm}</td>
-          <td style="padding:8px 4px;text-align:right">${it.qtySemana.toLocaleString()}</td>
-          <td style="padding:8px 4px;text-align:right">${it.target.toLocaleString()}</td>
-          <td style="padding:8px 4px;text-align:right">${it.producidoAcum.toLocaleString()}</td>
-          <td style="padding:8px 4px;text-align:right"><span style="${pendStyle};padding:2px 8px;border-radius:6px">${it.pendiente.toLocaleString()}</span></td>
-        </tr>`;
-    }).join('');
-
-    const filasDias = sem.dias.filter(d => d.asignaciones.length).map(d => {
-      const nombreDia = d.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
-      const modelosTxt = d.asignaciones.map(a => a.sm).join(' / ');
-      const qtyTxt = d.asignaciones.map(a => a.qty.toLocaleString()).join(' / ');
-      return `<tr><td style="padding:4px">${nombreDia}</td><td style="padding:4px">${modelosTxt}</td><td style="padding:4px;text-align:right">${qtyTxt}</td><td style="padding:4px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td></tr>`;
-    }).join('');
-
-    return `
-      <div class="card" style="margin-bottom:.8rem">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem">
-          <span style="font-size:13px;font-weight:600">${label} · Capacidad ${capSemana.toLocaleString()}</span>
-          <button class="btn btn-secondary btn-sm" onclick="togglePlanDia(${idx})" id="btnDia${idx}">Ver desglose diario</button>
-        </div>
-        <div style="overflow-x:auto">
-        <table style="width:100%;font-size:12px">
-          <thead><tr>
-            <th style="text-align:left;padding:6px 4px">Prior.</th>
-            <th style="text-align:left;padding:6px 4px">Modelo</th>
-            <th style="text-align:right;padding:6px 4px">Qty semana</th>
-            <th style="text-align:right;padding:6px 4px">Target total</th>
-            <th style="text-align:right;padding:6px 4px">Producido acum.</th>
-            <th style="text-align:right;padding:6px 4px">Pendiente</th>
-          </tr></thead>
-          <tbody>${filas}</tbody>
-        </table>
-        </div>
-        <div id="diaWrap${idx}" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:var(--bg2);border-radius:8px;overflow-x:auto">
-          <table style="width:100%;font-size:11px">
-            <thead><tr>
-              <th style="text-align:left;padding:4px">Día</th>
-              <th style="text-align:left;padding:4px">Modelo(s)</th>
-              <th style="text-align:right;padding:4px">Qty día</th>
-              <th style="text-align:right;padding:4px">Uso capacidad</th>
-            </tr></thead>
-            <tbody>${filasDias}</tbody>
-          </table>
-        </div>
-      </div>`;
-  }).join('');
-}
-window.renderPlanSemanal = renderPlanSemanal;
-
-async function publicarPlanSemanal() {
-  if (!adminAuthed) { alert('Solo el administrador puede publicar el plan al MES.'); return; }
-  const { semanas, sinFecha } = calcularPlanSemanal();
-  if (!semanas.length) { alert('No hay plan semanal para publicar. Asigna fecha de entrega a los modelos.'); return; }
-  let msg = '¿Publicar el Plan Semanal al MES?';
-  if (sinFecha.length) msg += `\n\nAviso: estos modelos no tienen fecha y NO se incluirán: ${sinFecha.join(', ')}`;
-  if (!confirm(msg)) return;
-
-  const btn = document.getElementById('btnPublicarPlanSemanal');
-  btn.textContent = '⏳ Publicando...'; btn.disabled = true;
-
-  const plan = {
-    publicadoEn: new Date().toISOString(),
-    capacidadDiariaASSY1: CAPACIDAD_DIARIA_ASSY1,
-    diasLaborales: DIAS_SEMANA_LABORAL,
-    semanas: semanas.map(sem => ({
-      semanaLunes: sem.semanaLunes.toISOString().split('T')[0],
-      numeroSemana: sem.numeroSemana,
-      items: sem.items,
-      dias: sem.dias.map(d => ({
-        fecha: d.fecha.toISOString().split('T')[0],
-        asignaciones: d.asignaciones,
-        usoCapacidad: d.usoCapacidad
-      }))
-    }))
-  };
-
-  try {
-    if (db) {
-      // Colección/documento independiente — no toca 'plan_activo' que ya usa el MES
-      await db.collection('plan_produccion').doc('plan_semanal_activo').set(plan);
-      btn.textContent = '✅ Publicado';
-      btn.style.background = 'rgba(0,184,90,.3)';
-      setTimeout(() => { btn.textContent = '📤 Publicar Plan Semanal al MES'; btn.disabled = false; btn.style.background = ''; }, 3000);
-    } else {
-      alert('Firebase no disponible — no se pudo publicar');
-      btn.textContent = '📤 Publicar Plan Semanal al MES'; btn.disabled = false;
-    }
-  } catch (e) {
-    alert('Error: ' + e.message);
-    btn.textContent = '📤 Publicar Plan Semanal al MES'; btn.disabled = false;
-  }
-}
-window.publicarPlanSemanal = publicarPlanSemanal;
 
 // ── CREAR PARTES NUEVAS EN IMS ──
 // Crea en planta4_inventario las partes del BOM activo que aún no existen.

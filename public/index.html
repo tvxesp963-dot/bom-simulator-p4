@@ -3602,7 +3602,7 @@ async function renderPlanSemanal() {
     const producido = produccionReal[sm] || 0;
     const pendiente = Math.max(0, target - producido);
     const fechaStr = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
-    const fechaTxt = fechaStr ? new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fechaTxt = fechaStr ? new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
 
     const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
     const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
@@ -3616,18 +3616,18 @@ async function renderPlanSemanal() {
     const matStyle = falts.length
       ? 'background:rgba(255,68,68,.15);color:var(--red)'
       : 'background:rgba(0,230,118,.15);color:#00e676';
-    const matTxt = falts.length ? `⚠ Falta material (${falts.length})` : '✓ Material completo';
+    const matTxt = falts.length ? `⚠ Falta material` : '✓ Completo';
 
     return `
       <tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:8px 4px">${prioridad}</td>
-        <td style="padding:8px 4px;font-weight:600">${sm}</td>
-        <td style="padding:8px 4px;color:var(--text2);font-size:11px">${numParte}</td>
-        <td style="padding:8px 4px;text-align:right">${target.toLocaleString()}</td>
-        <td style="padding:8px 4px">${fechaTxt}</td>
-        <td style="padding:8px 4px;text-align:right;color:var(--accent)">${producido.toLocaleString()}</td>
-        <td style="padding:8px 4px;text-align:right"><span style="${pendStyle};padding:2px 8px;border-radius:6px">${pendiente.toLocaleString()}</span></td>
-        <td style="padding:8px 4px"><span style="${matStyle};padding:2px 8px;border-radius:6px;font-size:11px;white-space:nowrap">${matTxt}</span></td>
+        <td style="padding:10px 8px;text-align:center;font-weight:700">${prioridad}</td>
+        <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
+        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${numParte}</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${target.toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:center;color:var(--text2)">${fechaTxt}</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:700">${producido.toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:center"><span style="${pendStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:12px">${pendiente.toLocaleString()}</span></td>
+        <td style="padding:10px 8px;text-align:center"><span style="${matStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">${matTxt}</span></td>
       </tr>`;
   }).join('');
 
@@ -3652,52 +3652,56 @@ async function renderPlanSemanal() {
       d.asignaciones.forEach(a => {
         const falts = faltantesPorModelo[a.sm] || [];
         const matBadge = falts.length
-          ? `<span style="background:rgba(255,68,68,.15);color:var(--red);padding:1px 7px;border-radius:6px;font-size:10px">⚠ falta material</span>`
-          : `<span style="background:rgba(0,230,118,.15);color:#00e676;padding:1px 7px;border-radius:6px;font-size:10px">✓ ok</span>`;
+          ? `<span style="background:rgba(255,68,68,.15);color:var(--red);padding:3px 12px;border-radius:999px;font-size:11px;font-weight:700">⚠ Falta</span>`
+          : `<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-size:11px;font-weight:700">✓ OK</span>`;
         const nombreDia = d.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
         filasDias.push(`
           <tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:6px 4px">${nombreDia}</td>
-            <td style="padding:6px 4px;font-weight:600">${a.sm}</td>
-            <td style="padding:6px 4px;text-align:right">${a.qty.toLocaleString()}</td>
-            <td style="padding:6px 4px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td>
-            <td style="padding:6px 4px">${matBadge}</td>
+            <td style="padding:10px 8px;color:var(--text2)">${nombreDia}</td>
+            <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${a.sm}</td>
+            <td style="padding:10px 8px;text-align:right;font-weight:700">${a.qty.toLocaleString()}</td>
+            <td style="padding:10px 8px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td>
+            <td style="padding:10px 8px;text-align:center">${matBadge}</td>
           </tr>`);
       });
     });
   });
 
+  const thStyle = 'text-align:left;padding:10px 8px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)';
+  const thRight = thStyle.replace('text-align:left', 'text-align:right');
+  const thCenter = thStyle.replace('text-align:left', 'text-align:center');
+
   wrap.innerHTML = avisoHtml + `
-    <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">📋 Plan requerido por modelo</div>
-      <div style="font-size:11px;color:var(--text3);margin:-.3rem 0 .6rem">"Producido" viene de los registros reales de la línea ASSY1 en el MES.</div>
+    <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">📋 Plan requerido · Modelo y partes</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" viene de los registros reales de la línea ASSY1 en el MES.</div>
       <div style="overflow-x:auto">
-      <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>
-          <th style="text-align:left;padding:6px 4px">Prior.</th>
-          <th style="text-align:left;padding:6px 4px">Modelo</th>
-          <th style="text-align:left;padding:6px 4px">Code</th>
-          <th style="text-align:right;padding:6px 4px">Target</th>
-          <th style="text-align:left;padding:6px 4px">Fecha entrega</th>
-          <th style="text-align:right;padding:6px 4px">Producido (ASSY1 MES)</th>
-          <th style="text-align:right;padding:6px 4px">Pendiente</th>
-          <th style="text-align:left;padding:6px 4px">Materiales</th>
+          <th style="${thCenter}">Prior.</th>
+          <th style="${thStyle}">Modelo</th>
+          <th style="${thStyle}">Code</th>
+          <th style="${thRight}">Target</th>
+          <th style="${thCenter}">Fecha</th>
+          <th style="${thRight}">Producido</th>
+          <th style="${thCenter}">Pendiente</th>
+          <th style="${thCenter}">Materiales</th>
         </tr></thead>
         <tbody>${filasPlan}</tbody>
       </table>
       </div>
     </div>
     ${alertasMateriales}
-    <div class="card" style="margin-top:1rem">
-      <div class="card-title">🗓️ Detalle diario de producción — línea ASSY1</div>
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.8rem">🗓️ Detalle diario · Línea ASSY1</div>
       <div style="overflow-x:auto">
-      <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>
-          <th style="text-align:left;padding:6px 4px">Día</th>
-          <th style="text-align:left;padding:6px 4px">Modelo</th>
-          <th style="text-align:right;padding:6px 4px">A producir</th>
-          <th style="text-align:right;padding:6px 4px">Uso capacidad día</th>
-          <th style="text-align:left;padding:6px 4px">Material</th>
+          <th style="${thStyle}">Día</th>
+          <th style="${thStyle}">Modelo</th>
+          <th style="${thRight}">A producir</th>
+          <th style="${thRight}">Uso capacidad</th>
+          <th style="${thCenter}">Material</th>
         </tr></thead>
         <tbody>${filasDias.join('')}</tbody>
       </table>

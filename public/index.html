@@ -357,6 +357,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <button class="btn btn-primary btn-sm" id="btnPublicarPlanSemanal" onclick="publicarPlanSemanal()" style="display:none">📤 Publicar Plan Semanal al MES</button>
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem;padding:.6rem .8rem;background:var(--bg2);border-radius:8px">
+      <span style="font-size:11px;color:var(--text2)">Producción real (ASSY1 MES) desde</span>
+      <input class="input" type="date" id="planFechaDesde" style="width:150px" onchange="renderPlanSemanal()">
+      <span style="font-size:11px;color:var(--text2)">hasta</span>
+      <input class="input" type="date" id="planFechaHasta" style="width:150px" onchange="renderPlanSemanal()">
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('planFechaDesde').value='';document.getElementById('planFechaHasta').value='';renderPlanSemanal()">↺ Ver todo el historial</button>
+    </div>
     <div id="planSemanalWrap"></div>
   </div>
 </div>
@@ -3413,7 +3420,7 @@ function numeroSemanaISO(d) {
 
 // Lee la producción REAL ya reportada en el MES (colección 'registros', línea ASSY1)
 // y la suma por modelo. Mismo proyecto Firebase que el BOM Simulator (mes-production-esp).
-async function obtenerProduccionRealASSY1() {
+async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
   const produccion = {};
   if (!db) return produccion;
   try {
@@ -3422,6 +3429,9 @@ async function obtenerProduccionRealASSY1() {
       const d = doc.data();
       const modelo = (d.modelo || '').trim();
       if (!modelo) return;
+      // El campo 'fecha' se guarda como texto 'YYYY-MM-DD' — comparación de texto funciona igual que de fecha
+      if (fechaDesde && (!d.fecha || d.fecha < fechaDesde)) return;
+      if (fechaHasta && (!d.fecha || d.fecha > fechaHasta)) return;
       const qty = Number(d.qty || d.prod || 0);
       produccion[modelo] = (produccion[modelo] || 0) + qty;
     });
@@ -3571,7 +3581,11 @@ async function renderPlanSemanal() {
 
   wrap.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text2);font-size:12px">⏳ Leyendo producción real de ASSY1 desde el MES...</div>`;
 
-  const produccionReal = await obtenerProduccionRealASSY1();
+  const fechaDesdeEl = document.getElementById('planFechaDesde');
+  const fechaHastaEl = document.getElementById('planFechaHasta');
+  const fechaDesde = fechaDesdeEl ? fechaDesdeEl.value : '';
+  const fechaHasta = fechaHastaEl ? fechaHastaEl.value : '';
+  const produccionReal = await obtenerProduccionRealASSY1(fechaDesde, fechaHasta);
 
   // Prioridad + material se evalúan ANTES de repartir por día, para que el plan
   // respete la prioridad pero limite lo planificado a lo que el material alcanza.
@@ -3950,7 +3964,12 @@ window.descargarMaterialesPlan = descargarMaterialesPlan;
 
 async function publicarPlanSemanal() {
   if (!adminAuthed) { alert('Solo el administrador puede publicar el plan al MES.'); return; }
-  const produccionReal = await obtenerProduccionRealASSY1();
+  const fechaDesdeEl = document.getElementById('planFechaDesde');
+  const fechaHastaEl = document.getElementById('planFechaHasta');
+  const produccionReal = await obtenerProduccionRealASSY1(
+    fechaDesdeEl ? fechaDesdeEl.value : '',
+    fechaHastaEl ? fechaHastaEl.value : ''
+  );
 
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const conTargetOrdenado = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0).sort((a, b) => {

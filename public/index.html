@@ -3695,7 +3695,7 @@ async function renderPlanSemanal() {
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">
         <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">🗓️ Detalle diario · Línea ASSY1</div>
-        <button class="btn btn-success btn-sm" onclick="descargarMaterialesPlan()">📥 Descargar materiales a pedir</button>
+        <button class="btn btn-success btn-sm" onclick="descargarMaterialesPlan()">📥 Descargar Pick List (almacén)</button>
       </div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
@@ -3717,6 +3717,34 @@ window.renderPlanSemanal = renderPlanSemanal;
 // Evalúa faltantes de material para la lista EXACTA de modelos que trae el Plan Semanal
 // (no depende de qué modelos estén agregados en "Analizar varios modelos"), respetando
 // el mismo orden de prioridad y el mismo pool de inventario compartido/cascada.
+// Identifica los 4 materiales de ensamble de un modelo (Strip, Top, Bot, Bundle),
+// usando exactamente la misma agrupación jerárquica del BOM (getSectionByRow)
+// que ya usa el Simulador — no una lista aparte.
+function obtener4MaterialesEnsamble(sm) {
+  const allData = BOM.filter(r => r.sm === sm);
+  const bomGroups = [];
+  let currentGroup = null;
+  allData.forEach(r => {
+    const isL1 = r.isLevel1 || (r.level === 1) || (r.groupNo !== null && r.level !== 2);
+    if (isL1) {
+      currentGroup = { header: r, section: getSectionByRow(r) };
+      bomGroups.push(currentGroup);
+    }
+  });
+
+  const topGroup = bomGroups.find(g => g.section === 'TOP');
+  const botGroup = bomGroups.find(g => g.section === 'BOT');
+  const bundleGroup = bomGroups.find(g => g.section === 'BUNDLE');
+  const stripRow = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
+
+  return [
+    { etiqueta: 'Strip', row: stripRow || null },
+    { etiqueta: 'Top', row: topGroup ? topGroup.header : null },
+    { etiqueta: 'Bot', row: botGroup ? botGroup.header : null },
+    { etiqueta: 'Bundle', row: bundleGroup ? bundleGroup.header : null }
+  ];
+}
+
 function calcularFaltantesPorModeloPlan(modelosOrdenados) {
   const invOriginal = new Map();
   BOM.forEach(r => { if (!invOriginal.has(r)) invOriginal.set(r, r.inv); });
@@ -3725,26 +3753,28 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
   simFiltro = 'todos';
 
   const faltantes = {};
+  const pickList = []; // { modelo, prioridad, etiqueta, pn, desc, requerido, disponible, ok }
 
   modelosOrdenados.forEach(sm => {
-    const html = calcularDetalleModeloMulti(sm);
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
+    const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+    calcularDetalleModeloMulti(sm); // dispara calcSim() y deja _reqReal calculado en cada fila del BOM de este modelo
     const items = [];
-    temp.querySelectorAll('tr').forEach(tr => {
-      const tds = tr.querySelectorAll('td');
-      if (tds.length < 9) return;
-      const pn = tds[0].textContent.trim();
-      const desc = tds[1].textContent.trim();
-      const diferenciaTxt = tds[6].textContent.trim();
-      if (diferenciaTxt === '—') return; // fila informativa (N/R, ensamble), no es un faltante real
-      const diferenciaMatch = diferenciaTxt.replace(/,/g, '').match(/-?\d+/);
-      const diferencia = diferenciaMatch ? parseInt(diferenciaMatch[0]) : null;
-      const estado = tds[8].textContent.trim().toUpperCase();
-      if (diferencia !== null && diferencia < 0 && estado.includes('ORDER')) {
-        items.push({ pn, desc, falta: Math.abs(diferencia) });
-      }
+
+    obtener4MaterialesEnsamble(sm).forEach(m => {
+      if (!m.row) return; // este modelo no tiene ese material (p.ej. no todos usan Bundle)
+      const target = simTargetsPorModelo[sm] || 0;
+      const requerido = (m.row._reqReal !== undefined) ? m.row._reqReal : target;
+      const disponible = m.row.inv || 0;
+      const falta = requerido - disponible;
+      const ok = falta <= 0;
+
+      pickList.push({
+        modelo: sm, prioridad, etiqueta: m.etiqueta, pn: m.row.pn, desc: m.row.desc || '',
+        requerido, disponible, ok
+      });
+      if (!ok) items.push({ pn: m.row.pn, desc: m.row.desc || '', falta });
     });
+
     faltantes[sm] = items;
 
     // Descontar del pool compartido lo que este modelo tomó (misma cascada que
@@ -3771,42 +3801,42 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
   // Se guarda para que el botón de descarga en "Detalle diario" pueda exportarlo
   // sin tener que recalcular todo de nuevo.
   window._planFaltantesPorModelo = faltantes;
+  window._planPickList = pickList;
 
   return faltantes;
 }
 
-// Arma y descarga un Excel con el listado consolidado de materiales que hacen falta
-// (agrupado por N° de parte) para que el almacén pueda prepararlos y entregarlos
-// según el Plan Semanal mostrado en pantalla.
+// Arma y descarga el PICK LIST del Plan Semanal: todos los componentes que el
+// almacén debe entregar a producción para cumplir el plan (modelo por modelo,
+// en orden de prioridad), marcando cuáles no alcanzan con el inventario actual.
 function descargarMaterialesPlan() {
-  const faltantes = window._planFaltantesPorModelo || {};
-  const consolidado = {}; // key = pn||desc -> { pn, desc, falta, modelos:[] }
+  const pickList = window._planPickList || [];
 
-  Object.keys(faltantes).forEach(sm => {
-    (faltantes[sm] || []).forEach(item => {
-      const key = item.pn + '||' + item.desc;
-      if (!consolidado[key]) consolidado[key] = { pn: item.pn, desc: item.desc, falta: 0, modelos: [] };
-      consolidado[key].falta += item.falta;
-      consolidado[key].modelos.push(sm + ' (' + item.falta.toLocaleString() + ')');
-    });
-  });
-
-  const filas = Object.values(consolidado).sort((a, b) => b.falta - a.falta);
-
-  if (!filas.length) {
-    alert('No hay faltantes de material registrados para este plan — nada que descargar.');
+  if (!pickList.length) {
+    alert('No hay datos del plan para generar el pick list. Abre la pestaña Plan Semanal primero.');
     return;
   }
 
-  const rows = [['N° Parte', 'Descripción', 'Cantidad a pedir', 'Modelos que lo requieren']];
-  filas.forEach(f => rows.push([f.pn, f.desc, f.falta, f.modelos.join(' · ')]));
+  const ordenados = pickList.slice().sort((a, b) => a.prioridad - b.prioridad || a.modelo.localeCompare(b.modelo));
+
+  const rows = [['Prioridad', 'Modelo', 'Material', 'N° Parte', 'Descripción', 'Cantidad a entregar', 'Disponible en almacén', 'Estado']];
+  ordenados.forEach(f => rows.push([
+    f.prioridad,
+    f.modelo,
+    f.etiqueta,
+    f.pn,
+    f.desc,
+    f.requerido,
+    f.disponible,
+    f.ok ? 'OK' : 'FALTA COMPRAR/PRODUCIR'
+  ]));
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 16 }, { wch: 40 }, { wch: 16 }, { wch: 50 }];
+  ws['!cols'] = [{ wch: 10 }, { wch: 18 }, { wch: 10 }, { wch: 16 }, { wch: 40 }, { wch: 16 }, { wch: 16 }, { wch: 20 }];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Materiales a Pedir');
+  XLSX.utils.book_append_sheet(wb, ws, 'Pick List Plan Semanal');
   const fecha = new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb, `Materiales_a_Pedir_Plan_Semanal_${fecha}.xlsx`);
+  XLSX.writeFile(wb, `PickList_Almacen_Plan_Semanal_${fecha}.xlsx`);
 }
 window.descargarMaterialesPlan = descargarMaterialesPlan;
 

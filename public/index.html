@@ -3433,6 +3433,8 @@ async function obtenerProduccionRealASSY1() {
 
 function calcularPlanSemanal(produccionReal) {
   produccionReal = produccionReal || {};
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
   const fechas = window.simFechaEntregaPorModelo || {};
@@ -3460,6 +3462,8 @@ function calcularPlanSemanal(produccionReal) {
     const l = lunesDeSemana(it.fechaEntrega);
     return (!min || l < min) ? l : min;
   }, null);
+  const semanaActualHoy = lunesDeSemana(hoy);
+  if (semanaActual < semanaActualHoy) semanaActual = semanaActualHoy; // nunca planificar en semanas ya pasadas
 
   const semanas = [];
   let semanasSinAvance = 0;
@@ -3487,7 +3491,8 @@ function calcularPlanSemanal(produccionReal) {
     for (let d = 0; d < DIAS_SEMANA_LABORAL; d++) {
       const fechaDia = new Date(semanaActual);
       fechaDia.setDate(fechaDia.getDate() + d);
-      let capacidadRestante = CAPACIDAD_DIARIA_ASSY1;
+      const esPasado = fechaDia < hoy; // no se puede planificar producción en un día que ya pasó
+      let capacidadRestante = esPasado ? 0 : CAPACIDAD_DIARIA_ASSY1;
       const asignaciones = [];
       for (const it of activos) {
         if (capacidadRestante <= 0) break;
@@ -3579,8 +3584,6 @@ async function renderPlanSemanal() {
     return;
   }
 
-  const faltantesPorModelo = calcularFaltantesPorModeloPlan();
-
   // Todos los modelos con target: los del plan + los ya cubiertos por producción real
   const modelosPlan = [...new Set([...semanas.flatMap(s => s.items.map(it => it.sm)), ...cubiertosPorReal])];
   modelosPlan.sort((a, b) => {
@@ -3588,6 +3591,9 @@ async function renderPlanSemanal() {
     const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
     return pa - pb;
   });
+
+  // Evalúa TODOS los modelos del plan (no solo los agregados a "Analizar varios modelos")
+  const faltantesPorModelo = calcularFaltantesPorModeloPlan(modelosPlan);
 
   // ── TABLA 1: PLAN REQUERIDO (qué necesita cada modelo, según lo YA producido en ASSY1) ──
   const filasPlan = modelosPlan.map(sm => {
@@ -3597,6 +3603,10 @@ async function renderPlanSemanal() {
     const pendiente = Math.max(0, target - producido);
     const fechaStr = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
     const fechaTxt = fechaStr ? new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
+    const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
+    const numParte = (bundle && bundle.pn) || (strip && strip.pn) || '—';
 
     const pendStyle = pendiente > 0
       ? 'background:rgba(255,186,0,.15);color:#FFBA00'
@@ -3612,8 +3622,9 @@ async function renderPlanSemanal() {
       <tr style="border-bottom:1px solid var(--border)">
         <td style="padding:8px 4px">${prioridad}</td>
         <td style="padding:8px 4px;font-weight:600">${sm}</td>
-        <td style="padding:8px 4px">${fechaTxt}</td>
+        <td style="padding:8px 4px;color:var(--text2);font-size:11px">${numParte}</td>
         <td style="padding:8px 4px;text-align:right">${target.toLocaleString()}</td>
+        <td style="padding:8px 4px">${fechaTxt}</td>
         <td style="padding:8px 4px;text-align:right;color:var(--accent)">${producido.toLocaleString()}</td>
         <td style="padding:8px 4px;text-align:right"><span style="${pendStyle};padding:2px 8px;border-radius:6px">${pendiente.toLocaleString()}</span></td>
         <td style="padding:8px 4px"><span style="${matStyle};padding:2px 8px;border-radius:6px;font-size:11px;white-space:nowrap">${matTxt}</span></td>
@@ -3665,8 +3676,9 @@ async function renderPlanSemanal() {
         <thead><tr>
           <th style="text-align:left;padding:6px 4px">Prior.</th>
           <th style="text-align:left;padding:6px 4px">Modelo</th>
-          <th style="text-align:left;padding:6px 4px">Fecha entrega</th>
+          <th style="text-align:left;padding:6px 4px">Code</th>
           <th style="text-align:right;padding:6px 4px">Target</th>
+          <th style="text-align:left;padding:6px 4px">Fecha entrega</th>
           <th style="text-align:right;padding:6px 4px">Producido (ASSY1 MES)</th>
           <th style="text-align:right;padding:6px 4px">Pendiente</th>
           <th style="text-align:left;padding:6px 4px">Materiales</th>
@@ -3695,27 +3707,60 @@ async function renderPlanSemanal() {
 }
 window.renderPlanSemanal = renderPlanSemanal;
 
-function calcularFaltantesPorModeloPlan() {
-  const { resultados } = calcularTodosMultiModeloConPool();
+// Evalúa faltantes de material para la lista EXACTA de modelos que trae el Plan Semanal
+// (no depende de qué modelos estén agregados en "Analizar varios modelos"), respetando
+// el mismo orden de prioridad y el mismo pool de inventario compartido/cascada.
+function calcularFaltantesPorModeloPlan(modelosOrdenados) {
+  const invOriginal = new Map();
+  BOM.forEach(r => { if (!invOriginal.has(r)) invOriginal.set(r, r.inv); });
+
+  const simFiltroOriginal = simFiltro;
+  simFiltro = 'todos';
+
   const faltantes = {};
-  Object.keys(resultados).forEach(sm => {
+
+  modelosOrdenados.forEach(sm => {
+    const html = calcularDetalleModeloMulti(sm);
     const temp = document.createElement('div');
-    temp.innerHTML = resultados[sm];
+    temp.innerHTML = html;
     const items = [];
     temp.querySelectorAll('tr').forEach(tr => {
       const tds = tr.querySelectorAll('td');
       if (tds.length < 9) return;
       const pn = tds[0].textContent.trim();
       const desc = tds[1].textContent.trim();
-      const diferenciaMatch = tds[6].textContent.replace(/,/g, '').match(/-?\d+/);
-      const diferencia = diferenciaMatch ? parseInt(diferenciaMatch[0]) : 0;
+      const diferenciaTxt = tds[6].textContent.trim();
+      if (diferenciaTxt === '—') return; // fila informativa (N/R, ensamble), no es un faltante real
+      const diferenciaMatch = diferenciaTxt.replace(/,/g, '').match(/-?\d+/);
+      const diferencia = diferenciaMatch ? parseInt(diferenciaMatch[0]) : null;
       const estado = tds[8].textContent.trim().toUpperCase();
-      if (diferencia < 0 || estado.includes('PEDIR')) {
+      if (diferencia !== null && diferencia < 0 && estado.includes('ORDER')) {
         items.push({ pn, desc, falta: Math.abs(diferencia) });
       }
     });
     faltantes[sm] = items;
+
+    // Descontar del pool compartido lo que este modelo tomó (misma cascada que
+    // "Analizar varios modelos"), para que el siguiente modelo de menor prioridad
+    // vea el inventario ya reducido.
+    const target = simTargetsPorModelo[sm] || 0;
+    const filasModelo = BOM.filter(r => r.sm === sm);
+    filasModelo.forEach(rowModelo => {
+      const pn = (rowModelo.pn || '').trim().toUpperCase();
+      const desc = (rowModelo.desc || '').trim().toUpperCase();
+      const reqReal = (rowModelo._reqReal !== undefined) ? rowModelo._reqReal : target;
+      BOM.forEach(r => {
+        if ((r.pn || '').trim().toUpperCase() === pn && (r.desc || '').trim().toUpperCase() === desc) {
+          const tomar = Math.min(r.inv || 0, reqReal);
+          r.inv = Math.max(0, (r.inv || 0) - tomar);
+        }
+      });
+    });
   });
+
+  simFiltro = simFiltroOriginal;
+  invOriginal.forEach((inv, r) => { r.inv = inv; });
+
   return faltantes;
 }
 

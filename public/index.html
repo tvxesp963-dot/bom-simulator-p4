@@ -3815,6 +3815,7 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
   // sin tener que recalcular todo de nuevo.
   window._planFaltantesPorModelo = faltantes;
   window._planPickList = pickList;
+  window._planModelosOrdenados = modelosOrdenados;
 
   return faltantes;
 }
@@ -3823,31 +3824,34 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
 // almacén debe entregar a producción para cumplir el plan (modelo por modelo,
 // en orden de prioridad), marcando cuáles no alcanzan con el inventario actual.
 function descargarMaterialesPlan() {
-  const pickList = window._planPickList || [];
+  const modelosOrdenados = window._planModelosOrdenados || [];
 
-  if (!pickList.length) {
+  if (!modelosOrdenados.length) {
     alert('No hay datos del plan para generar el pick list. Abre la pestaña Plan Semanal primero.');
     return;
   }
 
-  const ordenados = pickList.slice().sort((a, b) => a.prioridad - b.prioridad || a.modelo.localeCompare(b.modelo));
+  const rows = [
+    ['pick list'],
+    ['prioridad', 'modelo', 'codigo', 'strip', 'top', 'bot', 'bundle', 'cantidad']
+  ];
 
-  const rows = [['Prioridad', 'Modelo', 'Material', 'N° Parte', 'Descripción', 'Cantidad a entregar', 'Disponible en almacén', 'Estado']];
-  ordenados.forEach(f => rows.push([
-    f.prioridad,
-    f.modelo,
-    f.etiqueta,
-    f.pn,
-    f.desc,
-    f.requerido,
-    f.disponible,
-    f.ok ? 'OK' : 'FALTA COMPRAR/PRODUCIR'
-  ]));
+  modelosOrdenados.forEach(sm => {
+    const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+    const target = simTargetsPorModelo[sm] || 0;
+    const mats = obtener4MaterialesEnsamble(sm);
+    const pnDe = (etiqueta) => { const m = mats.find(x => x.etiqueta === etiqueta); return (m && m.row) ? m.row.pn : '—'; };
+    const strip = pnDe('Strip'), top = pnDe('Top'), bot = pnDe('Bot'), bundle = pnDe('Bundle');
+    const codigo = strip !== '—' ? strip : bundle;
+
+    rows.push([prioridad, sm, codigo, strip, top, bot, bundle, target]);
+  });
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 10 }, { wch: 18 }, { wch: 10 }, { wch: 16 }, { wch: 40 }, { wch: 16 }, { wch: 16 }, { wch: 20 }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+  ws['!cols'] = [{ wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Pick List Plan Semanal');
+  XLSX.utils.book_append_sheet(wb, ws, 'Pick List');
   const fecha = new Date().toISOString().split('T')[0];
   XLSX.writeFile(wb, `PickList_Almacen_Plan_Semanal_${fecha}.xlsx`);
 }

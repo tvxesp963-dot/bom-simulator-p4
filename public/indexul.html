@@ -2966,7 +2966,7 @@ function sincIMS() {
         if (!d.pn) return;
         var pn = d.pn.trim().toUpperCase();
         var desc = (d.desc||'').trim().toUpperCase();
-        var actual = d.Current || d.actual || 0;
+        var actual = d.actual || 0;
         rawP4[pn] = (rawP4[pn]||0) + actual;
         if (desc) rawP4[pn+'||'+desc] = actual;
         // Capturar precio P4
@@ -3016,7 +3016,6 @@ function sincIMS() {
       return k.split('||')[0].trim().toUpperCase().startsWith('GH90');
     }).forEach(function(pn) {
       imsInventario[pn+'||PLANTA:P3'] = rawP3[pn];
-      if (imsInventario[pn] === undefined) imsInventario[pn] = rawP3[pn];
     });
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';

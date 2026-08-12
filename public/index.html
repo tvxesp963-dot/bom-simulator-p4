@@ -3411,7 +3411,28 @@ function numeroSemanaISO(d) {
   return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
-function calcularPlanSemanal() {
+// Lee la producción REAL ya reportada en el MES (colección 'registros', línea ASSY1)
+// y la suma por modelo. Mismo proyecto Firebase que el BOM Simulator (mes-production-esp).
+async function obtenerProduccionRealASSY1() {
+  const produccion = {};
+  if (!db) return produccion;
+  try {
+    const snap = await db.collection('registros').where('maquina', '==', 'ASSY1').get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      const modelo = (d.modelo || '').trim();
+      if (!modelo) return;
+      const qty = Number(d.qty || d.prod || 0);
+      produccion[modelo] = (produccion[modelo] || 0) + qty;
+    });
+  } catch (e) {
+    console.error('Error leyendo producción real ASSY1 del MES:', e);
+  }
+  return produccion;
+}
+
+function calcularPlanSemanal(produccionReal) {
+  produccionReal = produccionReal || {};
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
   const fechas = window.simFechaEntregaPorModelo || {};
@@ -3421,16 +3442,19 @@ function calcularPlanSemanal() {
     const fechaStr = fechas[sm];
     const fecha = fechaStr ? new Date(fechaStr + 'T00:00:00') : null;
     if (!fecha || isNaN(fecha)) sinFecha.push(sm);
+    const target = simTargetsPorModelo[sm] || 0;
+    const producido = produccionReal[sm] || 0;
     return {
       sm,
-      target: simTargetsPorModelo[sm] || 0,
+      target,
+      producidoReal: producido,
       prioridad: (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999,
       fechaEntrega: fecha,
-      restante: simTargetsPorModelo[sm] || 0
+      restante: Math.max(0, target - producido) // solo se planifica lo que YA NO se produjo
     };
   }).filter(it => it.fechaEntrega);
 
-  if (!items.length) return { semanas: [], sinFecha };
+  if (!items.length) return { semanas: [], sinFecha, producidoPorModelo: {} };
 
   let semanaActual = items.reduce((min, it) => {
     const l = lunesDeSemana(it.fechaEntrega);
@@ -3509,23 +3533,168 @@ function calcularPlanSemanal() {
     semanaActual = proxLunes;
   }
 
-  return { semanas, sinFecha };
+  const producidoPorModelo = {};
+  items.forEach(it => { producidoPorModelo[it.sm] = it.producidoReal; });
+
+  return { semanas, sinFecha, producidoPorModelo };
 }
 
-function togglePlanDiaGlobal() {
-  const el = document.getElementById('diaWrapGlobal');
-  const btn = document.getElementById('btnDiaGlobal');
-  if (!el || !btn) return;
-  const abierto = el.style.display === 'block';
-  el.style.display = abierto ? 'none' : 'block';
-  btn.textContent = abierto ? 'Ver desglose diario' : 'Ocultar desglose diario';
-}
-window.togglePlanDiaGlobal = togglePlanDiaGlobal;
+async function renderPlanSemanal() {
+  const wrap = document.getElementById('planSemanalWrap');
+  const empty = document.getElementById('planEmpty');
+  const content = document.getElementById('planContent');
+  if (!wrap) return;
 
-// Reutiliza el mismo cálculo de pool compartido (prioridad + inventario) que ya usa
-// "Analizar varios modelos", y extrae de su tabla ya calculada qué componentes no
-// alcanzan a cubrir el Requerido de cada modelo (columna Diferencia negativa / Estado "PEDIR").
-// No duplica la lógica de negocio — solo lee el resultado ya calculado.
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
+
+  if (!conTarget.length) {
+    if (empty) empty.style.display = 'block';
+    if (content) content.style.display = 'none';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  if (content) content.style.display = 'block';
+
+  wrap.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text2);font-size:12px">⏳ Leyendo producción real de ASSY1 desde el MES...</div>`;
+
+  const produccionReal = await obtenerProduccionRealASSY1();
+  const { semanas, sinFecha } = calcularPlanSemanal(produccionReal);
+  const btnPub = document.getElementById('btnPublicarPlanSemanal');
+  if (btnPub) btnPub.style.display = (adminAuthed && semanas.length) ? 'inline-flex' : 'none';
+
+  let avisoHtml = '';
+  if (sinFecha.length) {
+    avisoHtml = `<div style="padding:.6rem .8rem;background:rgba(255,186,0,.1);border:1px solid rgba(255,186,0,.3);border-radius:8px;color:#FFBA00;font-size:12px;margin-bottom:1rem">⚠ Sin fecha de entrega asignada (no aparecen en el plan): ${sinFecha.join(', ')}. Asígnala en la tarjeta del modelo o cárgala vía Excel.</div>`;
+  }
+
+  // Modelos con target pero YA cubiertos por completo con producción real (no requieren más plan)
+  const cubiertosPorReal = conTarget.filter(sm => {
+    const producido = produccionReal[sm] || 0;
+    return producido >= (simTargetsPorModelo[sm] || 0) && !semanas.some(s => s.items.some(it => it.sm === sm));
+  });
+
+  if (!semanas.length && !cubiertosPorReal.length) {
+    wrap.innerHTML = avisoHtml + `<div class="empty" style="padding:2rem"><div class="empty-title">Asigna fecha de entrega a los modelos para generar el plan semanal</div></div>`;
+    return;
+  }
+
+  const faltantesPorModelo = calcularFaltantesPorModeloPlan();
+
+  // Todos los modelos con target: los del plan + los ya cubiertos por producción real
+  const modelosPlan = [...new Set([...semanas.flatMap(s => s.items.map(it => it.sm)), ...cubiertosPorReal])];
+  modelosPlan.sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
+
+  // ── TABLA 1: PLAN REQUERIDO (qué necesita cada modelo, según lo YA producido en ASSY1) ──
+  const filasPlan = modelosPlan.map(sm => {
+    const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+    const target = simTargetsPorModelo[sm] || 0;
+    const producido = produccionReal[sm] || 0;
+    const pendiente = Math.max(0, target - producido);
+    const fechaStr = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
+    const fechaTxt = fechaStr ? new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    const pendStyle = pendiente > 0
+      ? 'background:rgba(255,186,0,.15);color:#FFBA00'
+      : 'background:rgba(0,230,118,.15);color:#00e676';
+
+    const falts = faltantesPorModelo[sm] || [];
+    const matStyle = falts.length
+      ? 'background:rgba(255,68,68,.15);color:var(--red)'
+      : 'background:rgba(0,230,118,.15);color:#00e676';
+    const matTxt = falts.length ? `⚠ Falta material (${falts.length})` : '✓ Material completo';
+
+    return `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 4px">${prioridad}</td>
+        <td style="padding:8px 4px;font-weight:600">${sm}</td>
+        <td style="padding:8px 4px">${fechaTxt}</td>
+        <td style="padding:8px 4px;text-align:right">${target.toLocaleString()}</td>
+        <td style="padding:8px 4px;text-align:right;color:var(--accent)">${producido.toLocaleString()}</td>
+        <td style="padding:8px 4px;text-align:right"><span style="${pendStyle};padding:2px 8px;border-radius:6px">${pendiente.toLocaleString()}</span></td>
+        <td style="padding:8px 4px"><span style="${matStyle};padding:2px 8px;border-radius:6px;font-size:11px;white-space:nowrap">${matTxt}</span></td>
+      </tr>`;
+  }).join('');
+
+  const alertasMateriales = modelosPlan
+    .filter(sm => (faltantesPorModelo[sm] || []).length)
+    .map(sm => {
+      const filasFalt = faltantesPorModelo[sm].map(f =>
+        `<tr><td style="padding:3px 0;color:var(--red)">${f.pn} — ${f.desc}</td><td style="padding:3px 0;text-align:right;color:var(--red)">faltan ${f.falta.toLocaleString()}</td></tr>`
+      ).join('');
+      return `
+        <div style="margin-top:.6rem;padding:.7rem .9rem;background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:8px">
+          <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:.4rem">${sm} — materiales insuficientes para cubrir el target</div>
+          <table style="width:100%;font-size:12px">${filasFalt}</table>
+        </div>`;
+    }).join('');
+
+  // ── TABLA 2: DETALLE DIARIO (cuánto se produce cada día en ASSY1) ──
+  const filasDias = [];
+  semanas.forEach(sem => {
+    sem.dias.forEach(d => {
+      if (!d.asignaciones.length) return;
+      d.asignaciones.forEach(a => {
+        const falts = faltantesPorModelo[a.sm] || [];
+        const matBadge = falts.length
+          ? `<span style="background:rgba(255,68,68,.15);color:var(--red);padding:1px 7px;border-radius:6px;font-size:10px">⚠ falta material</span>`
+          : `<span style="background:rgba(0,230,118,.15);color:#00e676;padding:1px 7px;border-radius:6px;font-size:10px">✓ ok</span>`;
+        const nombreDia = d.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
+        filasDias.push(`
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:6px 4px">${nombreDia}</td>
+            <td style="padding:6px 4px;font-weight:600">${a.sm}</td>
+            <td style="padding:6px 4px;text-align:right">${a.qty.toLocaleString()}</td>
+            <td style="padding:6px 4px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td>
+            <td style="padding:6px 4px">${matBadge}</td>
+          </tr>`);
+      });
+    });
+  });
+
+  wrap.innerHTML = avisoHtml + `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">📋 Plan requerido por modelo</div>
+      <div style="font-size:11px;color:var(--text3);margin:-.3rem 0 .6rem">"Producido" viene de los registros reales de la línea ASSY1 en el MES.</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 4px">Prior.</th>
+          <th style="text-align:left;padding:6px 4px">Modelo</th>
+          <th style="text-align:left;padding:6px 4px">Fecha entrega</th>
+          <th style="text-align:right;padding:6px 4px">Target</th>
+          <th style="text-align:right;padding:6px 4px">Producido (ASSY1 MES)</th>
+          <th style="text-align:right;padding:6px 4px">Pendiente</th>
+          <th style="text-align:left;padding:6px 4px">Materiales</th>
+        </tr></thead>
+        <tbody>${filasPlan}</tbody>
+      </table>
+      </div>
+    </div>
+    ${alertasMateriales}
+    <div class="card" style="margin-top:1rem">
+      <div class="card-title">🗓️ Detalle diario de producción — línea ASSY1</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 4px">Día</th>
+          <th style="text-align:left;padding:6px 4px">Modelo</th>
+          <th style="text-align:right;padding:6px 4px">A producir</th>
+          <th style="text-align:right;padding:6px 4px">Uso capacidad día</th>
+          <th style="text-align:left;padding:6px 4px">Material</th>
+        </tr></thead>
+        <tbody>${filasDias.join('')}</tbody>
+      </table>
+      </div>
+    </div>
+  `;
+}
+window.renderPlanSemanal = renderPlanSemanal;
+
 function calcularFaltantesPorModeloPlan() {
   const { resultados } = calcularTodosMultiModeloConPool();
   const faltantes = {};
@@ -3550,144 +3719,10 @@ function calcularFaltantesPorModeloPlan() {
   return faltantes;
 }
 
-function renderPlanSemanal() {
-  const wrap = document.getElementById('planSemanalWrap');
-  const empty = document.getElementById('planEmpty');
-  const content = document.getElementById('planContent');
-  if (!wrap) return;
-
-  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
-  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
-
-  if (!conTarget.length) {
-    if (empty) empty.style.display = 'block';
-    if (content) content.style.display = 'none';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-  if (content) content.style.display = 'block';
-
-  const { semanas, sinFecha } = calcularPlanSemanal();
-  const btnPub = document.getElementById('btnPublicarPlanSemanal');
-  if (btnPub) btnPub.style.display = (adminAuthed && semanas.length) ? 'inline-flex' : 'none';
-
-  let avisoHtml = '';
-  if (sinFecha.length) {
-    avisoHtml = `<div style="padding:.6rem .8rem;background:rgba(255,186,0,.1);border:1px solid rgba(255,186,0,.3);border-radius:8px;color:#FFBA00;font-size:12px;margin-bottom:1rem">⚠ Sin fecha de entrega asignada (no aparecen en el plan): ${sinFecha.join(', ')}. Asígnala en la tarjeta del modelo o cárgala vía Excel.</div>`;
-  }
-
-  if (!semanas.length) {
-    wrap.innerHTML = avisoHtml + `<div class="empty" style="padding:2rem"><div class="empty-title">Asigna fecha de entrega a los modelos para generar el plan semanal</div></div>`;
-    return;
-  }
-
-  const faltantesPorModelo = calcularFaltantesPorModeloPlan();
-
-  // Todos los modelos que aparecen en el plan, ordenados por prioridad
-  const modelosPlan = [...new Set(semanas.flatMap(s => s.items.map(it => it.sm)))];
-  modelosPlan.sort((a, b) => {
-    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
-    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
-    return pa - pb;
-  });
-
-  // Encabezado de columnas de semanas
-  const colsSemana = semanas.map(sem => {
-    const finSemana = new Date(sem.semanaLunes); finSemana.setDate(finSemana.getDate() + 4);
-    return `Sem ${sem.numeroSemana}<br><span style="font-weight:400;font-size:10px">${formatFechaCorta(sem.semanaLunes)}-${formatFechaCorta(finSemana)}</span>`;
-  });
-
-  const filas = modelosPlan.map(sm => {
-    const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
-    const target = simTargetsPorModelo[sm] || 0;
-    let pendiente = target;
-    const celdasSemana = semanas.map(sem => {
-      const it = sem.items.find(x => x.sm === sm);
-      pendiente = it ? it.pendiente : pendiente;
-      const qty = it ? it.qtySemana : 0;
-      return `<td style="padding:8px 4px;text-align:right;background:var(--bg2)">${qty > 0 ? qty.toLocaleString() : '<span style="color:var(--text3)">—</span>'}</td>`;
-    }).join('');
-
-    const pendStyle = pendiente > 0
-      ? 'background:rgba(255,186,0,.15);color:#FFBA00'
-      : 'background:rgba(0,230,118,.15);color:#00e676';
-
-    const falts = faltantesPorModelo[sm] || [];
-    const matStyle = falts.length
-      ? 'background:rgba(255,68,68,.15);color:var(--red)'
-      : 'background:rgba(0,230,118,.15);color:#00e676';
-    const matTxt = falts.length ? `⚠ Falta material (${falts.length})` : '✓ Completo';
-
-    return `
-      <tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:8px 4px">${prioridad}</td>
-        <td style="padding:8px 4px;font-weight:600">${sm}</td>
-        <td style="padding:8px 4px;text-align:right">${target.toLocaleString()}</td>
-        ${celdasSemana}
-        <td style="padding:8px 4px;text-align:right"><span style="${pendStyle};padding:2px 8px;border-radius:6px">${pendiente.toLocaleString()}</span></td>
-        <td style="padding:8px 4px"><span style="${matStyle};padding:2px 8px;border-radius:6px;font-size:11px;white-space:nowrap">${matTxt}</span></td>
-      </tr>`;
-  }).join('');
-
-  const alertasMateriales = modelosPlan
-    .filter(sm => (faltantesPorModelo[sm] || []).length)
-    .map(sm => {
-      const filasFalt = faltantesPorModelo[sm].map(f =>
-        `<tr><td style="padding:3px 0;color:var(--red)">${f.pn} — ${f.desc}</td><td style="padding:3px 0;text-align:right;color:var(--red)">faltan ${f.falta.toLocaleString()}</td></tr>`
-      ).join('');
-      return `
-        <div style="margin-top:.6rem;padding:.7rem .9rem;background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:8px">
-          <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:.4rem">${sm} — materiales insuficientes para cubrir el target</div>
-          <table style="width:100%;font-size:12px">${filasFalt}</table>
-        </div>`;
-    }).join('');
-
-  // Desglose diario global (todas las semanas juntas, en orden cronológico)
-  const filasDias = semanas.flatMap(sem => sem.dias.filter(d => d.asignaciones.length)).map(d => {
-    const nombreDia = d.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
-    const modelosTxt = d.asignaciones.map(a => a.sm).join(' / ');
-    const qtyTxt = d.asignaciones.map(a => a.qty.toLocaleString()).join(' / ');
-    return `<tr><td style="padding:4px">${nombreDia}</td><td style="padding:4px">${modelosTxt}</td><td style="padding:4px;text-align:right">${qtyTxt}</td><td style="padding:4px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td></tr>`;
-  }).join('');
-
-  wrap.innerHTML = avisoHtml + `
-    <div class="card">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:.5rem">
-        <button class="btn btn-secondary btn-sm" onclick="togglePlanDiaGlobal()" id="btnDiaGlobal">Ver desglose diario</button>
-      </div>
-      <div style="overflow-x:auto">
-      <table style="width:100%;font-size:12px;border-collapse:collapse">
-        <thead><tr>
-          <th style="text-align:left;padding:6px 4px">Prior.</th>
-          <th style="text-align:left;padding:6px 4px">Modelo</th>
-          <th style="text-align:right;padding:6px 4px">Target</th>
-          ${colsSemana.map(c => `<th style="text-align:right;padding:6px 4px;background:var(--bg2)">${c}</th>`).join('')}
-          <th style="text-align:right;padding:6px 4px">Pendiente</th>
-          <th style="text-align:left;padding:6px 4px">Materiales</th>
-        </tr></thead>
-        <tbody>${filas}</tbody>
-      </table>
-      </div>
-      <div id="diaWrapGlobal" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:var(--bg2);border-radius:8px;overflow-x:auto">
-        <table style="width:100%;font-size:11px">
-          <thead><tr>
-            <th style="text-align:left;padding:4px">Día</th>
-            <th style="text-align:left;padding:4px">Modelo(s)</th>
-            <th style="text-align:right;padding:4px">Qty día</th>
-            <th style="text-align:right;padding:4px">Uso capacidad</th>
-          </tr></thead>
-          <tbody>${filasDias}</tbody>
-        </table>
-      </div>
-    </div>
-    ${alertasMateriales}
-  `;
-}
-window.renderPlanSemanal = renderPlanSemanal;
-
 async function publicarPlanSemanal() {
   if (!adminAuthed) { alert('Solo el administrador puede publicar el plan al MES.'); return; }
-  const { semanas, sinFecha } = calcularPlanSemanal();
+  const produccionReal = await obtenerProduccionRealASSY1();
+  const { semanas, sinFecha } = calcularPlanSemanal(produccionReal);
   if (!semanas.length) { alert('No hay plan semanal para publicar. Asigna fecha de entrega a los modelos.'); return; }
   let msg = '¿Publicar el Plan Semanal al MES?';
   if (sinFecha.length) msg += `\n\nAviso: estos modelos no tienen fecha y NO se incluirán: ${sinFecha.join(', ')}`;

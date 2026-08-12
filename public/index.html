@@ -3861,6 +3861,8 @@ function descargarMaterialesPlan() {
   const modelosOrdenados = window._planModelosOrdenados || [];
   const qtyPlanificadaPorModelo = window._planQtyPlanificadaPorModelo || {};
   const faltantesPorModelo = window._planFaltantesPorModelo || {};
+  const materialCapPorModelo = window._planMaterialCapPorModelo || {};
+  const pickListDetalle = window._planPickList || [];
 
   if (!modelosOrdenados.length) {
     alert('No hay datos del plan para generar el pick list. Abre la pestaña Plan Semanal primero.');
@@ -3880,7 +3882,19 @@ function descargarMaterialesPlan() {
     const strip = pnDe('Strip'), top = pnDe('Top'), bot = pnDe('Bot'), bundle = pnDe('Bundle');
     const codigo = strip !== '—' ? strip : bundle;
     const faltaMaterial = (faltantesPorModelo[sm] || []).length > 0;
-    registros.push({ prioridad, sm, codigo, strip, top, bot, bundle, cantidad, faltaMaterial });
+
+    // ¿Cuál de los 4 materiales fue el cuello de botella? Solo se marca si el
+    // material (y no la capacidad/target) fue lo que limitó la cantidad final.
+    const cap = materialCapPorModelo[sm];
+    let cuello = '';
+    if (cap !== undefined && cap !== null && isFinite(cap) && cantidad >= cap) {
+      const itemsModelo = pickListDetalle.filter(p => p.modelo === sm);
+      let peor = null;
+      itemsModelo.forEach(p => { if (!peor || p.disponible < peor.disponible) peor = p; });
+      if (peor) cuello = peor.etiqueta;
+    }
+
+    registros.push({ prioridad, sm, codigo, strip, top, bot, bundle, cantidad, faltaMaterial, cuello });
   });
 
   if (!registros.length) {
@@ -3897,13 +3911,13 @@ function descargarMaterialesPlan() {
     left: { style: 'thin', color: { rgb: 'BFBFBF' } }, right: { style: 'thin', color: { rgb: 'BFBFBF' } }
   };
 
-  const headers = ['Prioridad', 'Modelo', 'Código', 'Strip', 'Top', 'Bot', 'Bundle', 'Cantidad'];
+  const headers = ['Prioridad', 'Modelo', 'Código', 'Strip', 'Top', 'Bot', 'Bundle', 'Cantidad', 'Cuello de botella'];
   const data = [['PICK LIST — PLAN SEMANAL DE ENSAMBLE ASSY1'], headers];
-  registros.forEach(r => data.push([r.prioridad, r.sm, r.codigo, r.strip, r.top, r.bot, r.bundle, r.cantidad]));
+  registros.forEach(r => data.push([r.prioridad, r.sm, r.codigo, r.strip, r.top, r.bot, r.bundle, r.cantidad, r.cuello]));
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
-  ws['!cols'] = [{ wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
+  ws['!cols'] = [{ wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 16 }];
   ws['!rows'] = [{ hpt: 22 }, { hpt: 18 }];
 
   const range = XLSX.utils.decode_range(ws['!ref']);

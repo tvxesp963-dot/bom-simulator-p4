@@ -3512,15 +3512,43 @@ function calcularPlanSemanal() {
   return { semanas, sinFecha };
 }
 
-function togglePlanDia(idx) {
-  const el = document.getElementById('diaWrap' + idx);
-  const btn = document.getElementById('btnDia' + idx);
+function togglePlanDiaGlobal() {
+  const el = document.getElementById('diaWrapGlobal');
+  const btn = document.getElementById('btnDiaGlobal');
   if (!el || !btn) return;
   const abierto = el.style.display === 'block';
   el.style.display = abierto ? 'none' : 'block';
   btn.textContent = abierto ? 'Ver desglose diario' : 'Ocultar desglose diario';
 }
-window.togglePlanDia = togglePlanDia;
+window.togglePlanDiaGlobal = togglePlanDiaGlobal;
+
+// Reutiliza el mismo cálculo de pool compartido (prioridad + inventario) que ya usa
+// "Analizar varios modelos", y extrae de su tabla ya calculada qué componentes no
+// alcanzan a cubrir el Requerido de cada modelo (columna Diferencia negativa / Estado "PEDIR").
+// No duplica la lógica de negocio — solo lee el resultado ya calculado.
+function calcularFaltantesPorModeloPlan() {
+  const { resultados } = calcularTodosMultiModeloConPool();
+  const faltantes = {};
+  Object.keys(resultados).forEach(sm => {
+    const temp = document.createElement('div');
+    temp.innerHTML = resultados[sm];
+    const items = [];
+    temp.querySelectorAll('tr').forEach(tr => {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length < 9) return;
+      const pn = tds[0].textContent.trim();
+      const desc = tds[1].textContent.trim();
+      const diferenciaMatch = tds[6].textContent.replace(/,/g, '').match(/-?\d+/);
+      const diferencia = diferenciaMatch ? parseInt(diferenciaMatch[0]) : 0;
+      const estado = tds[8].textContent.trim().toUpperCase();
+      if (diferencia < 0 || estado.includes('PEDIR')) {
+        items.push({ pn, desc, falta: Math.abs(diferencia) });
+      }
+    });
+    faltantes[sm] = items;
+  });
+  return faltantes;
+}
 
 function renderPlanSemanal() {
   const wrap = document.getElementById('planSemanalWrap');
@@ -3553,65 +3581,107 @@ function renderPlanSemanal() {
     return;
   }
 
-  wrap.innerHTML = avisoHtml + semanas.map((sem, idx) => {
-    const capSemana = CAPACIDAD_DIARIA_ASSY1 * DIAS_SEMANA_LABORAL;
+  const faltantesPorModelo = calcularFaltantesPorModeloPlan();
+
+  // Todos los modelos que aparecen en el plan, ordenados por prioridad
+  const modelosPlan = [...new Set(semanas.flatMap(s => s.items.map(it => it.sm)))];
+  modelosPlan.sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
+
+  // Encabezado de columnas de semanas
+  const colsSemana = semanas.map(sem => {
     const finSemana = new Date(sem.semanaLunes); finSemana.setDate(finSemana.getDate() + 4);
-    const label = `Semana ${sem.numeroSemana} (${formatFechaCorta(sem.semanaLunes)} - ${formatFechaCorta(finSemana)})`;
+    return `Sem ${sem.numeroSemana}<br><span style="font-weight:400;font-size:10px">${formatFechaCorta(sem.semanaLunes)}-${formatFechaCorta(finSemana)}</span>`;
+  });
 
-    const filas = sem.items.map(it => {
-      const pendStyle = it.pendiente > 0
-        ? 'background:rgba(255,186,0,.15);color:#FFBA00'
-        : 'background:rgba(0,230,118,.15);color:#00e676';
-      return `
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:8px 4px">${it.prioridad}</td>
-          <td style="padding:8px 4px">${it.sm}</td>
-          <td style="padding:8px 4px;text-align:right">${it.qtySemana.toLocaleString()}</td>
-          <td style="padding:8px 4px;text-align:right">${it.target.toLocaleString()}</td>
-          <td style="padding:8px 4px;text-align:right">${it.producidoAcum.toLocaleString()}</td>
-          <td style="padding:8px 4px;text-align:right"><span style="${pendStyle};padding:2px 8px;border-radius:6px">${it.pendiente.toLocaleString()}</span></td>
-        </tr>`;
+  const filas = modelosPlan.map(sm => {
+    const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+    const target = simTargetsPorModelo[sm] || 0;
+    let pendiente = target;
+    const celdasSemana = semanas.map(sem => {
+      const it = sem.items.find(x => x.sm === sm);
+      pendiente = it ? it.pendiente : pendiente;
+      const qty = it ? it.qtySemana : 0;
+      return `<td style="padding:8px 4px;text-align:right;background:var(--bg2)">${qty > 0 ? qty.toLocaleString() : '<span style="color:var(--text3)">—</span>'}</td>`;
     }).join('');
 
-    const filasDias = sem.dias.filter(d => d.asignaciones.length).map(d => {
-      const nombreDia = d.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
-      const modelosTxt = d.asignaciones.map(a => a.sm).join(' / ');
-      const qtyTxt = d.asignaciones.map(a => a.qty.toLocaleString()).join(' / ');
-      return `<tr><td style="padding:4px">${nombreDia}</td><td style="padding:4px">${modelosTxt}</td><td style="padding:4px;text-align:right">${qtyTxt}</td><td style="padding:4px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td></tr>`;
-    }).join('');
+    const pendStyle = pendiente > 0
+      ? 'background:rgba(255,186,0,.15);color:#FFBA00'
+      : 'background:rgba(0,230,118,.15);color:#00e676';
+
+    const falts = faltantesPorModelo[sm] || [];
+    const matStyle = falts.length
+      ? 'background:rgba(255,68,68,.15);color:var(--red)'
+      : 'background:rgba(0,230,118,.15);color:#00e676';
+    const matTxt = falts.length ? `⚠ Falta material (${falts.length})` : '✓ Completo';
 
     return `
-      <div class="card" style="margin-bottom:.8rem">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;gap:.5rem">
-          <span style="font-size:13px;font-weight:600">${label} · Capacidad ${capSemana.toLocaleString()}</span>
-          <button class="btn btn-secondary btn-sm" onclick="togglePlanDia(${idx})" id="btnDia${idx}">Ver desglose diario</button>
-        </div>
-        <div style="overflow-x:auto">
-        <table style="width:100%;font-size:12px">
-          <thead><tr>
-            <th style="text-align:left;padding:6px 4px">Prior.</th>
-            <th style="text-align:left;padding:6px 4px">Modelo</th>
-            <th style="text-align:right;padding:6px 4px">Qty semana</th>
-            <th style="text-align:right;padding:6px 4px">Target total</th>
-            <th style="text-align:right;padding:6px 4px">Producido acum.</th>
-            <th style="text-align:right;padding:6px 4px">Pendiente</th>
-          </tr></thead>
-          <tbody>${filas}</tbody>
-        </table>
-        </div>
-        <div id="diaWrap${idx}" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:var(--bg2);border-radius:8px;overflow-x:auto">
-          <table style="width:100%;font-size:11px">
-            <thead><tr>
-              <th style="text-align:left;padding:4px">Día</th>
-              <th style="text-align:left;padding:4px">Modelo(s)</th>
-              <th style="text-align:right;padding:4px">Qty día</th>
-              <th style="text-align:right;padding:4px">Uso capacidad</th>
-            </tr></thead>
-            <tbody>${filasDias}</tbody>
-          </table>
-        </div>
-      </div>`;
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 4px">${prioridad}</td>
+        <td style="padding:8px 4px;font-weight:600">${sm}</td>
+        <td style="padding:8px 4px;text-align:right">${target.toLocaleString()}</td>
+        ${celdasSemana}
+        <td style="padding:8px 4px;text-align:right"><span style="${pendStyle};padding:2px 8px;border-radius:6px">${pendiente.toLocaleString()}</span></td>
+        <td style="padding:8px 4px"><span style="${matStyle};padding:2px 8px;border-radius:6px;font-size:11px;white-space:nowrap">${matTxt}</span></td>
+      </tr>`;
   }).join('');
+
+  const alertasMateriales = modelosPlan
+    .filter(sm => (faltantesPorModelo[sm] || []).length)
+    .map(sm => {
+      const filasFalt = faltantesPorModelo[sm].map(f =>
+        `<tr><td style="padding:3px 0;color:var(--red)">${f.pn} — ${f.desc}</td><td style="padding:3px 0;text-align:right;color:var(--red)">faltan ${f.falta.toLocaleString()}</td></tr>`
+      ).join('');
+      return `
+        <div style="margin-top:.6rem;padding:.7rem .9rem;background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:8px">
+          <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:.4rem">${sm} — materiales insuficientes para cubrir el target</div>
+          <table style="width:100%;font-size:12px">${filasFalt}</table>
+        </div>`;
+    }).join('');
+
+  // Desglose diario global (todas las semanas juntas, en orden cronológico)
+  const filasDias = semanas.flatMap(sem => sem.dias.filter(d => d.asignaciones.length)).map(d => {
+    const nombreDia = d.fecha.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' });
+    const modelosTxt = d.asignaciones.map(a => a.sm).join(' / ');
+    const qtyTxt = d.asignaciones.map(a => a.qty.toLocaleString()).join(' / ');
+    return `<tr><td style="padding:4px">${nombreDia}</td><td style="padding:4px">${modelosTxt}</td><td style="padding:4px;text-align:right">${qtyTxt}</td><td style="padding:4px;text-align:right;color:var(--text3)">${d.usoCapacidad.toLocaleString()} / ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()}</td></tr>`;
+  }).join('');
+
+  wrap.innerHTML = avisoHtml + `
+    <div class="card">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:.5rem">
+        <button class="btn btn-secondary btn-sm" onclick="togglePlanDiaGlobal()" id="btnDiaGlobal">Ver desglose diario</button>
+      </div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 4px">Prior.</th>
+          <th style="text-align:left;padding:6px 4px">Modelo</th>
+          <th style="text-align:right;padding:6px 4px">Target</th>
+          ${colsSemana.map(c => `<th style="text-align:right;padding:6px 4px;background:var(--bg2)">${c}</th>`).join('')}
+          <th style="text-align:right;padding:6px 4px">Pendiente</th>
+          <th style="text-align:left;padding:6px 4px">Materiales</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      </div>
+      <div id="diaWrapGlobal" style="display:none;margin-top:.6rem;padding:.6rem .8rem;background:var(--bg2);border-radius:8px;overflow-x:auto">
+        <table style="width:100%;font-size:11px">
+          <thead><tr>
+            <th style="text-align:left;padding:4px">Día</th>
+            <th style="text-align:left;padding:4px">Modelo(s)</th>
+            <th style="text-align:right;padding:4px">Qty día</th>
+            <th style="text-align:right;padding:4px">Uso capacidad</th>
+          </tr></thead>
+          <tbody>${filasDias}</tbody>
+        </table>
+      </div>
+    </div>
+    ${alertasMateriales}
+  `;
 }
 window.renderPlanSemanal = renderPlanSemanal;
 

@@ -3587,6 +3587,15 @@ async function renderPlanSemanal() {
   const btnPub = document.getElementById('btnPublicarPlanSemanal');
   if (btnPub) btnPub.style.display = (adminAuthed && semanas.length) ? 'inline-flex' : 'none';
 
+  // Cuánto quedó REALMENTE planificado por modelo en todo el plan (ya limitado por
+  // capacidad, prioridad y material disponible) — esto es lo que el pick list debe pedir,
+  // no el target completo si el material no alcanza para cubrirlo.
+  const qtyPlanificadaPorModelo = {};
+  semanas.forEach(sem => sem.items.forEach(it => {
+    qtyPlanificadaPorModelo[it.sm] = (qtyPlanificadaPorModelo[it.sm] || 0) + it.qtySemana;
+  }));
+  window._planQtyPlanificadaPorModelo = qtyPlanificadaPorModelo;
+
   let avisoHtml = '';
   if (sinFecha.length) {
     avisoHtml = `<div style="padding:.6rem .8rem;background:rgba(255,186,0,.1);border:1px solid rgba(255,186,0,.3);border-radius:8px;color:#FFBA00;font-size:12px;margin-bottom:1rem">⚠ Sin fecha de entrega asignada (no aparecen en el plan): ${sinFecha.join(', ')}. Asígnala en la tarjeta del modelo o cárgala vía Excel.</div>`;
@@ -3850,31 +3859,74 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
 // en orden de prioridad), marcando cuáles no alcanzan con el inventario actual.
 function descargarMaterialesPlan() {
   const modelosOrdenados = window._planModelosOrdenados || [];
+  const qtyPlanificadaPorModelo = window._planQtyPlanificadaPorModelo || {};
+  const faltantesPorModelo = window._planFaltantesPorModelo || {};
 
   if (!modelosOrdenados.length) {
     alert('No hay datos del plan para generar el pick list. Abre la pestaña Plan Semanal primero.');
     return;
   }
 
-  const rows = [
-    ['pick list'],
-    ['prioridad', 'modelo', 'codigo', 'strip', 'top', 'bot', 'bundle', 'cantidad']
-  ];
-
+  const registros = [];
   modelosOrdenados.forEach(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
-    const target = simTargetsPorModelo[sm] || 0;
+    // Cantidad REALMENTE planificada (limitada por capacidad, prioridad y material
+    // disponible) — no el target completo, ya que si falta material no se puede pedir
+    // más de lo que hoy se puede entregar y ensamblar según el plan.
+    const cantidad = qtyPlanificadaPorModelo[sm] || 0;
+    if (cantidad <= 0) return; // no hay nada que pedir/ensamblar de este modelo por ahora
     const mats = obtener4MaterialesEnsamble(sm);
     const pnDe = (etiqueta) => { const m = mats.find(x => x.etiqueta === etiqueta); return (m && m.row) ? m.row.pn : '—'; };
     const strip = pnDe('Strip'), top = pnDe('Top'), bot = pnDe('Bot'), bundle = pnDe('Bundle');
     const codigo = strip !== '—' ? strip : bundle;
-
-    rows.push([prioridad, sm, codigo, strip, top, bot, bundle, target]);
+    const faltaMaterial = (faltantesPorModelo[sm] || []).length > 0;
+    registros.push({ prioridad, sm, codigo, strip, top, bot, bundle, cantidad, faltaMaterial });
   });
 
-  const ws = XLSX.utils.aoa_to_sheet(rows);
+  if (!registros.length) {
+    alert('No hay material disponible para ensamblar ningún modelo del plan en este momento.');
+    return;
+  }
+
+  const TITLE_BG = '1F4E78', TITLE_FG = 'FFFFFF';
+  const HEAD_BG = '2E75B6', HEAD_FG = 'FFFFFF';
+  const ROW_BG = 'FFFFFF', ROW_BG_ALT = 'EAF1FB';
+  const WARN_BG = 'FCE4E4', WARN_FG = 'C00000';
+  const border = {
+    top: { style: 'thin', color: { rgb: 'BFBFBF' } }, bottom: { style: 'thin', color: { rgb: 'BFBFBF' } },
+    left: { style: 'thin', color: { rgb: 'BFBFBF' } }, right: { style: 'thin', color: { rgb: 'BFBFBF' } }
+  };
+
+  const headers = ['Prioridad', 'Modelo', 'Código', 'Strip', 'Top', 'Bot', 'Bundle', 'Cantidad'];
+  const data = [['PICK LIST — PLAN SEMANAL DE ENSAMBLE ASSY1'], headers];
+  registros.forEach(r => data.push([r.prioridad, r.sm, r.codigo, r.strip, r.top, r.bot, r.bundle, r.cantidad]));
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
   ws['!cols'] = [{ wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }];
+  ws['!rows'] = [{ hpt: 22 }, { hpt: 18 }];
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    const esTitulo = R === 0;
+    const esHeader = R === 1;
+    const registro = !esTitulo && !esHeader ? registros[R - 2] : null;
+    const filaImpar = registro && (R - 2) % 2 === 1;
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      let cell = ws[addr];
+      if (!cell) { cell = { t: 's', v: '' }; ws[addr] = cell; }
+      const bgColor = esTitulo ? TITLE_BG : esHeader ? HEAD_BG : (registro && registro.faltaMaterial) ? WARN_BG : filaImpar ? ROW_BG_ALT : ROW_BG;
+      const fgColor = esTitulo ? TITLE_FG : esHeader ? HEAD_FG : (registro && registro.faltaMaterial) ? WARN_FG : '000000';
+      cell.s = {
+        font: { bold: esTitulo || esHeader, color: { rgb: fgColor }, sz: esTitulo ? 13 : 11 },
+        fill: { patternType: 'solid', fgColor: { rgb: bgColor } },
+        alignment: { horizontal: esTitulo ? 'center' : (C === 1 ? 'left' : 'center'), vertical: 'center' },
+        border: esTitulo ? undefined : border
+      };
+    }
+  }
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Pick List');
   const fecha = new Date().toISOString().split('T')[0];

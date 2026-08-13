@@ -3222,40 +3222,7 @@ async function publicarPlan() {
   btn.textContent = '⏳ Sincronizando IMS...'; btn.disabled = true;
 
   // Sync IMS fresco antes de calcular el plan
-  await new Promise((resolve) => {
-    if (!db) { resolve(); return; }
-    // Leer P4 y P3 en paralelo antes de publicar
-    imsInventario = {};
-    var colsSync = [
-      {col: 'planta4_inventario', planta: 'P4'},
-      {col: 'planta3_inventario', planta: 'P3'}
-    ];
-    Promise.all(colsSync.map(function(c) {
-      return db.collection(c.col).get().then(function(snap) {
-        snap.forEach(function(doc) {
-          var d = doc.data();
-          if (!d.pn) return;
-          var pn = d.pn.trim().toUpperCase();
-          var desc = (d.desc||'').trim().toUpperCase();
-          var actual = d.actual || 0;
-          var keyPlanta = pn + '||PLANTA:' + c.planta;
-          imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + actual;
-          if (c.planta === 'P3') {
-            imsInventario[pn] = actual;
-          } else {
-            imsInventario[pn] = (imsInventario[pn]||0) + actual;
-          }
-          if (desc) {
-            imsInventario[pn+'||'+desc] = actual;
-            imsInventario[pn+'||'+desc+'||PLANTA:'+c.planta] = actual;
-          }
-        });
-      }).catch(function(){});
-    })).then(function() {
-      actualizarInvBOM();
-      resolve();
-    }).catch(() => resolve());
-  });
+  await sincIMSFresco();
 
   btn.textContent = '⏳ Calculando plan...';
 
@@ -3556,8 +3523,10 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
 
   if (!items.length) return { semanas: [], sinFecha, producidoPorModelo: {}, proximoCorte: null };
 
-  let fechaInicio = items.reduce((min, it) => (!min || it.fechaEntrega < min) ? it.fechaEntrega : min, null);
-  if (fechaInicio < hoy) fechaInicio = new Date(hoy); // nunca planificar en fechas ya pasadas
+  // El panorama SIEMPRE arranca desde hoy (para ver ambos ciclos, miércoles y sábado,
+  // completos) — los días antes de que un modelo "active" según su fecha de entrega
+  // simplemente aparecen vacíos, no se saltan.
+  const fechaInicio = new Date(hoy);
 
   const diasGenerados = [];
   let cursor = new Date(fechaInicio);
@@ -3638,6 +3607,46 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
   return { semanas, sinFecha, producidoPorModelo, proximoCorte: proximoCorteEnvio(ahoraConHora) };
 }
 
+// Sincroniza IMS (P4 + P3) fresco desde Firestore y actualiza BOM.inv — reutilizable
+// desde "Publicar Plan al MES" y desde el Plan Semanal, para no depender de que el
+// usuario le dé clic manual a "Sync IMS" antes de revisar disponibilidad de material.
+function sincIMSFresco() {
+  return new Promise((resolve) => {
+    if (!db) { resolve(); return; }
+    imsInventario = {};
+    var colsSync = [
+      {col: 'planta4_inventario', planta: 'P4'},
+      {col: 'planta3_inventario', planta: 'P3'}
+    ];
+    Promise.all(colsSync.map(function(c) {
+      return db.collection(c.col).get().then(function(snap) {
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          if (!d.pn) return;
+          var pn = d.pn.trim().toUpperCase();
+          var desc = (d.desc||'').trim().toUpperCase();
+          var actual = d.actual || 0;
+          var keyPlanta = pn + '||PLANTA:' + c.planta;
+          imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + actual;
+          if (c.planta === 'P3') {
+            imsInventario[pn] = actual;
+          } else {
+            imsInventario[pn] = (imsInventario[pn]||0) + actual;
+          }
+          if (desc) {
+            imsInventario[pn+'||'+desc] = actual;
+            imsInventario[pn+'||'+desc+'||PLANTA:'+c.planta] = actual;
+          }
+        });
+      }).catch(function(){});
+    })).then(function() {
+      actualizarInvBOM();
+      resolve();
+    }).catch(() => resolve());
+  });
+}
+window.sincIMSFresco = sincIMSFresco;
+
 async function renderPlanSemanal() {
   const wrap = document.getElementById('planSemanalWrap');
   const empty = document.getElementById('planEmpty');
@@ -3655,7 +3664,8 @@ async function renderPlanSemanal() {
   if (empty) empty.style.display = 'none';
   if (content) content.style.display = 'block';
 
-  wrap.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--text2);font-size:12px">⏳ Calculando plan...</div>`;
+  wrap.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--text2);font-size:12px">⏳ Sincronizando inventario (IMS) y calculando plan...</div>`;
+  await sincIMSFresco();
 
   // El "Producido" ya no se jala automático del MES — se captura manualmente en la
   // Tabla 1 (columna editable). Botón "Sync desde MES" lo puede prellenar cuando se pida.

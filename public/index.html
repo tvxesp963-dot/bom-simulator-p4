@@ -3409,7 +3409,8 @@ window.publicarPlan = publicarPlan;
 // PLAN SEMANAL DE ENSAMBLE (ASSY1)
 // ══════════════════════════════════════════
 const CAPACIDAD_DIARIA_ASSY1 = 13000;
-const DIAS_SEMANA_LABORAL = 5; // Lunes a Viernes
+const CAPACIDAD_SABADO_ASSY1 = 4000; // medio turno, antes del corte de las 10:00am
+const DIAS_SEMANA_LABORAL = 5; // Lunes a Viernes (referencia general, ya no se usa para el loop de días)
 
 function lunesDeSemana(fecha) {
   const d = new Date(fecha);
@@ -3430,6 +3431,55 @@ function numeroSemanaISO(d) {
   date.setUTCDate(date.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+// Capacidad de línea ASSY1 según el día: Lun-Vie completo, Sábado medio turno, Domingo no produce.
+function capacidadDelDia(fecha) {
+  const dow = fecha.getDay(); // 0=Domingo..6=Sábado
+  if (dow === 0) return 0;
+  if (dow === 6) return CAPACIDAD_SABADO_ASSY1;
+  return CAPACIDAD_DIARIA_ASSY1;
+}
+
+// Corte de envío al que pertenece un día: Lun-Mar-Mié → corte miércoles 3:30pm de esa semana;
+// Jue-Vie-Sáb → corte sábado 10:00am de esa semana. Domingo no aplica (no se produce).
+function cicloDeEnvioDelDia(fecha) {
+  const dow = fecha.getDay();
+  const d = new Date(fecha);
+  d.setHours(0, 0, 0, 0);
+  if (dow >= 1 && dow <= 3) {
+    d.setDate(d.getDate() + (3 - dow)); // avanza al miércoles de esa semana
+    d.setHours(15, 30, 0, 0);
+  } else {
+    d.setDate(d.getDate() + (6 - dow)); // avanza al sábado de esa semana (jue=4,vie=5,sáb=6)
+    d.setHours(10, 0, 0, 0);
+  }
+  return d;
+}
+
+// Próximo corte de envío (miércoles 3:30pm o sábado 10:00am) estrictamente posterior a 'desde'.
+// Si ya pasó el corte de hoy, salta automáticamente al siguiente.
+function proximoCorteEnvio(desde) {
+  for (let i = 0; i < 14; i++) {
+    const dia = new Date(desde);
+    dia.setDate(dia.getDate() + i);
+    dia.setHours(0, 0, 0, 0);
+    const dow = dia.getDay();
+    if (dow === 3) {
+      const corte = new Date(dia); corte.setHours(15, 30, 0, 0);
+      if (corte > desde) return corte;
+    } else if (dow === 6) {
+      const corte = new Date(dia); corte.setHours(10, 0, 0, 0);
+      if (corte > desde) return corte;
+    }
+  }
+  return null;
+}
+
+function formatCorteLabel(corte) {
+  const diaTxt = corte.getDay() === 3 ? 'Miércoles' : 'Sábado';
+  const horaTxt = corte.getDay() === 3 ? '3:30pm' : '10:00am';
+  return `📦 Envío ${diaTxt} ${formatFechaCorta(corte)} ${horaTxt}`;
 }
 
 // Lee la producción REAL ya reportada en el MES (colección 'registros', línea ASSY1)
@@ -3479,6 +3529,7 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
   materialCapPorModelo = materialCapPorModelo || {};
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
+  const ahoraConHora = new Date(); // para el cálculo de próximo corte sí importa la hora
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
   const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
   const fechas = window.simFechaEntregaPorModelo || {};
@@ -3503,43 +3554,28 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
     };
   }).filter(it => it.fechaEntrega);
 
-  if (!items.length) return { semanas: [], sinFecha, producidoPorModelo: {} };
+  if (!items.length) return { semanas: [], sinFecha, producidoPorModelo: {}, proximoCorte: null };
 
-  let semanaActual = items.reduce((min, it) => {
-    const l = lunesDeSemana(it.fechaEntrega);
-    return (!min || l < min) ? l : min;
-  }, null);
-  const semanaActualHoy = lunesDeSemana(hoy);
-  if (semanaActual < semanaActualHoy) semanaActual = semanaActualHoy; // nunca planificar en semanas ya pasadas
+  let fechaInicio = items.reduce((min, it) => (!min || it.fechaEntrega < min) ? it.fechaEntrega : min, null);
+  if (fechaInicio < hoy) fechaInicio = new Date(hoy); // nunca planificar en fechas ya pasadas
 
-  const semanas = [];
-  let semanasSinAvance = 0;
-  const MAX_SEMANAS = 26; // límite de seguridad para evitar loops infinitos
+  const diasGenerados = [];
+  let cursor = new Date(fechaInicio);
+  cursor.setHours(0, 0, 0, 0);
+  const MAX_DIAS = 120; // límite de seguridad (~4 meses) para evitar loops infinitos
+  let diasSinAvanceSeguidos = 0;
 
-  for (let i = 0; i < MAX_SEMANAS; i++) {
-    const activos = items.filter(it => lunesDeSemana(it.fechaEntrega) <= semanaActual && it.restante > 0);
+  for (let i = 0; i < MAX_DIAS; i++) {
+    const quedaAlgo = items.some(it => it.restante > 0);
+    if (!quedaAlgo) break;
 
-    if (!activos.length) {
-      const quedaAlgo = items.some(it => it.restante > 0);
-      if (!quedaAlgo) break;
-      const siguientes = items.filter(it => lunesDeSemana(it.fechaEntrega) > semanaActual);
-      if (!siguientes.length) break;
-      semanaActual = siguientes.reduce((min, it) => {
-        const l = lunesDeSemana(it.fechaEntrega);
-        return (!min || l < min) ? l : min;
-      }, null);
-      continue;
-    }
+    if (cursor.getDay() !== 0) { // domingo: no se produce, se salta directo
+      const esPasado = cursor < hoy;
+      const capacidadDia = esPasado ? 0 : capacidadDelDia(cursor);
+      const activos = items.filter(it => it.fechaEntrega <= cursor && it.restante > 0)
+        .sort((a, b) => a.prioridad - b.prioridad);
 
-    activos.sort((a, b) => a.prioridad - b.prioridad);
-
-    const dias = [];
-    let huboAvance = false;
-    for (let d = 0; d < DIAS_SEMANA_LABORAL; d++) {
-      const fechaDia = new Date(semanaActual);
-      fechaDia.setDate(fechaDia.getDate() + d);
-      const esPasado = fechaDia < hoy; // no se puede planificar producción en un día que ya pasó
-      let capacidadRestante = esPasado ? 0 : CAPACIDAD_DIARIA_ASSY1;
+      let capacidadRestante = capacidadDia;
       const asignaciones = [];
       for (const it of activos) {
         if (capacidadRestante <= 0) break;
@@ -3553,47 +3589,53 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
           it.restante -= toma;
           it.materialUsado += toma;
           capacidadRestante -= toma;
-          huboAvance = true;
         }
       }
       const usoCapacidad = asignaciones.reduce((s, a) => s + a.qty, 0);
-      dias.push({ fecha: fechaDia, asignaciones, usoCapacidad });
+      diasGenerados.push({ fecha: new Date(cursor), asignaciones, usoCapacidad, corteEnvio: cicloDeEnvioDelDia(cursor) });
+
+      if (!esPasado && activos.length) {
+        diasSinAvanceSeguidos = usoCapacidad > 0 ? 0 : diasSinAvanceSeguidos + 1;
+        if (diasSinAvanceSeguidos > 14) break; // seguridad: 2 semanas sin avanzar nada
+      }
     }
-
-    const itemsSemana = activos.map(it => ({
-      sm: it.sm,
-      prioridad: it.prioridad,
-      target: it.target,
-      qtySemana: dias.reduce((sum, d) => sum + (d.asignaciones.find(a => a.sm === it.sm)?.qty || 0), 0),
-      producidoAcum: it.target - it.restante,
-      pendiente: it.restante
-    })).filter(x => x.qtySemana > 0);
-
-    if (itemsSemana.length) {
-      semanas.push({
-        semanaLunes: new Date(semanaActual),
-        numeroSemana: numeroSemanaISO(semanaActual),
-        items: itemsSemana,
-        dias
-      });
-    }
-
-    if (!huboAvance) {
-      semanasSinAvance++;
-      if (semanasSinAvance > 2) break;
-    } else {
-      semanasSinAvance = 0;
-    }
-
-    const proxLunes = new Date(semanaActual);
-    proxLunes.setDate(proxLunes.getDate() + 7);
-    semanaActual = proxLunes;
+    cursor.setDate(cursor.getDate() + 1);
   }
+
+  // Agrupar los días generados por CICLO DE ENVÍO (miércoles/sábado), no por semana calendario —
+  // así Tabla 1, Detalle Diario y Pick List hablan todos el mismo idioma de "próximo embarque".
+  const ciclosMap = new Map();
+  diasGenerados.forEach(d => {
+    const key = d.corteEnvio.toISOString();
+    if (!ciclosMap.has(key)) ciclosMap.set(key, { corteEnvio: d.corteEnvio, dias: [] });
+    ciclosMap.get(key).dias.push(d);
+  });
+
+  const semanas = [...ciclosMap.values()]
+    .sort((a, b) => a.corteEnvio - b.corteEnvio)
+    .map(ciclo => {
+      const itemsCiclo = {};
+      ciclo.dias.forEach(d => d.asignaciones.forEach(a => {
+        itemsCiclo[a.sm] = (itemsCiclo[a.sm] || 0) + a.qty;
+      }));
+      const itemsArr = Object.keys(itemsCiclo).map(sm => {
+        const it = items.find(x => x.sm === sm);
+        return {
+          sm,
+          prioridad: it.prioridad,
+          target: it.target,
+          qtySemana: itemsCiclo[sm],
+          producidoAcum: it.target - it.restante,
+          pendiente: it.restante
+        };
+      });
+      return { semanaLunes: ciclo.corteEnvio, numeroSemana: numeroSemanaISO(ciclo.corteEnvio), corteEnvio: ciclo.corteEnvio, items: itemsArr, dias: ciclo.dias };
+    });
 
   const producidoPorModelo = {};
   items.forEach(it => { producidoPorModelo[it.sm] = it.producidoReal; });
 
-  return { semanas, sinFecha, producidoPorModelo };
+  return { semanas, sinFecha, producidoPorModelo, proximoCorte: proximoCorteEnvio(ahoraConHora) };
 }
 
 async function renderPlanSemanal() {
@@ -3634,13 +3676,23 @@ async function renderPlanSemanal() {
   if (btnPub) btnPub.style.display = (adminAuthed && semanas.length) ? 'inline-flex' : 'none';
 
   // Cuánto quedó REALMENTE planificado por modelo en todo el plan (ya limitado por
-  // capacidad, prioridad y material disponible) — esto es lo que el pick list debe pedir,
-  // no el target completo si el material no alcanza para cubrirlo.
+  // capacidad y prioridad) — referencia general.
   const qtyPlanificadaPorModelo = {};
   semanas.forEach(sem => sem.items.forEach(it => {
     qtyPlanificadaPorModelo[it.sm] = (qtyPlanificadaPorModelo[it.sm] || 0) + it.qtySemana;
   }));
   window._planQtyPlanificadaPorModelo = qtyPlanificadaPorModelo;
+
+  // Solo lo que se necesita para cubrir el PRÓXIMO corte de envío (miércoles 3:30pm o
+  // sábado 10:00am, el que venga primero) — esto es lo que debe pedir el Pick List.
+  const qtyProximoCortePorModelo = {};
+  if (semanas.length) {
+    semanas[0].items.forEach(it => {
+      qtyProximoCortePorModelo[it.sm] = (qtyProximoCortePorModelo[it.sm] || 0) + it.qtySemana;
+    });
+  }
+  window._planQtyProximoCortePorModelo = qtyProximoCortePorModelo;
+  window._planProximoCorte = semanas.length ? semanas[0].corteEnvio : null;
 
   let avisoHtml = '';
   if (sinFecha.length) {
@@ -3704,24 +3756,57 @@ async function renderPlanSemanal() {
       </tr>`;
   }).join('');
 
-  const alertasMateriales = modelosPlan
-    .filter(sm => (faltantesPorModelo[sm] || []).length)
-    .map(sm => {
-      const filasFalt = faltantesPorModelo[sm].map(f =>
-        `<tr><td style="padding:3px 0;color:var(--red)">${f.pn} — ${f.desc}</td><td style="padding:3px 0;text-align:right;color:var(--red)">faltan ${f.falta.toLocaleString()}</td></tr>`
-      ).join('');
-      return `
-        <div style="margin-top:.6rem;padding:.7rem .9rem;background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:8px">
-          <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:.4rem">${sm} — materiales insuficientes para cubrir el target</div>
-          <table style="width:100%;font-size:12px">${filasFalt}</table>
-        </div>`;
-    }).join('');
+  const pickListParaAlertas = window._planPickList || [];
+  const faltantesDesglose = pickListParaAlertas
+    .filter(p => !p.ok && modelosPlan.includes(p.modelo))
+    .sort((a, b) => a.prioridad - b.prioridad || a.modelo.localeCompare(b.modelo));
+
+  const alertasMateriales = !faltantesDesglose.length ? '' : `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid rgba(255,68,68,.35);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--red);text-transform:uppercase;margin-bottom:.8rem">⚠ Desglose de materiales insuficientes</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:center;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)">Prior.</th>
+          <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)">Modelo</th>
+          <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)">Material</th>
+          <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)">N° Parte</th>
+          <th style="text-align:right;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)">Requerido</th>
+          <th style="text-align:right;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)">Disponible</th>
+          <th style="text-align:right;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--red);border-bottom:2px solid var(--border)">Falta</th>
+        </tr></thead>
+        <tbody>
+          ${faltantesDesglose.map(f => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px 6px;text-align:center">${f.prioridad}</td>
+              <td style="padding:8px 6px;font-weight:700;color:var(--accent)">${f.modelo}</td>
+              <td style="padding:8px 6px;color:var(--text2)">${f.etiqueta}</td>
+              <td style="padding:8px 6px;color:var(--text2);font-size:12px">${f.pn}</td>
+              <td style="padding:8px 6px;text-align:right">${f.requerido.toLocaleString()}</td>
+              <td style="padding:8px 6px;text-align:right">${f.disponible.toLocaleString()}</td>
+              <td style="padding:8px 6px;text-align:right;font-weight:700;color:var(--red)">${(f.requerido - f.disponible).toLocaleString()}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
 
   // ── TABLA 2: DETALLE DIARIO como matriz (días en columnas, línea ASSY1 en fila) ──
   const todosLosDias = semanas.flatMap(sem => sem.dias); // ya vienen en orden cronológico
   const colHeadersDias = todosLosDias.map(d =>
     `${(d.fecha.getMonth() + 1)}/${d.fecha.getDate()}(${d.fecha.toLocaleDateString('es-MX', { weekday: 'short' })})`
   );
+
+  // Fila superior con el corte de envío al que pertenece cada bloque de días (colspan por ciclo)
+  const grupoCiclos = []; // [{label, count}]
+  todosLosDias.forEach(d => {
+    const key = d.corteEnvio.toISOString();
+    const ultimo = grupoCiclos[grupoCiclos.length - 1];
+    if (ultimo && ultimo.key === key) ultimo.count++;
+    else grupoCiclos.push({ key, label: formatCorteLabel(d.corteEnvio), count: 1 });
+  });
+  const thCiclo = 'text-align:center;padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#00bcd4;background:rgba(0,188,212,.08);border-bottom:1px solid var(--border);white-space:nowrap';
+  const filaCiclos = grupoCiclos.map(g => `<th colspan="${g.count}" style="${thCiclo}">${g.label}</th>`).join('');
 
   const codePorModelo = {};
   modelosPlan.forEach(sm => {
@@ -3773,15 +3858,24 @@ async function renderPlanSemanal() {
     ${alertasMateriales}
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">
-        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">🗓️ Detalle diario · Línea ASSY1</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">🗓️ Detalle diario · Línea ASSY1</div>
+          ${window._planProximoCorte ? `<div style="font-size:11px;color:#00bcd4;margin-top:2px">Pick List calcula para: ${formatCorteLabel(window._planProximoCorte)}</div>` : ''}
+        </div>
         <button class="btn btn-success btn-sm" onclick="descargarMaterialesPlan()">📥 Descargar Pick List (almacén)</button>
       </div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <thead><tr>
+        <thead>
+        <tr>
+          <th style="${thCiclo};position:sticky;left:0;background:rgba(0,188,212,.08)"></th>
+          ${filaCiclos}
+        </tr>
+        <tr>
           <th style="${thStyle};position:sticky;left:0;background:#0d1220">Línea</th>
           ${colHeadersDias.map(c => `<th style="${thDia}">${c}</th>`).join('')}
-        </tr></thead>
+        </tr>
+        </thead>
         <tbody>
           <tr style="border-bottom:1px solid var(--border)">
             <td style="padding:8px 6px;font-weight:700;position:sticky;left:0;background:#0d1220">ASSY1</td>
@@ -3794,7 +3888,7 @@ async function renderPlanSemanal() {
         </tbody>
       </table>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad diaria ASSY1: ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString()} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 10:00am</div>
     </div>
   `;
 }
@@ -3907,10 +4001,11 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
 // en orden de prioridad), marcando cuáles no alcanzan con el inventario actual.
 function descargarMaterialesPlan() {
   const modelosOrdenados = window._planModelosOrdenados || [];
-  const qtyPlanificadaPorModelo = window._planQtyPlanificadaPorModelo || {};
+  const qtyPlanificadaPorModelo = window._planQtyProximoCortePorModelo || {}; // solo el próximo corte
   const faltantesPorModelo = window._planFaltantesPorModelo || {};
   const materialCapPorModelo = window._planMaterialCapPorModelo || {};
   const pickListDetalle = window._planPickList || [];
+  const proximoCorte = window._planProximoCorte || null;
 
   if (!modelosOrdenados.length) {
     alert('No hay datos del plan para generar el pick list. Abre la pestaña Plan Semanal primero.');
@@ -3969,7 +4064,8 @@ function descargarMaterialesPlan() {
     'Strip PN', 'Strip Disp.', 'Top PN', 'Top Disp.', 'Bot PN', 'Bot Disp.', 'Bundle PN', 'Bundle Disp.',
     'Cantidad', 'Cuello de botella'
   ];
-  const data = [['PICK LIST — PLAN SEMANAL DE ENSAMBLE ASSY1'], headers];
+  const corteTxt = proximoCorte ? formatCorteLabel(proximoCorte).replace('📦 ', '') : 'próximo corte';
+  const data = [[`PICK LIST — PARA ${corteTxt.toUpperCase()}`], headers];
   registros.forEach(r => data.push([
     r.prioridad, r.sm, r.codigo,
     r.strip, r.stripDisp, r.top, r.topDisp, r.bot, r.botDisp, r.bundle, r.bundleDisp,

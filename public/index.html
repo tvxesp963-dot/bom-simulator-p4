@@ -3927,7 +3927,9 @@ function descargarMaterialesPlan() {
     if (cantidad <= 0) return; // no hay nada que pedir/ensamblar de este modelo por ahora
     const mats = obtener4MaterialesEnsamble(sm);
     const pnDe = (etiqueta) => { const m = mats.find(x => x.etiqueta === etiqueta); return (m && m.row) ? m.row.pn : '—'; };
+    const dispDe = (etiqueta) => { const p = pickListDetalle.find(x => x.modelo === sm && x.etiqueta === etiqueta); return p ? p.disponible : '—'; };
     const strip = pnDe('Strip'), top = pnDe('Top'), bot = pnDe('Bot'), bundle = pnDe('Bundle');
+    const stripDisp = dispDe('Strip'), topDisp = dispDe('Top'), botDisp = dispDe('Bot'), bundleDisp = dispDe('Bundle');
     const codigo = strip !== '—' ? strip : bundle;
     const faltaMaterial = (faltantesPorModelo[sm] || []).length > 0;
 
@@ -3942,7 +3944,10 @@ function descargarMaterialesPlan() {
       if (peor) cuello = peor.etiqueta;
     }
 
-    registros.push({ prioridad, sm, codigo, strip, top, bot, bundle, cantidad, faltaMaterial, cuello });
+    registros.push({
+      prioridad, sm, codigo, cantidad, faltaMaterial, cuello,
+      strip, stripDisp, top, topDisp, bot, botDisp, bundle, bundleDisp
+    });
   });
 
   if (!registros.length) {
@@ -3959,13 +3964,25 @@ function descargarMaterialesPlan() {
     left: { style: 'thin', color: { rgb: 'BFBFBF' } }, right: { style: 'thin', color: { rgb: 'BFBFBF' } }
   };
 
-  const headers = ['Prioridad', 'Modelo', 'Código', 'Strip', 'Top', 'Bot', 'Bundle', 'Cantidad', 'Cuello de botella'];
+  const headers = [
+    'Prioridad', 'Modelo', 'Código',
+    'Strip PN', 'Strip Disp.', 'Top PN', 'Top Disp.', 'Bot PN', 'Bot Disp.', 'Bundle PN', 'Bundle Disp.',
+    'Cantidad', 'Cuello de botella'
+  ];
   const data = [['PICK LIST — PLAN SEMANAL DE ENSAMBLE ASSY1'], headers];
-  registros.forEach(r => data.push([r.prioridad, r.sm, r.codigo, r.strip, r.top, r.bot, r.bundle, r.cantidad, r.cuello]));
+  registros.forEach(r => data.push([
+    r.prioridad, r.sm, r.codigo,
+    r.strip, r.stripDisp, r.top, r.topDisp, r.bot, r.botDisp, r.bundle, r.bundleDisp,
+    r.cantidad, r.cuello
+  ]));
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
-  ws['!cols'] = [{ wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 16 }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 12 } }];
+  ws['!cols'] = [
+    { wch: 10 }, { wch: 20 }, { wch: 16 },
+    { wch: 14 }, { wch: 11 }, { wch: 14 }, { wch: 11 }, { wch: 14 }, { wch: 11 }, { wch: 14 }, { wch: 12 },
+    { wch: 12 }, { wch: 16 }
+  ];
   ws['!rows'] = [{ hpt: 22 }, { hpt: 18 }];
 
   const range = XLSX.utils.decode_range(ws['!ref']);

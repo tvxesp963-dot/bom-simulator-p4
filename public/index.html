@@ -3541,7 +3541,10 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
     if (cursor.getDay() !== 0) { // domingo: no se produce, se salta directo
       const esPasado = cursor < hoy;
       const capacidadDia = esPasado ? 0 : capacidadDelDia(cursor);
-      const activos = items.filter(it => it.fechaEntrega <= cursor && it.restante > 0)
+      // Ya no se espera a la fecha de entrega para empezar a producir — se adelanta
+      // producción si hay capacidad libre. La fecha de entrega queda solo como
+      // referencia informativa en la Tabla 1 (Plan requerido).
+      const activos = items.filter(it => it.restante > 0)
         .sort((a, b) => a.prioridad - b.prioridad);
 
       let capacidadRestante = capacidadDia;

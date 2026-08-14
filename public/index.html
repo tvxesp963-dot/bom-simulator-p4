@@ -3650,6 +3650,79 @@ function sincIMSFresco() {
 }
 window.sincIMSFresco = sincIMSFresco;
 
+// ══════════════════════════════════════════
+// PLAN PRE-ENSAMBLE (S1-S4, Zhongke, VC1/VC2)
+// ══════════════════════════════════════════
+
+// Qué máquina hace Top o Bot — editable en pantalla para "ocasiones especiales"
+// (S1/S2 normalmente Top, S3/S4 normalmente Bot, pero se puede invertir).
+window.simTipoMaquinaPreEnsamble = window.simTipoMaquinaPreEnsamble || { S1: 'TOP', S2: 'TOP', S3: 'BOT', S4: 'BOT' };
+try {
+  const savedTipo = localStorage.getItem('simTipoMaquinaPreEnsamble_p4');
+  if (savedTipo) window.simTipoMaquinaPreEnsamble = JSON.parse(savedTipo);
+} catch (e) {}
+
+// Colchones (días de anticipación) — editables, no fijos en código.
+window.simColchonTopBot = (window.simColchonTopBot !== undefined) ? window.simColchonTopBot : 2;
+window.simColchonVC = (window.simColchonVC !== undefined) ? window.simColchonVC : 5;
+try {
+  const c1 = localStorage.getItem('simColchonTopBot_p4'); if (c1 !== null) window.simColchonTopBot = parseInt(c1) || 2;
+  const c2 = localStorage.getItem('simColchonVC_p4'); if (c2 !== null) window.simColchonVC = parseInt(c2) || 5;
+} catch (e) {}
+
+function actualizarTipoMaquina(maquina, tipo) {
+  window.simTipoMaquinaPreEnsamble[maquina] = tipo;
+  try { localStorage.setItem('simTipoMaquinaPreEnsamble_p4', JSON.stringify(window.simTipoMaquinaPreEnsamble)); } catch (e) {}
+  renderPlanSemanal();
+}
+window.actualizarTipoMaquina = actualizarTipoMaquina;
+
+function actualizarColchon(cual, valor) {
+  const v = Math.max(0, parseInt(valor) || 0);
+  if (cual === 'topbot') window.simColchonTopBot = v; else window.simColchonVC = v;
+  try {
+    localStorage.setItem('simColchonTopBot_p4', String(window.simColchonTopBot));
+    localStorage.setItem('simColchonVC_p4', String(window.simColchonVC));
+  } catch (e) {}
+  renderPlanSemanal();
+}
+window.actualizarColchon = actualizarColchon;
+
+// Lee en vivo los targets de máquina que ya administra el MES (colección 'targets',
+// mismo proyecto Firebase) — si cambian ahí, aquí se reflejan solos.
+async function obtenerTargetsMaquinas() {
+  const targets = {};
+  if (!db) return targets;
+  try {
+    const snap = await db.collection('targets').get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.nombre) targets[d.nombre] = Number(d.target || 0);
+    });
+  } catch (e) {
+    console.error('Error leyendo targets de máquinas:', e);
+  }
+  return targets;
+}
+
+function capacidadesPreEnsamble(targets) {
+  const t = (n) => targets[n] || 0;
+  let capTop = t('Zhongke');
+  let capBot = 0;
+  ['S1', 'S2', 'S3', 'S4'].forEach(m => {
+    const tipo = window.simTipoMaquinaPreEnsamble[m] || 'TOP';
+    if (tipo === 'TOP') capTop += t(m); else capBot += t(m);
+  });
+  const capVC = t('VC1') + t('VC2');
+  return { capTop, capBot, capVC };
+}
+
+function restarDiasCalendario(fecha, n) {
+  const d = new Date(fecha);
+  d.setDate(d.getDate() - n);
+  return d;
+}
+
 async function renderPlanSemanal() {
   const wrap = document.getElementById('planSemanalWrap');
   const empty = document.getElementById('planEmpty');
@@ -3810,6 +3883,106 @@ async function renderPlanSemanal() {
     `${(d.fecha.getMonth() + 1)}/${d.fecha.getDate()}(${d.fecha.toLocaleDateString('es-MX', { weekday: 'short' })})`
   );
 
+  // ── PLAN PRE-ENSAMBLE: se deriva de la necesidad diaria de ASSY1, corrida N días antes ──
+  const targetsMaquinas = await obtenerTargetsMaquinas();
+  const { capTop, capBot, capVC } = capacidadesPreEnsamble(targetsMaquinas);
+
+  // 1 unidad ensamblada = 1 Top + 1 Bot (relación 1:1, misma cantidad que ASSY1 necesita ese día)
+  const diasTopBot = todosLosDias.map(d => ({
+    fechaProduccion: restarDiasCalendario(d.fecha, window.simColchonTopBot),
+    fechaAssy: d.fecha,
+    necesidad: d.usoCapacidad
+  }));
+  // VC alimenta ranurado tanto para Top como para Bot → el doble de la necesidad de ASSY1 ese día
+  const diasVC = todosLosDias.map(d => ({
+    fechaProduccion: restarDiasCalendario(d.fecha, window.simColchonVC),
+    fechaAssy: d.fecha,
+    necesidad: d.usoCapacidad * 2
+  }));
+
+  const colHeadTopBot = diasTopBot.map(d =>
+    `${(d.fechaProduccion.getMonth() + 1)}/${d.fechaProduccion.getDate()}(${d.fechaProduccion.toLocaleDateString('es-MX', { weekday: 'short' })})`
+  );
+  const colHeadVC = diasVC.map(d =>
+    `${(d.fechaProduccion.getMonth() + 1)}/${d.fechaProduccion.getDate()}(${d.fechaProduccion.toLocaleDateString('es-MX', { weekday: 'short' })})`
+  );
+
+  const celdaEstado = (necesidad, capacidad) => {
+    if (necesidad <= 0) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
+    const ok = capacidad >= necesidad;
+    const style = ok ? 'background:rgba(0,230,118,.15);color:#00e676' : 'background:rgba(255,68,68,.15);color:var(--red)';
+    const icono = ok ? '✓' : '⚠';
+    return `<td style="padding:8px 6px;text-align:center"><div style="font-weight:700">${necesidad.toLocaleString()}</div><div style="font-size:10px;${style};display:inline-block;padding:1px 6px;border-radius:999px;margin-top:2px">${icono} de ${capacidad.toLocaleString()}</div></td>`;
+  };
+
+  const filaTop = diasTopBot.map(d => celdaEstado(d.necesidad, capTop)).join('');
+  const filaBot = diasTopBot.map(d => celdaEstado(d.necesidad, capBot)).join('');
+  const filaVC = diasVC.map(d => celdaEstado(d.necesidad, capVC)).join('');
+
+  const selectorMaquina = (m) => {
+    const val = window.simTipoMaquinaPreEnsamble[m] || 'TOP';
+    return `<select onchange="actualizarTipoMaquina('${m}', this.value)" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:700">
+      <option value="TOP" ${val === 'TOP' ? 'selected' : ''}>TOP</option>
+      <option value="BOT" ${val === 'BOT' ? 'selected' : ''}>BOT</option>
+    </select>`;
+  };
+
+  const planPreEnsambleHtml = `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">2️⃣ Plan Pre-Ensamble · S1-S4, Zhongke, VC1/VC2</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Derivado de la necesidad diaria de ASSY1, corrida hacia atrás según el colchón. Targets en vivo desde el MES.</div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:1.2rem;margin-bottom:1rem;padding:.7rem .9rem;background:var(--bg2);border-radius:8px;align-items:center">
+        <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S1 ${selectorMaquina('S1')}</div>
+        <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S2 ${selectorMaquina('S2')}</div>
+        <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S3 ${selectorMaquina('S3')}</div>
+        <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S4 ${selectorMaquina('S4')}</div>
+        <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">Colchón Top/Bot
+          <input type="number" min="0" value="${window.simColchonTopBot}" style="width:50px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:2px 6px;text-align:center" onchange="actualizarColchon('topbot', this.value)"> días
+        </div>
+        <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">Colchón VC
+          <input type="number" min="0" value="${window.simColchonVC}" style="width:50px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:2px 6px;text-align:center" onchange="actualizarColchon('vc', this.value)"> días
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text2);margin-bottom:.4rem;font-weight:700;text-transform:uppercase">Top / Bot — S1-S4, Zhongke (capacidad Top: ${capTop.toLocaleString()} · Bot: ${capBot.toLocaleString()})</div>
+      <div style="overflow-x:auto;margin-bottom:1rem">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 4px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border);position:sticky;left:0;background:#0d1220">Línea</th>
+          ${colHeadTopBot.map(c => `<th style="text-align:center;padding:6px 4px;font-size:11px;font-weight:700;color:var(--text2);border-bottom:2px solid var(--border);white-space:nowrap">${c}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 4px;font-weight:700;position:sticky;left:0;background:#0d1220">Top</td>
+            ${filaTop}
+          </tr>
+          <tr>
+            <td style="padding:8px 4px;font-weight:700;position:sticky;left:0;background:#0d1220">Bot</td>
+            ${filaBot}
+          </tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div style="font-size:11px;color:var(--text2);margin-bottom:.4rem;font-weight:700;text-transform:uppercase">VC1 + VC2 — Ranurado (capacidad: ${capVC.toLocaleString()})</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 4px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border);position:sticky;left:0;background:#0d1220">Línea</th>
+          ${colHeadVC.map(c => `<th style="text-align:center;padding:6px 4px;font-size:11px;font-weight:700;color:var(--text2);border-bottom:2px solid var(--border);white-space:nowrap">${c}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td style="padding:8px 4px;font-weight:700;position:sticky;left:0;background:#0d1220">VC</td>
+            ${filaVC}
+          </tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  `;
+
   // Fila superior con el corte de envío al que pertenece cada bloque de días (colspan por ciclo)
   const grupoCiclos = []; // [{label, count}]
   todosLosDias.forEach(d => {
@@ -3850,7 +4023,7 @@ async function renderPlanSemanal() {
 
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">📋 Plan requerido · Modelo y partes</div>
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Modelo y partes</div>
       <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" es manual — captura lo ya ensamblado en ASSY1 para ese modelo.</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
@@ -3869,10 +4042,11 @@ async function renderPlanSemanal() {
       </div>
     </div>
     ${alertasMateriales}
+    ${planPreEnsambleHtml}
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">
         <div>
-          <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">🗓️ Detalle diario · Línea ASSY1</div>
+          <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">3️⃣ Plan de Ensamble · Línea ASSY1</div>
           ${window._planProximoCorte ? `<div style="font-size:11px;color:#00bcd4;margin-top:2px">Pick List calcula para: ${formatCorteLabel(window._planProximoCorte)}</div>` : ''}
         </div>
         <button class="btn btn-success btn-sm" onclick="descargarMaterialesPlan()">📥 Descargar Pick List (almacén)</button>

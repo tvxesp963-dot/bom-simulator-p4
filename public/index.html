@@ -3805,6 +3805,13 @@ async function renderPlanSemanal() {
   });
 
   // ── TABLA 1: PLAN REQUERIDO (qué necesita cada modelo, según lo YA producido en ASSY1) ──
+  const codePorModelo = {};
+  modelosPlan.forEach(sm => {
+    const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
+    const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
+    codePorModelo[sm] = (strip && strip.pn) || (bundle && bundle.pn) || '—';
+  });
+
   const filasPlan = modelosPlan.map(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     const target = simTargetsPorModelo[sm] || 0;
@@ -3888,16 +3895,19 @@ async function renderPlanSemanal() {
   const { capTop, capBot, capVC } = capacidadesPreEnsamble(targetsMaquinas);
 
   // 1 unidad ensamblada = 1 Top + 1 Bot (relación 1:1, misma cantidad que ASSY1 necesita ese día)
+  // Se arrastra el detalle de modelo+cantidad de ese día, igual que en el Plan de Ensamble.
   const diasTopBot = todosLosDias.map(d => ({
     fechaProduccion: restarDiasCalendario(d.fecha, window.simColchonTopBot),
     fechaAssy: d.fecha,
-    necesidad: d.usoCapacidad
+    necesidad: d.usoCapacidad,
+    asignaciones: d.asignaciones
   }));
   // VC alimenta ranurado tanto para Top como para Bot → el doble de la necesidad de ASSY1 ese día
   const diasVC = todosLosDias.map(d => ({
     fechaProduccion: restarDiasCalendario(d.fecha, window.simColchonVC),
     fechaAssy: d.fecha,
-    necesidad: d.usoCapacidad * 2
+    necesidad: d.usoCapacidad * 2,
+    asignaciones: d.asignaciones
   }));
 
   const colHeadTopBot = diasTopBot.map(d =>
@@ -3907,17 +3917,25 @@ async function renderPlanSemanal() {
     `${(d.fechaProduccion.getMonth() + 1)}/${d.fechaProduccion.getDate()}(${d.fechaProduccion.toLocaleDateString('es-MX', { weekday: 'short' })})`
   );
 
-  const celdaEstado = (necesidad, capacidad) => {
-    if (necesidad <= 0) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
-    const ok = capacidad >= necesidad;
+  // Muestra modelo + N° Parte (GH90) + cantidad por cada asignación de ese día, igual
+  // que en el Plan de Ensamble, más un mini-resumen de estado (✓/⚠) contra la capacidad.
+  const celdaEstado = (dia, capacidad, factor) => {
+    factor = factor || 1;
+    if (!dia.asignaciones.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
+    const partes = dia.asignaciones.map(a => {
+      const code = codePorModelo[a.sm] || '—';
+      const qty = a.qty * factor;
+      return `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:10px;color:var(--text2)">${code}</div><div style="font-size:11px">${qty.toLocaleString()}</div>`;
+    }).join('<div style="height:4px"></div>');
+    const ok = capacidad >= dia.necesidad;
     const style = ok ? 'background:rgba(0,230,118,.15);color:#00e676' : 'background:rgba(255,68,68,.15);color:var(--red)';
     const icono = ok ? '✓' : '⚠';
-    return `<td style="padding:8px 6px;text-align:center"><div style="font-weight:700">${necesidad.toLocaleString()}</div><div style="font-size:10px;${style};display:inline-block;padding:1px 6px;border-radius:999px;margin-top:2px">${icono} de ${capacidad.toLocaleString()}</div></td>`;
+    return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}<div style="font-size:10px;${style};display:inline-block;padding:1px 6px;border-radius:999px;margin-top:4px">${icono} ${dia.necesidad.toLocaleString()} de ${capacidad.toLocaleString()}</div></td>`;
   };
 
-  const filaTop = diasTopBot.map(d => celdaEstado(d.necesidad, capTop)).join('');
-  const filaBot = diasTopBot.map(d => celdaEstado(d.necesidad, capBot)).join('');
-  const filaVC = diasVC.map(d => celdaEstado(d.necesidad, capVC)).join('');
+  const filaTop = diasTopBot.map(d => celdaEstado(d, capTop)).join('');
+  const filaBot = diasTopBot.map(d => celdaEstado(d, capBot)).join('');
+  const filaVC = diasVC.map(d => celdaEstado(d, capVC, 2)).join('');
 
   const selectorMaquina = (m) => {
     const val = window.simTipoMaquinaPreEnsamble[m] || 'TOP';
@@ -3993,13 +4011,6 @@ async function renderPlanSemanal() {
   });
   const thCiclo = 'text-align:center;padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#00bcd4;background:rgba(0,188,212,.08);border-bottom:1px solid var(--border);white-space:nowrap';
   const filaCiclos = grupoCiclos.map(g => `<th colspan="${g.count}" style="${thCiclo}">${g.label}</th>`).join('');
-
-  const codePorModelo = {};
-  modelosPlan.forEach(sm => {
-    const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
-    const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
-    codePorModelo[sm] = (strip && strip.pn) || (bundle && bundle.pn) || '—';
-  });
 
   const celdasASSY1 = todosLosDias.map(d => {
     if (!d.asignaciones.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;

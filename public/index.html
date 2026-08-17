@@ -1858,7 +1858,14 @@ function renderCons() {
         // no el inventario crudo de cada modelo por separado.
         if (d.includes('CHIP BOARD BOTTOM') && d.includes('RANURADO')) return botRanuradoInvDisp;
         if (d.includes('CHIP BOARD BOTTOM') && (d.includes('VIRGEN') || d.includes('VIRGIN'))) return botVirgenInvDisp;
-        return r.inv||0;
+        // Insumos genéricos (Pulp Tray, Data Cable, Ejection Pin, Back Sticker,
+        // Insert, Set Pad, QSG, HAC, etc.): usar el pool compartido en cascada
+        // — mismo criterio que headers/Chip Board. Antes cada modelo comparaba
+        // contra el inventario COMPLETO de almacén sin restar lo que otro
+        // modelo de mayor prioridad ya se llevó, lo que podía mostrar "cubierto"
+        // en varios modelos a la vez aunque en piso no alcanzara para todos.
+        const keyGen = keyPool(r.pn, r.desc);
+        return poolPlanta[keyGen] ?? (r.inv||0);
       };
 
       // P4: Gift Box y Lower Box producidos internamente — mismo calculo que P1 headers
@@ -1919,6 +1926,16 @@ function renderCons() {
         // real, pero NUNCA tienen "A Pedir" propio — el faltante de Ranurado se
         // cubre comprando Virgen (que luego se ranura), no se compra Ranurado aparte.
         const sinPedirPropio = isBotRanurado || isTopRanurado;
+        // Insumos genéricos (Pulp Tray y similares, no header ni Chip Board —
+        // esos ya se descuentan aparte arriba): descontar del pool compartido
+        // lo que este modelo toma, para que el siguiente modelo en prioridad
+        // ya vea el remanente real y no el inventario completo otra vez.
+        const esGenerico = !isHG && !isHL && !d3.includes('CHIP BOARD');
+        if (esGenerico) {
+          const keyGen = keyPool(r.pn, r.desc);
+          const tomado = Math.min(invParaDiff, Math.max(0, tgt));
+          poolPlanta[keyGen] = Math.max(0, (poolPlanta[keyGen] ?? (r.inv||0)) - tomado);
+        }
         return {...r, inv: invDisplay, falta: falta, aPedir: (!sinPedirPropio && falta > 0) ? calcularAPedir(falta) : 0};
       });
       const bundleCalc = bundleRows.map(r => {

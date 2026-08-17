@@ -2443,7 +2443,9 @@ function exportarExcel() {
   if (!window.consolidadoData) { alert('No hay datos del consolidado para exportar'); return; }
   const semana = document.getElementById('semanaRef').value;
   const EXTRA  = 1.10;
-  const fecha  = new Date().toLocaleDateString('es-MX');
+  const ahoraExport = new Date();
+  const fecha  = ahoraExport.toLocaleDateString('es-MX') + ' ' + ahoraExport.toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'});
+  const fechaArchivo = ahoraExport.toISOString().slice(0,10) + '_' + String(ahoraExport.getHours()).padStart(2,'0') + 'h' + String(ahoraExport.getMinutes()).padStart(2,'0');
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean).sort((a, b) => {
     const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
     const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
@@ -2671,7 +2673,7 @@ function exportarExcel() {
   ws2['!cols'] = [{wch:5},{wch:18},{wch:14},{wch:30},{wch:13},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws2, 'Producir y VC Ranurar');
 
-  XLSX.writeFile(wb, `BOM_Consolidado_P4_${semana.replace(/[\s\u2014]+/g,'_')}.xlsx`);
+  XLSX.writeFile(wb, `BOM_Consolidado_P4_${semana.replace(/[\s\u2014]+/g,'_')}_${fechaArchivo}.xlsx`);
 }
 
 

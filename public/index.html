@@ -700,7 +700,24 @@ function cargarPlanMultiExcel(file) {
     try {
       const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const filas = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+      // Buscar la fila real de encabezados (puede no ser la fila 1 si hay títulos arriba)
+      const filasCrudas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const nombresModeloCol = ['modelo', 'sm', 'model'];
+      let headerRowIdx = filasCrudas.findIndex(fila =>
+        fila.some(c => nombresModeloCol.includes(String(c).trim().toLowerCase()))
+      );
+      if (headerRowIdx === -1) {
+        statusEl.textContent = '❌ No se encontró una columna "Modelo" en el archivo. Verifica los encabezados.';
+        document.getElementById('inputPlanMulti').value = '';
+        return;
+      }
+      const encabezados = filasCrudas[headerRowIdx].map(c => String(c).trim());
+      const filas = filasCrudas.slice(headerRowIdx + 1).map(fila => {
+        const obj = {};
+        encabezados.forEach((h, i) => { obj[h] = fila[i] !== undefined ? fila[i] : ''; });
+        return obj;
+      });
 
       const modelosBOM = [...new Set(BOM.map(r => r.sm))];
       let agregados = 0, noEncontrados = [];

@@ -3513,15 +3513,22 @@ async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
 async function sincronizarProducidoDesdeMES() {
   const fechaDesdeEl = document.getElementById('planFechaDesde');
   const fechaHastaEl = document.getElementById('planFechaHasta');
+  if (!fechaDesdeEl?.value || !fechaHastaEl?.value) {
+    alert('Selecciona un rango de fechas (Desde / Hasta) antes de traer del MES.');
+    return;
+  }
   const wrap = document.getElementById('planSemanalWrap');
   if (wrap) wrap.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--text2);font-size:12px">⏳ Trayendo producción real de ASSY1 desde el MES...</div>`;
 
   const datos = await obtenerProduccionRealASSY1(
-    fechaDesdeEl ? fechaDesdeEl.value : '',
-    fechaHastaEl ? fechaHastaEl.value : ''
+    fechaDesdeEl.value,
+    fechaHastaEl.value
   );
 
-  window.simProducidoManualPorModelo = { ...window.simProducidoManualPorModelo, ...datos };
+  const modelosPlan = Object.keys(simTargetsPorModelo).filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
+  modelosPlan.forEach(sm => {
+    window.simProducidoManualPorModelo[sm] = datos[sm] || 0;
+  });
   try { localStorage.setItem('simProducidoManual_p4', JSON.stringify(window.simProducidoManualPorModelo)); } catch (e) {}
   renderPlanSemanal();
 }

@@ -3491,7 +3491,7 @@ async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
   const produccion = {};
   if (!db) return produccion;
   try {
-    const snap = await db.collection('registros').where('maquina', '==', 'ASSY1').get();
+    const snap = await db.collection('registros').where('maqNombre', '==', 'ASSY1').get();
     snap.forEach(doc => {
       const d = doc.data();
       const modelo = (d.modelo || '').trim();

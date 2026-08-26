@@ -3485,22 +3485,52 @@ function formatCorteLabel(corte) {
   return `📦 Envío ${diaTxt} ${formatFechaCorta(corte)} ${horaTxt}`;
 }
 
-// Lee la producción REAL ya reportada en el MES (colección 'registros', línea ASSY1)
-// y la suma por modelo. Mismo proyecto Firebase que el BOM Simulator (mes-production-esp).
+// Lee la producción REAL ya CONFIRMADA/ENVIADA a ShipQR (no solo producida en ASSY1).
+// Cruza 'registros' (producción cruda, agrupada en lotes igual que la pantalla ShipQR del MES)
+// contra 'shipqr_envios_mes' (lo que realmente se dio clic en enviar) y suma solo lo enviado.
+// Mismo proyecto Firebase que el BOM Simulator (mes-production-esp).
 async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
   const produccion = {};
   if (!db) return produccion;
   try {
-    const snap = await db.collection('registros').where('maqNombre', '==', 'ASSY1').get();
+    // 1) Agrupar la producción de ASSY1 + partes GH90 en lotes (misma llave que usa el MES)
+    const snap = await db.collection('registros').get();
+    const lotes = {};
     snap.forEach(doc => {
       const d = doc.data();
+      const esASSY = (d.maqNombre || '').toUpperCase().includes('ASSY') || (d.maqTipo || '').toUpperCase() === 'ASSY';
+      const esGH90 = (d.parte || '').toUpperCase().startsWith('GH90');
+      if (!esASSY || !esGH90) return;
       const modelo = (d.modelo || '').trim();
       if (!modelo) return;
+      const fecha = d.fecha || '';
       // El campo 'fecha' se guarda como texto 'YYYY-MM-DD' — comparación de texto funciona igual que de fecha
-      if (fechaDesde && (!d.fecha || d.fecha < fechaDesde)) return;
-      if (fechaHasta && (!d.fecha || d.fecha > fechaHasta)) return;
-      const qty = Number(d.qty || d.prod || 0);
-      produccion[modelo] = (produccion[modelo] || 0) + qty;
+      if (fechaDesde && fecha < fechaDesde) return;
+      if (fechaHasta && fecha > fechaHasta) return;
+      const parte = d.parte || '';
+      const turno = d.turno || '';
+      const horaCaptura = d.ts ? new Date(d.ts.seconds * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+        : (d.tsLocal ? new Date(d.tsLocal).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—');
+      const key = modelo + '||' + parte + '||' + fecha + '||' + turno + '||' + horaCaptura;
+      if (!lotes[key]) lotes[key] = { modelo, prod: 0 };
+      lotes[key].prod += Number(d.prod) || Number(d.qty) || 0;
+    });
+
+    // 2) Traer lo realmente enviado a ShipQR y sumarlo por llave de lote (soporta envíos parciales)
+    const enviadosPorKey = {};
+    const snapShip = await db.collection('shipqr_envios_mes').get();
+    snapShip.forEach(doc => {
+      const data = doc.data();
+      const k = data.key || doc.id;
+      const cantidad = (data.cantidad_enviada != null) ? Number(data.cantidad_enviada) : (Number(data.prod) || 0);
+      enviadosPorKey[k] = (enviadosPorKey[k] || 0) + cantidad;
+    });
+
+    // 3) Solo contar lo REALMENTE enviado (nunca más de lo producido en ese lote), agrupado por modelo
+    Object.keys(lotes).forEach(key => {
+      const lote = lotes[key];
+      const enviado = Math.min(lote.prod, enviadosPorKey[key] || 0);
+      produccion[lote.modelo] = (produccion[lote.modelo] || 0) + enviado;
     });
   } catch (e) {
     console.error('Error leyendo producción real ASSY1 del MES:', e);

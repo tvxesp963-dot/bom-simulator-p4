@@ -3859,7 +3859,12 @@ async function renderPlanSemanal() {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     const target = simTargetsPorModelo[sm] || 0;
     const producido = produccionReal[sm] || 0;
-    const pendiente = Math.max(0, target - producido);
+    const diff = target - producido;
+    const pendiente = Math.max(0, diff);
+    const excedente = diff < 0 ? Math.abs(diff) : 0;
+    const pendienteTxt = excedente > 0
+      ? ('+' + excedente.toLocaleString())
+      : (pendiente > 0 ? ('-' + pendiente.toLocaleString()) : '0');
     const fechaStr = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
     const fechaTxt = fechaStr ? new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
 
@@ -3867,9 +3872,11 @@ async function renderPlanSemanal() {
     const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
     const numParte = (strip && strip.pn) || (bundle && bundle.pn) || '—';
 
-    const pendStyle = pendiente > 0
-      ? 'background:rgba(255,186,0,.15);color:#FFBA00'
-      : 'background:rgba(0,230,118,.15);color:#00e676';
+    const pendStyle = excedente > 0
+      ? 'background:rgba(0,230,118,.15);color:#00e676'
+      : (pendiente > 0
+        ? 'background:rgba(255,68,68,.15);color:var(--red)'
+        : 'background:rgba(0,230,118,.15);color:#00e676');
 
     const falts = faltantesPorModelo[sm] || [];
     const matStyle = falts.length
@@ -3887,7 +3894,7 @@ async function renderPlanSemanal() {
         <td style="padding:10px 8px;text-align:right;font-weight:700">
           <input type="number" min="0" value="${producido}" style="width:90px;text-align:right;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 6px;font-weight:700" onchange="actualizarProducidoManual('${sm.replace(/'/g, "\\'")}', this.value)">
         </td>
-        <td style="padding:10px 8px;text-align:center"><span style="${pendStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:12px">${pendiente.toLocaleString()}</span></td>
+        <td style="padding:10px 8px;text-align:center"><span style="${pendStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:12px">${pendienteTxt}</span></td>
         <td style="padding:10px 8px;text-align:center"><span style="${matStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">${matTxt}</span></td>
       </tr>`;
   }).join('');

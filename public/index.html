@@ -3485,15 +3485,19 @@ function formatCorteLabel(corte) {
   return `📦 Envío ${diaTxt} ${formatFechaCorta(corte)} ${horaTxt}`;
 }
 
-// Lee TODA la producción real ya ensamblada en ASSY1 (esté o no ya enviada a Dallas vía ShipQR).
-// "Producido" mide avance de ENSAMBLE contra el Target, no si ya salió físicamente de la empresa.
-// PENDIENTE en ShipQR = sigue en piso de P4 (ya ensamblado, cuenta). ENVIADO = ya salió a Dallas (también cuenta).
+// Lee lo que hay DISPONIBLE ahora mismo en piso de P4 (ya ensamblado en ASSY1, pero AÚN NO enviado a Dallas).
+// Esta pantalla (Plan Requerido) responde: "¿cuánto me falta por producir para cubrir el requerimiento?"
+// Por lote: Disponible = Producido del lote − lo ya enviado de ese lote (nunca negativo).
+// Una vez que un lote se envía a Dallas por ShipQR, deja de contar aquí (ya no está disponible en P4).
+// El avance TOTAL de ensamble (sin importar envío) se ve en otra pantalla, no en esta.
 // Mismo proyecto Firebase que el BOM Simulator (mes-production-esp).
 async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
   const produccion = {};
   if (!db) return produccion;
   try {
+    // 1) Agrupar la producción de ASSY1 + partes GH90 en lotes (misma llave que usa la pantalla ShipQR del MES)
     const snap = await db.collection('registros').get();
+    const lotes = {};
     snap.forEach(doc => {
       const d = doc.data();
       const esASSY = (d.maqNombre || '').toUpperCase().includes('ASSY') || (d.maqTipo || '').toUpperCase() === 'ASSY';
@@ -3505,8 +3509,30 @@ async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
       // El campo 'fecha' se guarda como texto 'YYYY-MM-DD' — comparación de texto funciona igual que de fecha
       if (fechaDesde && fecha < fechaDesde) return;
       if (fechaHasta && fecha > fechaHasta) return;
-      const qty = Number(d.prod) || Number(d.qty) || 0;
-      produccion[modelo] = (produccion[modelo] || 0) + qty;
+      const parte = d.parte || '';
+      const turno = d.turno || '';
+      const horaCaptura = d.ts ? new Date(d.ts.seconds * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+        : (d.tsLocal ? new Date(d.tsLocal).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—');
+      const key = modelo + '||' + parte + '||' + fecha + '||' + turno + '||' + horaCaptura;
+      if (!lotes[key]) lotes[key] = { modelo, prod: 0 };
+      lotes[key].prod += Number(d.prod) || Number(d.qty) || 0;
+    });
+
+    // 2) Traer lo ya enviado a Dallas y sumarlo por llave de lote (soporta envíos parciales)
+    const enviadosPorKey = {};
+    const snapShip = await db.collection('shipqr_envios_mes').get();
+    snapShip.forEach(doc => {
+      const data = doc.data();
+      const k = data.key || doc.id;
+      const cantidad = (data.cantidad_enviada != null) ? Number(data.cantidad_enviada) : (Number(data.prod) || 0);
+      enviadosPorKey[k] = (enviadosPorKey[k] || 0) + cantidad;
+    });
+
+    // 3) Disponible por lote = producido − enviado (nunca negativo), agrupado por modelo
+    Object.keys(lotes).forEach(key => {
+      const lote = lotes[key];
+      const disponible = Math.max(0, lote.prod - (enviadosPorKey[key] || 0));
+      produccion[lote.modelo] = (produccion[lote.modelo] || 0) + disponible;
     });
   } catch (e) {
     console.error('Error leyendo producción real ASSY1 del MES:', e);
@@ -4091,7 +4117,7 @@ async function renderPlanSemanal() {
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Modelo y partes</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" es manual — captura lo ya ensamblado en ASSY1 para ese modelo.</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" es manual — o usa el botón para traer del MES lo que sigue disponible en piso de P4 (sin enviar a Dallas aún).</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>

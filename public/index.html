@@ -363,6 +363,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <span style="font-size:11px;color:var(--text2)">hasta</span>
       <input class="input" type="date" id="planFechaHasta" style="width:150px" title="Hasta (opcional)">
       <button class="btn btn-secondary btn-sm" onclick="sincronizarProducidoDesdeMES()">🔄 Traer del MES (ASSY1)</button>
+      <button class="btn btn-secondary btn-sm" onclick="renderPlanSemanal()">🔄 Actualizar disponible (IMS)</button>
     </div>
     <div id="planSemanalWrap"></div>
   </div>
@@ -3804,7 +3805,7 @@ async function renderPlanSemanal() {
     const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
     return pa - pb;
   });
-  const faltantesPorModelo = calcularFaltantesPorModeloPlan(conTargetOrdenado);
+  const faltantesPorModelo = calcularFaltantesPorModeloPlan(conTargetOrdenado, produccionReal);
   const materialCapPorModelo = window._planMaterialCapPorModelo || {};
 
   const { semanas, sinFecha } = calcularPlanSemanal(produccionReal, materialCapPorModelo);
@@ -4180,9 +4181,15 @@ function obtener4MaterialesEnsamble(sm) {
   ];
 }
 
-function calcularFaltantesPorModeloPlan(modelosOrdenados) {
+function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
+  produccionReal = produccionReal || {};
   const invOriginal = new Map();
   BOM.forEach(r => { if (!invOriginal.has(r)) invOriginal.set(r, r.inv); });
+
+  // Guardamos el target original de cada modelo para restaurarlo al final —
+  // durante el cálculo lo sustituimos por el target EFECTIVO (target - Producido).
+  const targetsOriginal = {};
+  modelosOrdenados.forEach(sm => { targetsOriginal[sm] = simTargetsPorModelo[sm]; });
 
   const simFiltroOriginal = simFiltro;
   simFiltro = 'todos';
@@ -4193,14 +4200,22 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
 
   modelosOrdenados.forEach(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+
+    // Lo que YA se produjo (manual o traído de ShipQR) ya consumió su material —
+    // el desglose de faltantes debe calcularse sobre lo que REALMENTE falta por
+    // producir, no sobre el target completo.
+    const producidoSm = produccionReal[sm] || 0;
+    const targetOriginalSm = targetsOriginal[sm] || 0;
+    const targetEfectivo = Math.max(0, targetOriginalSm - producidoSm);
+    simTargetsPorModelo[sm] = targetEfectivo;
+
     calcularDetalleModeloMulti(sm); // dispara calcSim() y deja _reqReal calculado en cada fila del BOM de este modelo
     const items = [];
     const disponiblesEsteModelo = [];
 
     obtener4MaterialesEnsamble(sm).forEach(m => {
       if (!m.row) return; // este modelo no tiene ese material (p.ej. no todos usan Bundle)
-      const target = simTargetsPorModelo[sm] || 0;
-      const requerido = (m.row._reqReal !== undefined) ? m.row._reqReal : target;
+      const requerido = (m.row._reqReal !== undefined) ? m.row._reqReal : targetEfectivo;
       const disponible = m.row.inv || 0;
       const falta = requerido - disponible;
       const ok = falta <= 0;
@@ -4223,12 +4238,11 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
     // Descontar del pool compartido lo que este modelo tomó (misma cascada que
     // "Analizar varios modelos"), para que el siguiente modelo de menor prioridad
     // vea el inventario ya reducido.
-    const target = simTargetsPorModelo[sm] || 0;
     const filasModelo = BOM.filter(r => r.sm === sm);
     filasModelo.forEach(rowModelo => {
       const pn = (rowModelo.pn || '').trim().toUpperCase();
       const desc = (rowModelo.desc || '').trim().toUpperCase();
-      const reqReal = (rowModelo._reqReal !== undefined) ? rowModelo._reqReal : target;
+      const reqReal = (rowModelo._reqReal !== undefined) ? rowModelo._reqReal : targetEfectivo;
       BOM.forEach(r => {
         if ((r.pn || '').trim().toUpperCase() === pn && (r.desc || '').trim().toUpperCase() === desc) {
           const tomar = Math.min(r.inv || 0, reqReal);
@@ -4240,6 +4254,7 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados) {
 
   simFiltro = simFiltroOriginal;
   invOriginal.forEach((inv, r) => { r.inv = inv; });
+  modelosOrdenados.forEach(sm => { simTargetsPorModelo[sm] = targetsOriginal[sm]; });
 
   // Se guarda para que el botón de descarga en "Detalle diario" pueda exportarlo
   // sin tener que recalcular todo de nuevo.
@@ -4374,7 +4389,7 @@ async function publicarPlanSemanal() {
     const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
     return pa - pb;
   });
-  calcularFaltantesPorModeloPlan(conTargetOrdenado);
+  calcularFaltantesPorModeloPlan(conTargetOrdenado, produccionReal);
   const materialCapPorModelo = window._planMaterialCapPorModelo || {};
 
   const { semanas, sinFecha } = calcularPlanSemanal(produccionReal, materialCapPorModelo);

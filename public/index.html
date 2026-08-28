@@ -3863,7 +3863,14 @@ async function renderPlanSemanal() {
     codePorModelo[sm] = (strip && strip.pn) || (bundle && bundle.pn) || '—';
   });
 
-  const filasPlan = modelosPlan.map(sm => {
+  // Solo se muestran los modelos que TODAVÍA tienen algo pendiente por producir
+  // (Pendiente en rojo). Los que ya están al 100% o superados (verde/+excedente)
+  // se ocultan de esta tabla — ya no requieren seguimiento aquí.
+  const filasPlan = modelosPlan.filter(sm => {
+    const target = simTargetsPorModelo[sm] || 0;
+    const producido = produccionReal[sm] || 0;
+    return (target - producido) > 0;
+  }).map(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     const target = simTargetsPorModelo[sm] || 0;
     const producido = produccionReal[sm] || 0;

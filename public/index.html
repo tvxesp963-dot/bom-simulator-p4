@@ -4185,11 +4185,6 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
   const invOriginal = new Map();
   BOM.forEach(r => { if (!invOriginal.has(r)) invOriginal.set(r, r.inv); });
 
-  // Guardamos el target original de cada modelo para restaurarlo al final —
-  // durante el cálculo lo sustituimos por el target EFECTIVO (target - Producido).
-  const targetsOriginal = {};
-  modelosOrdenados.forEach(sm => { targetsOriginal[sm] = simTargetsPorModelo[sm]; });
-
   const simFiltroOriginal = simFiltro;
   simFiltro = 'todos';
 
@@ -4199,25 +4194,30 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
 
   modelosOrdenados.forEach(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+    const target = simTargetsPorModelo[sm] || 0;
 
-    // Lo que YA se produjo (manual o traído de ShipQR) ya consumió su material —
-    // el desglose de faltantes debe calcularse sobre lo que REALMENTE falta por
-    // producir, no sobre el target completo.
-    const producidoSm = produccionReal[sm] || 0;
-    const targetOriginalSm = targetsOriginal[sm] || 0;
-    const targetEfectivo = Math.max(0, targetOriginalSm - producidoSm);
-    simTargetsPorModelo[sm] = targetEfectivo;
-
+    // El motor de cálculo (calcSim) corre con el TARGET COMPLETO, igual que
+    // siempre — su lógica interna (header/pool/cascada) no se toca.
     calcularDetalleModeloMulti(sm); // dispara calcSim() y deja _reqReal calculado en cada fila del BOM de este modelo
     const items = [];
     const disponiblesEsteModelo = [];
+    // pn||desc -> requerido ya ajustado por Producido, para reusar en el descuento del pool
+    const ajusteProducidoPorClave = {};
+    const producidoSm = produccionReal[sm] || 0;
 
     obtener4MaterialesEnsamble(sm).forEach(m => {
       if (!m.row) return; // este modelo no tiene ese material (p.ej. no todos usan Bundle)
-      const requerido = (m.row._reqReal !== undefined) ? m.row._reqReal : targetEfectivo;
+      const requeridoBase = (m.row._reqReal !== undefined) ? m.row._reqReal : target;
+      // Lo que YA se produjo (manual o traído de ShipQR) ya no requiere más de
+      // este material — se resta al final, sobre el resultado ya calculado por
+      // el motor, para no interferir con su lógica interna de pool/header.
+      const requerido = Math.max(0, requeridoBase - producidoSm);
       const disponible = m.row.inv || 0;
       const falta = requerido - disponible;
       const ok = falta <= 0;
+
+      const clave = (m.row.pn || '').trim().toUpperCase() + '||' + (m.row.desc || '').trim().toUpperCase();
+      ajusteProducidoPorClave[clave] = requerido;
 
       pickList.push({
         modelo: sm, prioridad, etiqueta: m.etiqueta, pn: m.row.pn, desc: m.row.desc || '',
@@ -4236,12 +4236,17 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
 
     // Descontar del pool compartido lo que este modelo tomó (misma cascada que
     // "Analizar varios modelos"), para que el siguiente modelo de menor prioridad
-    // vea el inventario ya reducido.
+    // vea el inventario ya reducido. Para los 4 materiales de ensamble se usa el
+    // requerido YA ajustado por Producido; el resto de filas (pool interno de
+    // Chip Board, etc.) sigue igual que siempre.
     const filasModelo = BOM.filter(r => r.sm === sm);
     filasModelo.forEach(rowModelo => {
       const pn = (rowModelo.pn || '').trim().toUpperCase();
       const desc = (rowModelo.desc || '').trim().toUpperCase();
-      const reqReal = (rowModelo._reqReal !== undefined) ? rowModelo._reqReal : targetEfectivo;
+      const clave = pn + '||' + desc;
+      const reqReal = (clave in ajusteProducidoPorClave)
+        ? ajusteProducidoPorClave[clave]
+        : ((rowModelo._reqReal !== undefined) ? rowModelo._reqReal : target);
       BOM.forEach(r => {
         if ((r.pn || '').trim().toUpperCase() === pn && (r.desc || '').trim().toUpperCase() === desc) {
           const tomar = Math.min(r.inv || 0, reqReal);
@@ -4253,7 +4258,6 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
 
   simFiltro = simFiltroOriginal;
   invOriginal.forEach((inv, r) => { r.inv = inv; });
-  modelosOrdenados.forEach(sm => { simTargetsPorModelo[sm] = targetsOriginal[sm]; });
 
   // Se guarda para que el botón de descarga en "Detalle diario" pueda exportarlo
   // sin tener que recalcular todo de nuevo.

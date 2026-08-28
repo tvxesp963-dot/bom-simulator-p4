@@ -362,8 +362,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <input class="input" type="date" id="planFechaDesde" style="width:150px" title="Desde (opcional)">
       <span style="font-size:11px;color:var(--text2)">hasta</span>
       <input class="input" type="date" id="planFechaHasta" style="width:150px" title="Hasta (opcional)">
-      <button class="btn btn-secondary btn-sm" onclick="sincronizarProducidoDesdeMES()">🔄 Traer del MES (ASSY1)</button>
-      <button class="btn btn-secondary btn-sm" onclick="renderPlanSemanal()">🔄 Actualizar disponible (IMS)</button>
+      <button class="btn btn-secondary btn-sm" onclick="sincronizarProducidoDesdeMES()">🔄 Actualizar todo (Producido + IMS)</button>
     </div>
     <div id="planSemanalWrap"></div>
   </div>
@@ -3863,14 +3862,7 @@ async function renderPlanSemanal() {
     codePorModelo[sm] = (strip && strip.pn) || (bundle && bundle.pn) || '—';
   });
 
-  // Solo se muestran los modelos que TODAVÍA tienen algo pendiente por producir
-  // (Pendiente en rojo). Los que ya están al 100% o superados (verde/+excedente)
-  // se ocultan de esta tabla — ya no requieren seguimiento aquí.
-  const filasPlan = modelosPlan.filter(sm => {
-    const target = simTargetsPorModelo[sm] || 0;
-    const producido = produccionReal[sm] || 0;
-    return (target - producido) > 0;
-  }).map(sm => {
+  const filasPlan = modelosPlan.map(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     const target = simTargetsPorModelo[sm] || 0;
     const producido = produccionReal[sm] || 0;

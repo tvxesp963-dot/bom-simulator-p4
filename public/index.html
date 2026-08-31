@@ -2687,6 +2687,12 @@ var db = null;
 var auth = null;
 var imsInventario = {};
 var imsPrecios = {};
+// Inventario REAL de piezas terminadas GH90 (bundles P4), tomado directo de ShipQR/pallets —
+// no de planta4_inventario (que es captura manual y se puede desactualizar).
+// shipqrPnTracked: qué PN's SÍ tienen pallets en ShipQR (para saber si ya se puede confiar en este dato).
+// shipqrPnDisponible: suma de quantity de pallets NO embarcados (status !== 'SHIPPED') por PN.
+var shipqrPnTracked = {};
+var shipqrPnDisponible = {};
 var adminAuthed = false;
 
 // ── LOGIN: Firebase Authentication (igual que el MES) ──
@@ -2950,9 +2956,19 @@ function getInvIMS(pn, desc, planta, level) {
       if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
       return 0;
     } else {
-      // Level 1 = bundle terminado en P4
-      if (imsInventario[pnUp+'||PLANTA:P4'] !== undefined) return imsInventario[pnUp+'||PLANTA:P4'];
-      if (plantaUp === 'P3') return 0;
+      // Level 1 = solo es Bundle terminado (rastreado en ShipQR) si la descripcion lo dice.
+      // Otros materiales GH90 (ej. Strip) usan el inventario normal de planta4_inventario.
+      var esBundleReal = descUp.indexOf('BUNDLE') >= 0 || descUp.indexOf('LIT') >= 0 || descUp.indexOf('MANUAL') >= 0;
+      if (esBundleReal) {
+        // Fuente real de verdad: ShipQR (pallets fisicos, excluyendo los ya embarcados).
+        // Solo si este PN nunca se ha manejado en ShipQR, se usa el respaldo manual de planta4_inventario.
+        if (shipqrPnTracked[pnUp]) return shipqrPnDisponible[pnUp] || 0;
+        if (imsInventario[pnUp+'||PLANTA:P4'] !== undefined) return imsInventario[pnUp+'||PLANTA:P4'];
+        if (plantaUp === 'P3') return 0;
+      } else {
+        if (descUp && imsInventario[pnUp+'||'+descUp+'||PLANTA:P4'] !== undefined) return imsInventario[pnUp+'||'+descUp+'||PLANTA:P4'];
+        if (imsInventario[pnUp+'||PLANTA:P4'] !== undefined) return imsInventario[pnUp+'||PLANTA:P4'];
+      }
     }
   }
   // P3 y ALIBER: buscar SOLO por PN — descripciones del BOM no coinciden con IMS
@@ -3052,6 +3068,8 @@ function sincIMS() {
   ];
   imsInventario = {};
   imsPrecios = {};
+  shipqrPnTracked = {};
+  shipqrPnDisponible = {};
   var rawP4 = {}, rawP3 = {};
   // Leer ambas colecciones en paralelo en objetos separados
   Promise.all([
@@ -3084,6 +3102,16 @@ function sincIMS() {
         if (d.precio && d.precio > 0) {
           if (!imsPrecios[pn]) imsPrecios[pn] = d.precio;
         }
+      });
+    }).catch(function(){}),
+    db.collection('shipqr_pallets').get().then(function(snap) {
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        var pn = (d.part_number || '').trim().toUpperCase();
+        if (!pn) return;
+        shipqrPnTracked[pn] = true; // este PN sí se maneja en ShipQR
+        if (d.status === 'SHIPPED') return; // ya salió de la planta, no cuenta como disponible
+        shipqrPnDisponible[pn] = (shipqrPnDisponible[pn] || 0) + (Number(d.quantity) || 0);
       });
     }).catch(function(){})
   ]).then(function() {

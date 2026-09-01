@@ -358,10 +358,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem;padding:.6rem .8rem;background:var(--bg2);border-radius:8px">
-      <span style="font-size:11px;color:var(--text2)">"Producido" es manual (editable en la tabla). Opcional: traerlo del MES</span>
-      <input class="input" type="date" id="planFechaDesde" style="width:150px" title="Desde (opcional)">
-      <span style="font-size:11px;color:var(--text2)">hasta</span>
-      <input class="input" type="date" id="planFechaHasta" style="width:150px" title="Hasta (opcional)">
+      <span style="font-size:11px;color:var(--text2)">"Producido" es manual (editable en la tabla). Opcional: traerlo de ShipQR — trae TODO lo disponible sin embarcar (no filtra por fecha)</span>
       <button class="btn btn-secondary btn-sm" onclick="sincronizarProducidoDesdeMES()">🔄 Actualizar todo (Producido + IMS)</button>
     </div>
     <div id="planSemanalWrap"></div>
@@ -3440,7 +3437,7 @@ window.publicarPlan = publicarPlan;
 // PLAN SEMANAL DE ENSAMBLE (ASSY1)
 // ══════════════════════════════════════════
 const CAPACIDAD_DIARIA_ASSY1 = 13000;
-const CAPACIDAD_SABADO_ASSY1 = 4000; // medio turno, antes del corte de las 10:00am
+const CAPACIDAD_SABADO_ASSY1 = 4000; // medio turno, antes del corte de las 11:00am
 const DIAS_SEMANA_LABORAL = 5; // Lunes a Viernes (referencia general, ya no se usa para el loop de días)
 
 function lunesDeSemana(fecha) {
@@ -3473,7 +3470,7 @@ function capacidadDelDia(fecha) {
 }
 
 // Corte de envío al que pertenece un día: Lun-Mar-Mié → corte miércoles 3:30pm de esa semana;
-// Jue-Vie-Sáb → corte sábado 10:00am de esa semana. Domingo no aplica (no se produce).
+// Jue-Vie-Sáb → corte sábado 11:00am de esa semana. Domingo no aplica (no se produce).
 function cicloDeEnvioDelDia(fecha) {
   const dow = fecha.getDay();
   const d = new Date(fecha);
@@ -3483,12 +3480,12 @@ function cicloDeEnvioDelDia(fecha) {
     d.setHours(15, 30, 0, 0);
   } else {
     d.setDate(d.getDate() + (6 - dow)); // avanza al sábado de esa semana (jue=4,vie=5,sáb=6)
-    d.setHours(10, 0, 0, 0);
+    d.setHours(11, 0, 0, 0);
   }
   return d;
 }
 
-// Próximo corte de envío (miércoles 3:30pm o sábado 10:00am) estrictamente posterior a 'desde'.
+// Próximo corte de envío (miércoles 3:30pm o sábado 11:00am) estrictamente posterior a 'desde'.
 // Si ya pasó el corte de hoy, salta automáticamente al siguiente.
 function proximoCorteEnvio(desde) {
   for (let i = 0; i < 14; i++) {
@@ -3500,7 +3497,7 @@ function proximoCorteEnvio(desde) {
       const corte = new Date(dia); corte.setHours(15, 30, 0, 0);
       if (corte > desde) return corte;
     } else if (dow === 6) {
-      const corte = new Date(dia); corte.setHours(10, 0, 0, 0);
+      const corte = new Date(dia); corte.setHours(11, 0, 0, 0);
       if (corte > desde) return corte;
     }
   }
@@ -3509,19 +3506,50 @@ function proximoCorteEnvio(desde) {
 
 function formatCorteLabel(corte) {
   const diaTxt = corte.getDay() === 3 ? 'Miércoles' : 'Sábado';
-  const horaTxt = corte.getDay() === 3 ? '3:30pm' : '10:00am';
+  const horaTxt = corte.getDay() === 3 ? '3:30pm' : '11:00am';
   return `📦 Envío ${diaTxt} ${formatFechaCorta(corte)} ${horaTxt}`;
+}
+
+// Corte de envío (miércoles 3:30pm o sábado 11:00am) más reciente que ya pasó, estrictamente
+// anterior o igual a 'hasta'. Es el complemento de proximoCorteEnvio: define el INICIO del ciclo
+// actual — todo lo producido después de este corte pertenece al ciclo que se está armando ahora.
+function corteAnteriorEnvio(hasta) {
+  for (let i = 0; i < 14; i++) {
+    const dia = new Date(hasta);
+    dia.setDate(dia.getDate() - i);
+    dia.setHours(0, 0, 0, 0);
+    const dow = dia.getDay();
+    if (dow === 3) {
+      const corte = new Date(dia); corte.setHours(15, 30, 0, 0);
+      if (corte <= hasta) return corte;
+    } else if (dow === 6) {
+      const corte = new Date(dia); corte.setHours(11, 0, 0, 0);
+      if (corte <= hasta) return corte;
+    }
+  }
+  return null;
 }
 
 // Lee lo que hay DISPONIBLE ahora mismo en piso de P4, directo de la app ShipQR (fuente real de verdad).
 // Esta pantalla (Plan Requerido) responde: "¿cuánto me falta por producir para cubrir el requerimiento?"
 // Un pallet en 'shipqr_pallets' representa material físico ya empacado. Solo cuando su status pasa
 // a 'SHIPPED' (el trailer ya salió con ese pallet) deja de estar disponible en P4.
-// Antes de eso (QC_PENDING, QC_APPROVED, READY_TO_SHIP) sigue físicamente en la planta y SÍ cuenta.
+// Antes de eso (QC_PENDING, QC_APPROVED, READY_TO_SHIP) sigue físicamente en la planta y SÍ cuenta —
+// sin importar cuándo se produjo. NUNCA se filtra por fecha: un pallet viejo sin embarcar sigue siendo
+// inventario real y debe seguir contando (si se filtrara por fecha, desaparecería del plan aunque
+// siga físicamente en la planta — ese fue el bug original).
+//
+// Para ubicarlo dentro del ciclo de envío (miércoles 3:30pm / sábado 11:00am) se usa 'cicloDeEnvioDelDia'
+// sobre su fecha de creación: todo lo producido después del último corte pasado pertenece al ciclo
+// que se está armando ahora ("de este ciclo"); lo que quedó de cortes anteriores sin embarcar se
+// reporta aparte como "arrastre" — visible, no oculto, para que se pueda revisar y no se acumule
+// basura sin que nadie se dé cuenta.
 // Mismo proyecto Firebase que el BOM Simulator (mes-production-esp).
-async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
-  const produccion = {};
-  if (!db) return produccion;
+async function obtenerProduccionRealASSY1() {
+  const porModelo = {}; // { modelo: { total, cicloActual, arrastre } }
+  if (!db) return porModelo;
+  const ahora = new Date();
+  const inicioCicloActual = corteAnteriorEnvio(ahora); // corte ya pasado más reciente = inicio del ciclo en curso
   try {
     const snap = await db.collection('shipqr_pallets').get();
     snap.forEach(doc => {
@@ -3531,38 +3559,37 @@ async function obtenerProduccionRealASSY1(fechaDesde, fechaHasta) {
       if (!modelo) return;
       const parte = (d.part_number || '').toUpperCase();
       if (!parte.startsWith('GH90')) return;
-      const fechaStr = d.created_at ? new Date(d.created_at.seconds * 1000).toISOString().slice(0, 10) : '';
-      if (fechaDesde && fechaStr && fechaStr < fechaDesde) return;
-      if (fechaHasta && fechaStr && fechaStr > fechaHasta) return;
       const qty = Number(d.quantity) || 0;
-      produccion[modelo] = (produccion[modelo] || 0) + qty;
+      const fecha = d.created_at ? new Date(d.created_at.seconds * 1000) : null;
+      if (!porModelo[modelo]) porModelo[modelo] = { total: 0, cicloActual: 0, arrastre: 0 };
+      porModelo[modelo].total += qty;
+      const esDeEsteCiclo = fecha && inicioCicloActual && fecha > inicioCicloActual;
+      if (esDeEsteCiclo) porModelo[modelo].cicloActual += qty;
+      else porModelo[modelo].arrastre += qty;
     });
   } catch (e) {
     console.error('Error leyendo pallets de ShipQR:', e);
   }
-  return produccion;
+  return porModelo;
 }
 
 // Trae del MES lo producido en ASSY1 y lo carga en los campos manuales de "Producido"
 // (con clic explícito — no automático). El usuario puede seguir editándolo a mano después.
+// Ya no pide rango de fechas: "Producido" siempre es el disponible real completo (sin filtrar por
+// fecha), desglosado internamente en ciclo actual vs. arrastre de ciclos anteriores para que se
+// pueda revisar el arrastre sin que se pierda del total.
 async function sincronizarProducidoDesdeMES() {
-  const fechaDesdeEl = document.getElementById('planFechaDesde');
-  const fechaHastaEl = document.getElementById('planFechaHasta');
-  if (!fechaDesdeEl?.value || !fechaHastaEl?.value) {
-    alert('Selecciona un rango de fechas (Desde / Hasta) antes de traer del MES.');
-    return;
-  }
   const wrap = document.getElementById('planSemanalWrap');
   if (wrap) wrap.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--text2);font-size:12px">⏳ Trayendo producción real de ASSY1 desde el MES...</div>`;
 
-  const datos = await obtenerProduccionRealASSY1(
-    fechaDesdeEl.value,
-    fechaHastaEl.value
-  );
+  const datos = await obtenerProduccionRealASSY1();
+  window.simProducidoDesglosePorModelo = window.simProducidoDesglosePorModelo || {};
 
   const modelosPlan = Object.keys(simTargetsPorModelo).filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
   modelosPlan.forEach(sm => {
-    window.simProducidoManualPorModelo[sm] = datos[sm] || 0;
+    const d = datos[sm];
+    window.simProducidoManualPorModelo[sm] = d ? d.total : 0;
+    window.simProducidoDesglosePorModelo[sm] = d ? { cicloActual: d.cicloActual, arrastre: d.arrastre } : { cicloActual: 0, arrastre: 0 };
   });
   try { localStorage.setItem('simProducidoManual_p4', JSON.stringify(window.simProducidoManualPorModelo)); } catch (e) {}
   renderPlanSemanal();
@@ -3928,6 +3955,11 @@ async function renderPlanSemanal() {
         <td style="padding:10px 8px;text-align:center;color:var(--text2)">${fechaTxt}</td>
         <td style="padding:10px 8px;text-align:right;font-weight:700">
           <input type="number" min="0" value="${producido}" style="width:90px;text-align:right;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 6px;font-weight:700" onchange="actualizarProducidoManual('${sm.replace(/'/g, "\\'")}', this.value)">
+          ${(() => {
+            const d = (window.simProducidoDesglosePorModelo || {})[sm];
+            if (!d || !d.arrastre) return '';
+            return `<div style="font-size:10px;color:var(--yellow, #f1c40f);margin-top:3px;white-space:nowrap" title="Sigue sin embarcar de un corte anterior — revisa si sigue vigente">🕐 ${d.arrastre.toLocaleString()} de ciclo(s) anterior(es)</div>`;
+          })()}
         </td>
         <td style="padding:10px 8px;text-align:center"><span style="${pendStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:12px">${pendienteTxt}</span></td>
         <td style="padding:10px 8px;text-align:center"><span style="${matStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">${matTxt}</span></td>
@@ -4171,7 +4203,7 @@ async function renderPlanSemanal() {
         </tbody>
       </table>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString()} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 10:00am</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString()} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 11:00am</div>
     </div>
   `;
 }

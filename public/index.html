@@ -3108,6 +3108,7 @@ function sincIMS() {
         if (!pn) return;
         shipqrPnTracked[pn] = true; // este PN sí se maneja en ShipQR
         if (d.status === 'SHIPPED') return; // ya salió de la planta, no cuenta como disponible
+        if (d.motivo === 'REMPLAZO') return; // producción de remplazo: no cuenta como avance del plan
         shipqrPnDisponible[pn] = (shipqrPnDisponible[pn] || 0) + (Number(d.quantity) || 0);
       });
     }).catch(function(){})
@@ -3555,6 +3556,7 @@ async function obtenerProduccionRealASSY1() {
     snap.forEach(doc => {
       const d = doc.data();
       if (d.status === 'SHIPPED') return; // ya salió físicamente de la empresa, no cuenta
+      if (d.motivo === 'REMPLAZO') return; // producción de remplazo: no cuenta como avance del plan
       const modelo = (d.modelo || '').trim();
       if (!modelo) return;
       const parte = (d.part_number || '').toUpperCase();

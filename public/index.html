@@ -1103,6 +1103,13 @@ function calcSim() {
   const target = parseInt(document.getElementById('simTarget').value) || 0;
   const dias = parseInt(document.getElementById('simDias').value) || 5;
 
+  // Lo ya producido (manual o traído de ShipQR) reduce lo que realmente falta
+  // por producir. El motor de aquí en adelante trabaja con targetNeto, no con
+  // el target crudo del Excel — así el requerimiento de material deja de estar
+  // "congelado" y se ajusta conforme avanza la producción real.
+  const producidoSm = (window.simProducidoManualPorModelo && window.simProducidoManualPorModelo[sm]) || 0;
+  const targetNeto = Math.max(0, target - producidoSm);
+
   // Validar que sm existe en el BOM
   const modelos = BOM && BOM.length ? [...new Set(BOM.map(r => r.sm))] : [];
   if (!sm || !modelos.includes(sm)) {
@@ -1124,6 +1131,19 @@ function calcSim() {
     document.getElementById('simTable').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2.5rem;color:var(--text3);font-size:13px">Ingresa un target para ver el análisis de componentes</td></tr>`;
     return;
   }
+  // Si ya se produjo igual o más de lo que pedía el target, no falta material
+  if (targetNeto <= 0) {
+    document.getElementById('simStats').innerHTML = `
+      <div class="stat bl"><div class="stat-l">Capacidad real · <span style="color:var(--accent);font-weight:700">${sm}</span></div><div class="stat-v" style="color:var(--green)">${target.toLocaleString()}</div><div class="stat-s">100% · Producido: ${producidoSm.toLocaleString()} de ${target.toLocaleString()} meta</div><div class="prog"><div class="prog-fill" style="width:100%;background:var(--green)"></div></div></div>
+      <div class="stat gr"><div class="stat-l">A pedir</div><div class="stat-v" style="color:var(--green)">0</div><div class="stat-s">ya cubierto por Producido</div></div>
+      <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--text3)">0</div><div class="stat-s">nada pendiente</div></div>
+      <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--green)">0</div><div class="stat-s">unidades bloqueadas</div></div>`;
+    document.getElementById('simCuello').style.display = 'none';
+    document.getElementById('simTable').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2.5rem;color:var(--green);font-size:13px">✅ Producido (${producidoSm.toLocaleString()}) ya cubre el target (${target.toLocaleString()}) — no se requiere más material</td></tr>`;
+    renderCons();
+    renderProd();
+    return;
+  }
   // Calcular inventario de Ranurado para saber si Virgen es relevante
   const topRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
   const botRan = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') && (r.desc||'').toUpperCase().includes('RANURADO'));
@@ -1136,7 +1156,7 @@ function calcSim() {
   const stripC = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('STRIP'));
   const bundleC = BOM.find(r => r.sm===sm && r.familia==='GH90' && (r.desc||'').toUpperCase().includes('BUNDLE'));
 
-  const comps = BOM.filter(r => r.sm === sm && r.familia !== 'GH90' && componenteNecesario(r, sm, target));
+  const comps = BOM.filter(r => r.sm === sm && r.familia !== 'GH90' && componenteNecesario(r, sm, targetNeto));
 
   // Para el cálculo de capacidad, considerar inventario de medio proceso
   const giftBoxDisp = giftBoxC ? Math.max(giftBoxC.inv||0, 0) : 0;
@@ -1144,35 +1164,35 @@ function calcSim() {
   const stripDisp = stripC ? (stripC.inv||0) : 0;
   const bundleDisp = bundleC ? (bundleC.inv||0) : 0;
 
-  let maxProd = target, cuello = null;
-  comps.forEach(r => { if (r.inv < target && r.inv < maxProd) { maxProd = r.inv; cuello = r; } });
+  let maxProd = targetNeto, cuello = null;
+  comps.forEach(r => { if (r.inv < targetNeto && r.inv < maxProd) { maxProd = r.inv; cuello = r; } });
 
   // También considerar medio proceso en maxProd
   // Gift Box es cuello solo si no hay producción TOP disponible para cubrirlo
-  if (giftBoxC && (giftBoxC.inv||0) < target) maxProd = Math.min(maxProd, giftBoxC.inv||0);
+  if (giftBoxC && (giftBoxC.inv||0) < targetNeto) maxProd = Math.min(maxProd, giftBoxC.inv||0);
   // Lower Box es cuello solo si no hay producción BOT disponible (Ranurado BOT no cubre targetReal)
-  const targetRealBot_cs = Math.max(0, target - (lowerBoxC ? (lowerBoxC.inv||0) : 0));
-  if (lowerBoxC && (lowerBoxC.inv||0) < target && botRanInvC < targetRealBot_cs) maxProd = Math.min(maxProd, lowerBoxC.inv||0);
-  if (stripC && (stripC.inv||0) < target) maxProd = Math.min(maxProd, stripC.inv||0);
+  const targetRealBot_cs = Math.max(0, targetNeto - (lowerBoxC ? (lowerBoxC.inv||0) : 0));
+  if (lowerBoxC && (lowerBoxC.inv||0) < targetNeto && botRanInvC < targetRealBot_cs) maxProd = Math.min(maxProd, lowerBoxC.inv||0);
+  if (stripC && (stripC.inv||0) < targetNeto) maxProd = Math.min(maxProd, stripC.inv||0);
   // Bundle: cuello principal — tiene prioridad sobre sub-componentes (INSERT, QSG)
-  if (bundleC && (bundleC.inv||0) < target) {
+  if (bundleC && (bundleC.inv||0) < targetNeto) {
     maxProd = Math.min(maxProd, bundleC.inv||0);
     cuello = bundleC;
   }
 
-  const pct = target > 0 ? Math.min(100, Math.round((maxProd/target)*100)) : 0;
+  const pct = targetNeto > 0 ? Math.min(100, Math.round((maxProd/targetNeto)*100)) : 100;
   const color = pct>=100?'var(--green)':pct>=70?'var(--amber)':'var(--red)';
-  const aPedir = comps.filter(r => r.inv < target).length;
+  const aPedir = comps.filter(r => r.inv < targetNeto).length;
 
   document.getElementById('simStats').innerHTML = `
-    <div class="stat bl"><div class="stat-l">Capacidad real · <span style="color:var(--accent);font-weight:700">${sm}</span></div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString()}</div><div class="stat-s">${pct}% del target · ${target.toLocaleString()} meta</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
+    <div class="stat bl"><div class="stat-l">Capacidad real · <span style="color:var(--accent);font-weight:700">${sm}</span></div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString()}</div><div class="stat-s">${pct}% del restante · ${target.toLocaleString()} meta${producidoSm>0?` · Producido: ${producidoSm.toLocaleString()}`:''}</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
     <div class="stat ${aPedir>0?'rd':'gr'}"><div class="stat-l">A pedir</div><div class="stat-v" style="color:${aPedir>0?'var(--red)':'var(--green)'}">${aPedir}</div><div class="stat-s">de ${comps.length} componentes</div></div>
     <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--amber)">${Math.round(maxProd/dias).toLocaleString()}</div><div class="stat-s">piezas en ${dias} días</div></div>
-    <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--red)">${Math.max(0,target-maxProd).toLocaleString()}</div><div class="stat-s">unidades bloqueadas</div></div>`;
+    <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--red)">${Math.max(0,targetNeto-maxProd).toLocaleString()}</div><div class="stat-s">unidades bloqueadas</div></div>`;
 
   if (cuello) {
     document.getElementById('simCuello').style.display = 'block';
-    document.getElementById('simCuelloContent').innerHTML = `<div style="display:flex;align-items:center;gap:.7rem"><span style="font-size:22px">⛔</span><div><div style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--amber)">${cuello.pn}</div><div style="font-size:11px;color:var(--text2)">${cuello.desc} · ${cuello.planta}</div><div style="font-size:11px;color:var(--red);margin-top:2px">Inv: ${cuello.inv.toLocaleString()} · Faltante: ${(target-cuello.inv).toLocaleString()} pzas</div></div></div>`;
+    document.getElementById('simCuelloContent').innerHTML = `<div style="display:flex;align-items:center;gap:.7rem"><span style="font-size:22px">⛔</span><div><div style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--amber)">${cuello.pn}</div><div style="font-size:11px;color:var(--text2)">${cuello.desc} · ${cuello.planta}</div><div style="font-size:11px;color:var(--red);margin-top:2px">Inv: ${cuello.inv.toLocaleString()} · Faltante: ${(targetNeto-cuello.inv).toLocaleString()} pzas</div></div></div>`;
   } else {
     document.getElementById('simCuello').style.display = 'none';
   }
@@ -1243,7 +1263,12 @@ function onDestinoChange(pn, desc, val) {
 
 function renderSimTable() {
   const sm = document.getElementById('simModelo').value;
-  const target = parseInt(document.getElementById('simTarget').value) || 0;
+  const targetBruto = parseInt(document.getElementById('simTarget').value) || 0;
+  // Mismo ajuste que calcSim(): el requerimiento real de material es el target
+  // del Excel menos lo ya Producido — así toda la tabla (encabezados, pool,
+  // Chip Board, Bundle) trabaja con el número que realmente falta.
+  const producidoSmTabla = (window.simProducidoManualPorModelo && window.simProducidoManualPorModelo[sm]) || 0;
+  const target = Math.max(0, targetBruto - producidoSmTabla);
   const allData = BOM.filter(r => r.sm === sm);
 
   // Reconstruir jerarquía exacta del BOM original respetando Level 1 y Level 2
@@ -1354,7 +1379,7 @@ function renderSimTable() {
 
   // Separar en secciones respetando el orden del BOM
   const secENSAMBLE = [], secTOP = [], secBOT = [];
-  const targetSim2 = parseInt(document.getElementById('simTarget')?.value) || 0;
+  const targetSim2 = target;
 
   // Modelo seleccionado (necesario para filtrar Ranurado por sm)
   const smSim = document.getElementById('simModelo')?.value || '';
@@ -1518,7 +1543,7 @@ function renderSimTable() {
   bomGroups.forEach(g => {
     if(g.section !== 'BUNDLE') return;
     const bundleHeader = g.header;
-    const targetSim = parseInt(document.getElementById('simTarget')?.value) || 0;
+    const targetSim = target;
     // Bundle (nivel 1) es el producto terminado, igual que Gift Box (Top) / Lower Box (Bottom)
     const bundleInv = bundleHeader ? (bundleHeader.inv || 0) : 0;
     // Siempre mostrar sub-componentes; banner OK es solo informativo

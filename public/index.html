@@ -1599,7 +1599,12 @@ function renderCons() {
   });
   const modeloTargets = {};
   modelos.forEach(sm => {
-    modeloTargets[sm] = simTargetsPorModelo[sm] || 0;
+    // Igual que en el Simulador: lo ya Producido reduce lo que realmente falta
+    // pedir a P1/P3/ALIBER. Sin esto, Consolidado Pedidos pedía material de más
+    // porque no veía el avance real de producción en P4.
+    const targetBrutoCons = simTargetsPorModelo[sm] || 0;
+    const producidoConsSm = (window.simProducidoManualPorModelo && window.simProducidoManualPorModelo[sm]) || 0;
+    modeloTargets[sm] = Math.max(0, targetBrutoCons - producidoConsSm);
   });
 
   let html = '';
@@ -2201,7 +2206,7 @@ function renderProd() {
     </div>`;
 
   modelos.forEach(sm => {
-    const target = simTargetsPorModelo[sm] || 0;
+    const target = modeloTargets[sm] || 0;
     if (!target) return;
     hayAlgo = true;
 

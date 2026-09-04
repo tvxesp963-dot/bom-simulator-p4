@@ -2206,7 +2206,7 @@ function renderProd() {
     </div>`;
 
   modelos.forEach(sm => {
-    const target = modeloTargets[sm] || 0;
+    const target = simTargetsPorModelo[sm] || 0;
     if (!target) return;
     hayAlgo = true;
 

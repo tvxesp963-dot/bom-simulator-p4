@@ -169,6 +169,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="tab" id="tab-cons" onclick="goTab('cons')">📦 Consolidado Pedidos</div>
   <div class="tab" id="tab-prod" onclick="goTab('prod')">🔧 Producir / Ranurar</div>
   <div class="tab" id="tab-plan" onclick="goTab('plan')">📅 Plan Semanal</div>
+  <div class="tab" id="tab-empaque" onclick="goTab('empaque')">📦 Empaque</div>
   
   <div class="tab" id="tab-admin" onclick="goTab('admin')" style="color:#FFBA00">⚙️ Admin BOM</div>
 </div>
@@ -365,6 +366,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
 </div>
 
+<!-- EMPAQUE -->
+<div class="page" id="page-empaque">
+  <div id="empaqueEmpty" class="empty" style="padding:4rem">
+    <div class="empty-icon">📦</div><div class="empty-title">Sin datos</div>
+    <button class="btn btn-primary" style="margin-top:1rem" onclick="goTab('upload')">📥 Cargar BOM</button>
+  </div>
+  <div id="empaqueContent" style="display:none">
+    <div class="top-actions">
+      <span style="font-size:12px;color:var(--text2)">Cajas y pallets — historial real y simulador por modelo</span>
+      <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="renderEmpaque()">🔄 Actualizar</button>
+    </div>
+    <div id="empaqueWrap"></div>
+  </div>
+</div>
+
 <!-- ASSY1 -->
   <div id="assyContent" style="display:none">
     <div class="sh">Capacidad ASSY1 — ranking por % de sub-componentes con inventario &gt; 0</div>
@@ -383,6 +399,7 @@ function goTab(n) {
   document.getElementById('page-' + n).classList.add('active');
   document.getElementById('tab-' + n).classList.add('active');
   if (n === 'plan' && typeof renderPlanSemanal === 'function') renderPlanSemanal();
+  if (n === 'empaque' && typeof renderEmpaque === 'function') renderEmpaque();
 }
 
 // DRAG & DROP
@@ -4227,6 +4244,172 @@ async function renderPlanSemanal() {
   `;
 }
 window.renderPlanSemanal = renderPlanSemanal;
+
+// ══════════════════════════════════════════════════════════════════
+// EMPAQUE — Historial real de cajas/pallets (shipqr_pallets) +
+// Simulador editable usando pcs/caja y cajas/pallet ya guardados en
+// ShipQR (colección shipqr_empaque_master, misma llave "sm" que el BOM).
+// ══════════════════════════════════════════════════════════════════
+async function renderEmpaque() {
+  const wrap = document.getElementById('empaqueWrap');
+  if (!wrap) return;
+  document.getElementById('empaqueEmpty').style.display = BOM.length ? 'none' : 'block';
+  document.getElementById('empaqueContent').style.display = BOM.length ? 'block' : 'none';
+  if (!BOM.length) return;
+  wrap.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">Cargando historial de ShipQR…</div>`;
+
+  const thStyle = 'text-align:left;padding:10px 8px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)';
+  const thRight = thStyle.replace('text-align:left', 'text-align:right');
+  const thCenter = thStyle.replace('text-align:left', 'text-align:center');
+
+  // 1) Historial real — sumar directo de shipqr_pallets (todo el histórico, sin filtrar fecha ni status)
+  let historialPorModelo = {};
+  try {
+    const snap = await db.collection('shipqr_pallets').get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      const sm = (d.modelo || '').trim().toUpperCase();
+      if (!sm) return;
+      if (!historialPorModelo[sm]) historialPorModelo[sm] = { pzas: 0, cajas: 0, pallets: 0 };
+      historialPorModelo[sm].pzas += Number(d.quantity) || 0;
+      historialPorModelo[sm].cajas += Number(d.cajas) || 0;
+      historialPorModelo[sm].pallets += 1;
+    });
+  } catch (e) {
+    console.error('Error leyendo shipqr_pallets para Empaque:', e);
+  }
+
+  // 2) Empaque maestro — pcsPorCaja / cajasPorPallet por modelo (misma llave "sm" en mayúsculas)
+  let empaqueMaster = {};
+  try {
+    const snap = await db.collection('shipqr_empaque_master').get();
+    snap.forEach(doc => { empaqueMaster[doc.id] = doc.data(); });
+  } catch (e) {
+    console.error('Error leyendo shipqr_empaque_master para Empaque:', e);
+  }
+
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean).sort();
+
+  // ── Tabla 1: Historial ──
+  const filasHist = modelos
+    .filter(sm => historialPorModelo[sm.toUpperCase()])
+    .map(sm => {
+      const h = historialPorModelo[sm.toUpperCase()];
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 6px;font-weight:700;color:var(--accent)">${sm}</td>
+        <td style="padding:8px 6px;text-align:right">${h.pzas.toLocaleString()}</td>
+        <td style="padding:8px 6px;text-align:right">${h.cajas.toLocaleString()}</td>
+        <td style="padding:8px 6px;text-align:right">${h.pallets.toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+
+  const totalHist = Object.values(historialPorModelo).reduce((acc, h) => {
+    acc.pzas += h.pzas; acc.cajas += h.cajas; acc.pallets += h.pallets; return acc;
+  }, { pzas: 0, cajas: 0, pallets: 0 });
+
+  // ── Tabla 2: Simulador — una fila por modelo del BOM activo ──
+  window._empaqueSimInfo = {};
+  const filasSim = modelos.map((sm, i) => {
+    const info = empaqueMaster[sm.toUpperCase()] || null;
+    const pc = info?.pcsPorCaja || 0;
+    const cp = info?.cajasPorPallet || 0;
+    window._empaqueSimInfo[i] = { pc, cp };
+    const target = simTargetsPorModelo[sm] || 0;
+    const sinConfig = !pc;
+    return `<tr style="border-bottom:1px solid var(--border)" id="empSimRow${i}">
+      <td style="padding:8px 6px;font-weight:700;color:var(--accent)">${sm}</td>
+      <td style="padding:4px 6px;text-align:center"><input type="number" id="empSimQty${i}" value="${target}" style="width:90px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text1);padding:4px" oninput="calcEmpaqueSimFila(${i})"></td>
+      <td style="padding:8px 6px;text-align:right;color:var(--text2)">${pc || '—'}</td>
+      <td style="padding:8px 6px;text-align:right;color:var(--text2)">${cp || '—'}</td>
+      <td style="padding:8px 6px;text-align:right;color:var(--accent);font-weight:700" id="empSimCajas${i}">${sinConfig ? '<span style="color:var(--amber);font-weight:400;font-size:11px">Falta configurar</span>' : ''}</td>
+      <td style="padding:8px 6px;text-align:right;color:var(--accent);font-weight:700" id="empSimPallets${i}"></td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">🕐 Historial · Cajas y pallets ya usados</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Suma real de los pallets creados en ShipQR (campo "cajas" de cada pallet) — histórico completo, no editable.</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thStyle}">Modelo</th>
+          <th style="${thRight}">Piezas</th>
+          <th style="${thRight}">Cajas usadas</th>
+          <th style="${thRight}">Pallets usados</th>
+        </tr></thead>
+        <tbody>${filasHist || `<tr><td colspan="4" style="text-align:center;padding:1.5rem;color:var(--text3)">Sin pallets registrados todavía</td></tr>`}</tbody>
+        ${filasHist ? `<tfoot><tr style="border-top:2px solid var(--border)">
+          <td style="padding:8px 6px;font-weight:700">Total</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.pzas.toLocaleString()}</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.cajas.toLocaleString()}</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.pallets.toLocaleString()}</td>
+        </tr></tfoot>` : ''}
+      </table>
+      </div>
+    </div>
+
+    <div class="card" style="background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">🧮 Simulador · Cuántas cajas/pallets necesita un target</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Escribe "A producir" por modelo. Usa pcs/caja y cajas/pallet de ShipQR (Empaque por modelo) — si un modelo no está configurado ahí, aparece "Falta configurar".</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thStyle}">Modelo</th>
+          <th style="${thCenter}">A producir</th>
+          <th style="${thRight}">Pzas/caja</th>
+          <th style="${thRight}">Cajas/pallet</th>
+          <th style="${thRight}">Cajas estimadas</th>
+          <th style="${thRight}">Pallets estimados</th>
+        </tr></thead>
+        <tbody>${filasSim}</tbody>
+        <tfoot><tr style="border-top:2px solid var(--border)">
+          <td colspan="4" style="padding:8px 6px;font-weight:700">Total</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700;color:var(--accent)" id="empSimTotCajas">0</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700;color:var(--accent)" id="empSimTotPallets">0</td>
+        </tr></tfoot>
+      </table>
+      </div>
+    </div>
+  `;
+
+  modelos.forEach((sm, i) => calcEmpaqueSimFila(i));
+}
+window.renderEmpaque = renderEmpaque;
+
+function calcEmpaqueSimFila(i) {
+  const info = window._empaqueSimInfo?.[i];
+  if (!info) return;
+  const qtyEl = document.getElementById('empSimQty' + i);
+  const qty = parseInt(qtyEl?.value) || 0;
+  const cajasEl = document.getElementById('empSimCajas' + i);
+  const palletsEl = document.getElementById('empSimPallets' + i);
+  if (!info.pc) {
+    cajasEl.innerHTML = '<span style="color:var(--amber);font-weight:400;font-size:11px">Falta configurar</span>';
+    palletsEl.textContent = '';
+  } else {
+    const cajas = Math.ceil(qty / info.pc);
+    const pallets = info.cp ? Math.ceil(cajas / info.cp) : 0;
+    cajasEl.textContent = cajas.toLocaleString();
+    palletsEl.textContent = info.cp ? pallets.toLocaleString() : '—';
+  }
+  // Recalcular totales
+  let tc = 0, tp = 0;
+  Object.keys(window._empaqueSimInfo).forEach(idx => {
+    const inf = window._empaqueSimInfo[idx];
+    const q = parseInt(document.getElementById('empSimQty' + idx)?.value) || 0;
+    if (inf.pc) {
+      const c = Math.ceil(q / inf.pc);
+      tc += c;
+      if (inf.cp) tp += Math.ceil(c / inf.cp);
+    }
+  });
+  const totCajasEl = document.getElementById('empSimTotCajas');
+  const totPalletsEl = document.getElementById('empSimTotPallets');
+  if (totCajasEl) totCajasEl.textContent = tc.toLocaleString();
+  if (totPalletsEl) totPalletsEl.textContent = tp.toLocaleString();
+}
+window.calcEmpaqueSimFila = calcEmpaqueSimFila;
 
 // Evalúa faltantes de material para la lista EXACTA de modelos que trae el Plan Semanal
 // (no depende de qué modelos estén agregados en "Analizar varios modelos"), respetando

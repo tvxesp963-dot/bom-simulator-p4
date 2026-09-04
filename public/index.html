@@ -4309,11 +4309,15 @@ async function renderEmpaque() {
 
   // ── Tabla 2 → Simulador por dropdown (un modelo a la vez) ──
   window._empaqueMaster = empaqueMaster;
+  window._empaqueHistorial = historialPorModelo;
   const optsModelo = modelos.map(sm => `<option value="${sm}">${sm}</option>`).join('');
 
   wrap.innerHTML = `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">🕐 Historial · Cajas y pallets ya usados</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.2rem">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">🕐 Historial · Cajas y pallets ya usados</div>
+        <button class="btn btn-success btn-sm" onclick="exportarEmpaqueExcel()">📊 Excel</button>
+      </div>
       <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Suma real de los pallets creados en ShipQR (campo "cajas" de cada pallet) — histórico completo, no editable.</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
@@ -4379,6 +4383,46 @@ function calcEmpaqueSim() {
     </div>`;
 }
 window.calcEmpaqueSim = calcEmpaqueSim;
+
+function exportarEmpaqueExcel() {
+  const historial = window._empaqueHistorial || {};
+  const modelos = Object.keys(historial).sort();
+  if (!modelos.length) { alert('No hay historial de ShipQR para exportar todavía.'); return; }
+
+  const filas = [['Modelo', 'Piezas', 'Cajas usadas', 'Pallets usados']];
+  let tPzas = 0, tCajas = 0, tPallets = 0;
+  modelos.forEach(sm => {
+    const h = historial[sm];
+    filas.push([sm, h.pzas, h.cajas, h.pallets]);
+    tPzas += h.pzas; tCajas += h.cajas; tPallets += h.pallets;
+  });
+  filas.push(['Total', tPzas, tCajas, tPallets]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws, 'Historial Empaque');
+
+  // Segunda hoja: la simulación que esté visible en pantalla en ese momento (si hay una)
+  const smSel = document.getElementById('empSimModelo')?.value;
+  if (smSel) {
+    const qty = parseInt(document.getElementById('empSimQty')?.value) || 0;
+    const info = (window._empaqueMaster || {})[smSel.toUpperCase()] || {};
+    const pc = info.pcsPorCaja || 0, cp = info.cajasPorPallet || 0;
+    const cajas = pc ? Math.ceil(qty / pc) : 0;
+    const pallets = (pc && cp) ? Math.ceil(cajas / cp) : 0;
+    const wsSim = XLSX.utils.aoa_to_sheet([
+      ['Modelo', 'A producir', 'Pzas/caja', 'Cajas/pallet', 'Cajas necesarias', 'Pallets necesarios'],
+      [smSel, qty, pc || '—', cp || '—', pc ? cajas : '—', (pc && cp) ? pallets : '—']
+    ]);
+    wsSim['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, wsSim, 'Simulador');
+  }
+
+  const fecha = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Empaque_ShipQR_${fecha}.xlsx`);
+}
+window.exportarEmpaqueExcel = exportarEmpaqueExcel;
 
 // Evalúa faltantes de material para la lista EXACTA de modelos que trae el Plan Semanal
 // (no depende de qué modelos estén agregados en "Analizar varios modelos"), respetando

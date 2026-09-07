@@ -957,10 +957,14 @@ function renderSim() {
   const modelos = [...new Set(BOM.map(r => r.sm))].sort();
   const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))].sort();
 
-  // Poblar dropdown GH90 solo la primera vez
+  // Reconstruir dropdown GH90 SIEMPRE (evita que quede un filtro viejo
+  // de un Excel anterior escondiendo modelos del Excel nuevo) y resetear
+  // la selección a "Todos los modelos".
   const selGH90 = document.getElementById('simFiltroGH90');
-  if (selGH90 && selGH90.options.length <= 1) {
+  if (selGH90) {
+    selGH90.innerHTML = '<option value="">— Todos los modelos —</option>';
     gh90s.forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; selGH90.appendChild(o); });
+    selGH90.value = '';
   }
 
   // Poblar select de modelos — mantener selección actual si existe

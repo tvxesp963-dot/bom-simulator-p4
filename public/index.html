@@ -126,6 +126,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .dt th:nth-child(3),.dt td:nth-child(3){display:none}
   .dt th:nth-child(6),.dt td:nth-child(6){display:none}
   .pn-cell{max-width:80px;font-size:12px}
+
+  /* Topbar: pasa a 2 filas para que no se corten botones */
+  .topbar{height:auto;flex-wrap:wrap;gap:.5rem;padding:.6rem .8rem}
+  .topbar > div{flex-wrap:wrap}
+  .topbar > div:last-child{width:100%;justify-content:flex-start;overflow-x:auto}
+
+  /* Tablas: fuente más grande y legible */
+  .dt{font-size:13px}
+  .dt th{font-size:10px;padding:8px 6px}
+  .dt td{padding:8px 6px}
+
+  /* Botones: más área de toque */
+  .btn{padding:9px 14px;font-size:13px}
+  .btn-sm{padding:7px 12px;font-size:12px}
+  .tab{padding:11px 14px;font-size:13px}
 }
 </style>
 </head>

@@ -459,10 +459,6 @@ function procesarBOM() {
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z400');
   BOM = [];
   let currentSM = null, currentTarget = 0;
-  // Cuenta cuántas veces aparece cada nombre de modelo en este Excel.
-  // Si el mismo modelo trae dos bloques (ej. números de parte viejos y nuevos),
-  // se distinguen con un sufijo para que NO se mezclen sus cálculos/inventarios.
-  const smVisto = {};
 
   // Columnas (0-indexed): C=2(Level), D=3(Code), E=4(Desc), G=6(Inv), I=8(Plan)
   const COL_NO=2, COL_LEVEL=2, COL_CODE=3, COL_DESC=4, COL_INV=6, COL_PLAN=8;
@@ -497,9 +493,7 @@ function procesarBOM() {
     const isModelRow = /^SM-/i.test(codeVal) || 
                        (/^[A-Z]\d{3,4}/.test(codeVal) && !codeVal.startsWith('GH') && !codeVal.startsWith('GH'));
     if (isModelRow && !noRaw) {
-      smVisto[codeVal] = (smVisto[codeVal] || 0) + 1;
-      // 1ra vez: nombre normal. 2da vez en adelante: se marca como Rev.2, Rev.3...
-      currentSM = smVisto[codeVal] > 1 ? `${codeVal} (Rev.${smVisto[codeVal]})` : codeVal;
+      currentSM = codeVal;
       const tNum = typeof planRaw === 'number' ? planRaw : 
                    (planVal && !isNaN(parseInt(planVal))) ? parseInt(planVal) : 0;
       currentTarget = tNum;

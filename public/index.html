@@ -4760,10 +4760,10 @@ async function crearPartesNuevasIMS() {
   try {
     // 1. Leer TODAS las partes existentes en IMS (por PN)
     var snap = await db.collection('planta4_inventario').get();
-    var pnsExistentes = new Set();
+    var clavesExistentes = new Set();
     snap.forEach(function(doc){
       var d = doc.data();
-      if (d.pn) pnsExistentes.add(d.pn.trim().toUpperCase());
+      if (d.pn) clavesExistentes.add(d.pn.trim().toUpperCase() + '||' + (d.desc||'').trim().toUpperCase());
     });
 
     // 2. Partes únicas del BOM (deduplicar por PN+DESC)
@@ -4777,9 +4777,11 @@ async function crearPartesNuevasIMS() {
       partesBOM.push(r);
     });
 
-    // 3. Filtrar las que NO existen en IMS
+    // 3. Filtrar las que NO existen en IMS (mismo PN+DESC, no solo PN,
+    //    porque un mismo PN puede tener varias variantes con distinta descripción)
     var nuevas = partesBOM.filter(function(r){
-      return !pnsExistentes.has(r.pn.trim().toUpperCase());
+      var key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+      return !clavesExistentes.has(key);
     });
 
     if (!nuevas.length) {

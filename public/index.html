@@ -209,6 +209,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </div>
         <input type="file" id="fi" accept=".xlsx,.xls" style="display:none" onchange="cargarArchivo(this.files[0])">
         <div id="fileChip"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border)">
+          <input type="checkbox" id="pinBomExcel" onchange="togglePinBOM(this)" style="width:16px;height:16px;cursor:pointer">
+          <label for="pinBomExcel" style="font-size:11px;color:var(--text2);cursor:pointer">📌 Mantener este Excel al hacer refresh (hasta que cargues otro o lo quites)</label>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">⚙️ Parámetros</div>
@@ -411,7 +415,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </div>
 
 <script>
-let BOM = [], workbook = null, simFiltro = 'todos', simTargetsPorModelo = {};
+let BOM = [], workbook = null, simFiltro = 'todos', simTargetsPorModelo = {}, bomNombreArchivo = '';
 
 function goTab(n) {
   if (modoSoloSimulador && n !== 'sim') return;
@@ -421,6 +425,19 @@ function goTab(n) {
   document.getElementById('tab-' + n).classList.add('active');
   if (n === 'plan' && typeof renderPlanSemanal === 'function') renderPlanSemanal();
   if (n === 'empaque' && typeof renderEmpaque === 'function') renderEmpaque();
+
+  // Auto-refresh de "Plan Requerido" (Producido + IMS, igual que el botón
+  // "Actualizar todo") cada 1 minuto — SOLO mientras esa pestaña está abierta.
+  // Se detiene al cambiar de pestaña para no generar lecturas de Firebase de más.
+  if (window._planAutoRefresh) { clearInterval(window._planAutoRefresh); window._planAutoRefresh = null; }
+  if (n === 'plan') {
+    window._planAutoRefresh = setInterval(() => {
+      const tabPlan = document.getElementById('tab-plan');
+      if (tabPlan && tabPlan.classList.contains('active') && typeof sincronizarProducidoDesdeMES === 'function') {
+        sincronizarProducidoDesdeMES();
+      }
+    }, 60000);
+  }
 }
 
 // DRAG & DROP
@@ -434,6 +451,7 @@ function cargarArchivo(file) {
   const reader = new FileReader();
   reader.onload = e => {
     workbook = XLSX.read(e.target.result, { type: 'array', cellStyles: true });
+    bomNombreArchivo = file.name;
     const sheets = workbook.SheetNames;
     const sel = document.getElementById('sheetSel');
     sel.innerHTML = sheets.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -572,6 +590,56 @@ function procesarBOM() {
 
   renderPreview(); renderSim(); renderCons(); renderProd();
   document.getElementById('btnExport').style.display = 'flex';
+  // Si el pin ya estaba activado (o se acaba de marcar), este Excel recién
+  // procesado queda como el guardado — así el siguiente refresh lo mantiene.
+  if (document.getElementById('pinBomExcel').checked) guardarBomFijado();
+}
+
+// "Pin" del Excel de referencia: lo guarda en localStorage (solo en este navegador)
+// para que un refresh de la página no borre lo ya cargado. Se sobreescribe solo
+// cuando se procesa un Excel nuevo con el pin activo, o se borra al desmarcarlo.
+function guardarBomFijado() {
+  try {
+    localStorage.setItem('bomPinned_p4', JSON.stringify({
+      bom: BOM,
+      nombre: bomNombreArchivo || 'BOM.xlsx',
+      semana: document.getElementById('semanaRef').value || ''
+    }));
+  } catch (e) {
+    alert('No se pudo fijar el Excel: es demasiado grande para guardar en este navegador.');
+    document.getElementById('pinBomExcel').checked = false;
+  }
+}
+
+function togglePinBOM(chk) {
+  if (chk.checked) {
+    if (BOM && BOM.length) guardarBomFijado();
+    else { alert('Primero procesa un Excel para poder fijarlo.'); chk.checked = false; }
+  } else {
+    localStorage.removeItem('bomPinned_p4');
+  }
+}
+
+// Se llama al cargar la página, ANTES que autoCargarBOM() (que solo actúa si
+// BOM sigue vacío) — así el Excel fijado manda sobre el BOM activo de Firebase.
+function restaurarBomFijado() {
+  try {
+    const raw = localStorage.getItem('bomPinned_p4');
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !data.bom || !data.bom.length) return false;
+    BOM = data.bom;
+    document.getElementById('semanaRef').value = data.semana || '';
+    document.getElementById('fileChip').innerHTML =
+      `<div class="file-chip">📌 ${data.nombre} · fijado · ${BOM.length.toLocaleString()} filas</div>`;
+    document.getElementById('pinBomExcel').checked = true;
+    renderPreview(); renderSim(); renderCons(); renderProd();
+    document.getElementById('btnExport').style.display = 'flex';
+    return true;
+  } catch (e) {
+    console.warn('No se pudo restaurar el Excel fijado:', e);
+    return false;
+  }
 }
 
 // PREVIEW
@@ -5235,6 +5303,7 @@ window._admMostrarToast = _admMostrarToast;
 
 window.addEventListener('DOMContentLoaded', function() {
   // targets siempre arrancan en 0 al cargar la página
+  restaurarBomFijado(); // si hay un Excel fijado, se restaura primero (gana sobre el BOM activo de Firebase)
   setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
 });
 </script>

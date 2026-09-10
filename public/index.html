@@ -2491,17 +2491,20 @@ function exportarSimuladorExcel() {
 }
 
 // Descarga TODOS los BOM cargados (sin filtrar por modelo), un modelo por hoja,
-// ordenados alfabéticamente. Reutiliza calcularDetalleModeloMulti() (misma función
-// que usa "Analizar Varios Modelos") para que cada hoja salga IDÉNTICA en formato
-// a la que ya genera "⬇ Excel" — no se toca la selección activa del Simulador.
+// ordenados alfabéticamente. Usa la misma tabla real del Simulador (#simTable)
+// que ya usa "⬇ Excel" — así el formato sale IDÉNTICO — guardando y restaurando
+// la selección activa al terminar, sin dejar nada distinto a como estaba.
 function exportarTodosLosBomsExcel() {
   if (!BOM.length) { alert('Primero carga un BOM.'); return; }
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean).sort((a, b) => a.localeCompare(b));
   if (!modelos.length) { alert('No hay modelos cargados.'); return; }
 
-  // Forzar filtro 'todos' temporalmente para que ninguna fila quede oculta
+  const selPrincipal = document.getElementById('simModelo');
+  const targetPrincipal = document.getElementById('simTarget');
+  const smOriginal = selPrincipal.value;
+  const targetOriginal = targetPrincipal.value;
   const simFiltroOriginal = simFiltro;
-  simFiltro = 'todos';
+  simFiltro = 'todos'; // ninguna fila oculta por el filtro "A pedir"/"OK"
 
   const nombresUsados = {};
   const nombreUnico = (base) => {
@@ -2514,21 +2517,33 @@ function exportarTodosLosBomsExcel() {
 
   const hojas = [];
   modelos.forEach(sm => {
-    // Si el modelo nunca tuvo un target asignado, usar el target propio del BOM
-    // (mismo fallback que ya usa "Analizar Varios Modelos") — así también sale
-    // en el export en vez de quedar vacío por falta de target.
+    // Modelos sin target asignado (ni en el Plan ni en el BOM importado):
+    // usar 1 como target mínimo SOLO para forzar que se listen sus componentes
+    // (el target no aparece en las columnas exportadas: Level/N°Parte/Desc/Inv/Precio).
     if (!simTargetsPorModelo[sm]) {
-      simTargetsPorModelo[sm] = BOM.find(r => r.sm === sm)?.target || 0;
+      simTargetsPorModelo[sm] = BOM.find(r => r.sm === sm)?.target || 1;
     }
-    const html = calcularDetalleModeloMulti(sm); // renderiza y restaura la vista principal sola
-    const tmp = document.createElement('table');
-    tmp.innerHTML = html;
-    const ws = construirHojaModeloExcel(tmp);
-    if (ws) hojas.push({ nombre: nombreUnico(sm), ws });
+    selPrincipal.value = sm;
+    targetPrincipal.value = simTargetsPorModelo[sm];
+    calcSim();
+    const ws = construirHojaModeloExcel(document.getElementById('simTable'));
+    if (ws) {
+      hojas.push({ nombre: nombreUnico(sm), ws });
+    } else {
+      // Diagnóstico temporal: por qué este modelo no generó ninguna fila exportable
+      const filasBOM = BOM.filter(r => r.sm === sm).length;
+      const seleccionOK = selPrincipal.value === sm;
+      const targetUsado = targetPrincipal.value;
+      const tablaHTML = (document.getElementById('simTable').innerText || '').trim().slice(0,80);
+      console.warn(`⚠️ Excel Todos los BOM — se saltó "${sm}": filas en BOM=${filasBOM}, selección aplicada=${seleccionOK}, target usado=${targetUsado}, contenido de la tabla="${tablaHTML}"`);
+    }
   });
 
+  // Restaurar el Simulador principal exactamente como estaba antes de exportar
+  selPrincipal.value = smOriginal;
+  targetPrincipal.value = targetOriginal;
   simFiltro = simFiltroOriginal;
-  renderSimTable(); // repintar la vista principal con el filtro real del usuario
+  calcSim();
 
   if (!hojas.length) { alert('No se pudo generar ninguna hoja.'); return; }
 

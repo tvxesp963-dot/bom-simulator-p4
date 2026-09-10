@@ -2527,16 +2527,7 @@ function exportarTodosLosBomsExcel() {
     targetPrincipal.value = simTargetsPorModelo[sm];
     calcSim();
     const ws = construirHojaModeloExcel(document.getElementById('simTable'));
-    if (ws) {
-      hojas.push({ nombre: nombreUnico(sm), ws });
-    } else {
-      // Diagnóstico temporal: por qué este modelo no generó ninguna fila exportable
-      const filasBOM = BOM.filter(r => r.sm === sm).length;
-      const seleccionOK = selPrincipal.value === sm;
-      const targetUsado = targetPrincipal.value;
-      const tablaHTML = (document.getElementById('simTable').innerText || '').trim().slice(0,80);
-      console.warn(`⚠️ Excel Todos los BOM — se saltó "${sm}": filas en BOM=${filasBOM}, selección aplicada=${seleccionOK}, target usado=${targetUsado}, contenido de la tabla="${tablaHTML}"`);
-    }
+    if (ws) hojas.push({ nombre: nombreUnico(sm), ws });
   });
 
   // Restaurar el Simulador principal exactamente como estaba antes de exportar

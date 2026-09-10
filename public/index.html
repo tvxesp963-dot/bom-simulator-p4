@@ -3985,6 +3985,12 @@ async function renderPlanSemanal() {
     const pendienteTxt = excedente > 0
       ? ('+' + excedente.toLocaleString())
       : (pendiente > 0 ? pendiente.toLocaleString() : '0');
+    // ── Autocheck Plan Requerido: si algo aquí no cuadra matemáticamente,
+    // avisa en la consola (F12) en vez de quedar oculto en un número raro.
+    if (producido < 0 || target < 0) console.warn(`⚠️ Plan Requerido [${sm}]: target o producido negativo (target=${target}, producido=${producido})`);
+    if (pendiente > 0 && excedente > 0) console.warn(`⚠️ Plan Requerido [${sm}]: pendiente y excedente a la vez (pendiente=${pendiente}, excedente=${excedente})`);
+    if (pendienteTxt.includes('-')) console.warn(`⚠️ Plan Requerido [${sm}]: PENDIENTE mostrando signo negativo (${pendienteTxt}) — revisar lógica`);
+    if (Math.abs((pendiente - excedente) - (target - producido)) > 0) console.warn(`⚠️ Plan Requerido [${sm}]: pendiente/excedente no cuadra con target-producido`);
     const fechaStr = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
     const fechaTxt = fechaStr ? new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
 

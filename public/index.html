@@ -178,6 +178,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
     <button id="btnExportSim" onclick="exportarSimuladorExcel()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:2px solid #00e676;background:#0f2a1c;color:#00e676;font-weight:700;cursor:pointer">⬇ Excel</button>
+    <button id="btnExportTodosBOM" onclick="exportarTodosLosBomsExcel()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:2px solid #4da6ff;background:#0f1e2a;color:#4da6ff;font-weight:700;cursor:pointer">⬇ Excel Todos los BOM</button>
     <button class="btn btn-secondary btn-sm" onclick="doLogoutBom()">⏏ Salir</button>
   </div>
 </div>
@@ -2487,6 +2488,54 @@ function exportarSimuladorExcel() {
   const fecha = new Date().toISOString().slice(0,10);
   const nombreArchivo = hojas.length === 1 ? ('BOM_Simulador_' + hojas[0].nombre + '_' + fecha + '.xlsx') : ('BOM_Simulador_Multi_' + fecha + '.xlsx');
   XLSX.writeFile(wb, nombreArchivo);
+}
+
+// Descarga TODOS los BOM cargados (sin filtrar por modelo), un modelo por hoja,
+// ordenados alfabéticamente. Reutiliza calcularDetalleModeloMulti() (misma función
+// que usa "Analizar Varios Modelos") para que cada hoja salga IDÉNTICA en formato
+// a la que ya genera "⬇ Excel" — no se toca la selección activa del Simulador.
+function exportarTodosLosBomsExcel() {
+  if (!BOM.length) { alert('Primero carga un BOM.'); return; }
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  if (!modelos.length) { alert('No hay modelos cargados.'); return; }
+
+  // Forzar filtro 'todos' temporalmente para que ninguna fila quede oculta
+  const simFiltroOriginal = simFiltro;
+  simFiltro = 'todos';
+
+  const nombresUsados = {};
+  const nombreUnico = (base) => {
+    const limpio = base.replace(/[:\\/?*\[\]]/g, '-');
+    let n = limpio.substring(0,31), i = 2;
+    while (nombresUsados[n]) { n = (limpio.substring(0,28) + '_' + i).substring(0,31); i++; }
+    nombresUsados[n] = true;
+    return n;
+  };
+
+  const hojas = [];
+  modelos.forEach(sm => {
+    // Si el modelo nunca tuvo un target asignado, usar el target propio del BOM
+    // (mismo fallback que ya usa "Analizar Varios Modelos") — así también sale
+    // en el export en vez de quedar vacío por falta de target.
+    if (!simTargetsPorModelo[sm]) {
+      simTargetsPorModelo[sm] = BOM.find(r => r.sm === sm)?.target || 0;
+    }
+    const html = calcularDetalleModeloMulti(sm); // renderiza y restaura la vista principal sola
+    const tmp = document.createElement('table');
+    tmp.innerHTML = html;
+    const ws = construirHojaModeloExcel(tmp);
+    if (ws) hojas.push({ nombre: nombreUnico(sm), ws });
+  });
+
+  simFiltro = simFiltroOriginal;
+  renderSimTable(); // repintar la vista principal con el filtro real del usuario
+
+  if (!hojas.length) { alert('No se pudo generar ninguna hoja.'); return; }
+
+  const wb = XLSX.utils.book_new();
+  hojas.forEach(h => XLSX.utils.book_append_sheet(wb, h.ws, h.nombre));
+  const fecha = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `BOM_Simulador_TODOS_${fecha}.xlsx`);
 }
 
 function exportarExcel() {

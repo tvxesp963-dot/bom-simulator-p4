@@ -3984,7 +3984,7 @@ async function renderPlanSemanal() {
     const excedente = diff < 0 ? Math.abs(diff) : 0;
     const pendienteTxt = excedente > 0
       ? ('+' + excedente.toLocaleString())
-      : (pendiente > 0 ? ('-' + pendiente.toLocaleString()) : '0');
+      : (pendiente > 0 ? pendiente.toLocaleString() : '0');
     const fechaStr = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
     const fechaTxt = fechaStr ? new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
 

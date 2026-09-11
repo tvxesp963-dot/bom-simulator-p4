@@ -760,6 +760,32 @@ let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
 window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
 
+// Restaura el plan (modelos activos, prioridad, target y fecha de entrega)
+// guardado en este navegador — así "Analizar varios modelos" y "Plan Requerido"
+// no se vacían cada vez que se hace refresh; ya no depende de volver a cargar
+// el Excel de prioridades cada vez.
+try {
+  const savedPlan = localStorage.getItem('planCompleto_p4');
+  if (savedPlan) {
+    const d = JSON.parse(savedPlan);
+    if (Array.isArray(d.modelos)) multiModelosActivos = d.modelos;
+    if (d.targets) simTargetsPorModelo = Object.assign(simTargetsPorModelo, d.targets);
+    if (d.prioridades) window.simPrioridadPorModelo = Object.assign(window.simPrioridadPorModelo, d.prioridades);
+    if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
+  }
+} catch (e) {}
+
+function guardarPlanCompleto() {
+  try {
+    localStorage.setItem('planCompleto_p4', JSON.stringify({
+      modelos: multiModelosActivos,
+      targets: simTargetsPorModelo,
+      prioridades: window.simPrioridadPorModelo || {},
+      fechas: window.simFechaEntregaPorModelo || {}
+    }));
+  } catch (e) {}
+}
+
 // Producido manual por modelo (Plan Semanal) — el usuario lo captura a mano;
 // más adelante se puede traer automático o con un botón desde el MES.
 window.simProducidoManualPorModelo = window.simProducidoManualPorModelo || {};
@@ -791,6 +817,7 @@ function agregarModeloMulti() {
     }
   }
   sel.value = '';
+  guardarPlanCompleto();
   renderMultiModelos();
 }
 
@@ -864,6 +891,7 @@ function cargarPlanMultiExcel(file) {
 
       renderMultiModelos();
       if (typeof renderCons === 'function') renderCons();
+      guardarPlanCompleto();
 
       let msg = `✅ ${agregados} modelo(s) cargado(s) desde Excel.`;
       if (noEncontrados.length) msg += ` ⚠️ No encontrados en el BOM actual: ${noEncontrados.join(', ')}`;
@@ -880,18 +908,21 @@ function quitarModeloMulti(sm) {
   multiModelosActivos = multiModelosActivos.filter(m => m !== sm);
   // Poner target en 0 para que el Consolidado deje de procesar este modelo
   simTargetsPorModelo[sm] = 0;
+  guardarPlanCompleto();
   renderMultiModelos();
   if (typeof renderCons === 'function') renderCons();
 }
 
 function actualizarTargetMulti(sm, valor) {
   simTargetsPorModelo[sm] = parseInt(valor) || 0;
+  guardarPlanCompleto();
   renderMultiModelos();
   if (typeof renderCons === 'function') renderCons();
 }
 
 function actualizarPrioridadMulti(sm, valor) {
   window.simPrioridadPorModelo[sm] = parseInt(valor) || 999;
+  guardarPlanCompleto();
   renderMultiModelos();
   if (typeof renderCons === 'function') renderCons();
 }
@@ -899,6 +930,7 @@ function actualizarPrioridadMulti(sm, valor) {
 function actualizarFechaMulti(sm, valor) {
   window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
   window.simFechaEntregaPorModelo[sm] = valor || null;
+  guardarPlanCompleto();
   var pagePlan = document.getElementById('page-plan');
   if (pagePlan && pagePlan.classList.contains('active') && typeof renderPlanSemanal === 'function') renderPlanSemanal();
 }
@@ -1111,6 +1143,7 @@ function guardarTarget() {
   var val = parseInt(document.getElementById('simTarget').value) || 0;
   simTargetsPorModelo[sm] = val;
   try { localStorage.setItem('simTargets_p4', JSON.stringify(simTargetsPorModelo)); } catch(e){}
+  if (typeof guardarPlanCompleto === 'function') guardarPlanCompleto();
   var tag = document.getElementById('simSavedTag');
   if (tag) { tag.style.display = 'inline'; clearTimeout(tag._t); tag._t = setTimeout(function(){ tag.style.display='none'; }, 2000); }
 }

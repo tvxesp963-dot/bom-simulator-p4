@@ -2655,12 +2655,16 @@ function exportarTodosLosBomsExcel() {
 
   const hojas = [];
   const filasVertical = [];
+  const targetsTemporales = []; // modelos a los que solo por este export les pusimos
+  // un target de emergencia — hay que deshacerlo al final para que Plan Requerido
+  // y Analizar Varios Modelos NO los tomen como si de verdad tuvieran un target.
   modelos.forEach(sm => {
     // Modelos sin target asignado (ni en el Plan ni en el BOM importado):
     // usar 1 como target mínimo SOLO para forzar que se listen sus componentes
     // (el target no aparece en las columnas exportadas: Level/N°Parte/Desc/Inv/Precio).
     if (!simTargetsPorModelo[sm]) {
       simTargetsPorModelo[sm] = BOM.find(r => r.sm === sm)?.target || 1;
+      targetsTemporales.push(sm);
     }
     selPrincipal.value = sm;
     targetPrincipal.value = simTargetsPorModelo[sm];
@@ -2680,6 +2684,11 @@ function exportarTodosLosBomsExcel() {
       filasVertical.push([sm, level, pn, tds[1].innerText.trim(), tds[4].innerText.trim(), tds[7].innerText.trim()]);
     });
   });
+
+  // Deshacer los targets de emergencia: Plan Requerido, Analizar Varios Modelos
+  // y el Consolidado solo deben ver los modelos que TÚ pusiste en tu Excel de plan.
+  targetsTemporales.forEach(sm => { delete simTargetsPorModelo[sm]; });
+  if (typeof guardarPlanCompleto === 'function') guardarPlanCompleto();
 
   // Restaurar el Simulador principal exactamente como estaba antes de exportar
   selPrincipal.value = smOriginal;
@@ -3571,7 +3580,7 @@ function autoCargarBOM() {
 async function publicarPlan() {
   if (!adminAuthed) { alert('Solo el administrador puede publicar el plan al MES.'); return; }
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
-  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm]||0) > 0);
+  const conTarget = modelos.filter(sm => multiModelosActivos.includes(sm) && (simTargetsPorModelo[sm]||0) > 0);
   if (!conTarget.length) { alert('Ingresa el target de al menos un modelo antes de publicar.'); return; }
   if (!confirm('¿Publicar el plan de producción al MES?')) return;
   const btn = document.getElementById('btnPublicar');
@@ -3899,7 +3908,7 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
   hoy.setHours(0, 0, 0, 0);
   const ahoraConHora = new Date(); // para el cálculo de próximo corte sí importa la hora
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
-  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
+  const conTarget = modelos.filter(sm => multiModelosActivos.includes(sm) && (simTargetsPorModelo[sm] || 0) > 0);
   const fechas = window.simFechaEntregaPorModelo || {};
   const sinFecha = [];
 
@@ -4131,7 +4140,7 @@ async function renderPlanSemanal() {
   if (!wrap) return;
 
   const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
-  const conTarget = modelos.filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
+  const conTarget = modelos.filter(sm => multiModelosActivos.includes(sm) && (simTargetsPorModelo[sm] || 0) > 0);
 
   if (!conTarget.length) {
     if (empty) empty.style.display = 'block';

@@ -13,9 +13,7 @@
 :root{--bg:#080c18;--bg2:#0e1325;--bg3:#141929;--bg4:#1c2238;--accent:#4da6ff;--accent2:#1a6fd4;--accent3:#0d4a99;--green:#00e676;--green2:#00b85a;--red:#ff4444;--amber:#ffb300;--cyan:#00e5ff;--purple:#b388ff;--teal:#00bcd4;--text:#dde3f5;--text2:#7a88b8;--text3:#3d4d77;--border:#1e2a4a;--border2:#263558;}
 *{box-sizing:border-box;margin:0;padding:0}
 @keyframes planListoBlink{0%,100%{opacity:1}50%{opacity:.35}}
-.plan-listo-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(0,230,118,.18);color:var(--green);border:1px solid rgba(0,230,118,.5);margin-top:3px;white-space:nowrap}
-.plan-listo-badge.is-active{animation:planListoBlink 1s ease-in-out infinite}
-.plan-listo-num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#f1c40f;color:#3a2e00;font-size:12px;font-weight:800;flex-shrink:0}
+.plan-listo-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(0,230,118,.18);color:var(--green);border:1px solid rgba(0,230,118,.5);animation:planListoBlink 1s ease-in-out infinite;margin-top:3px;white-space:nowrap}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .topbar{background:var(--bg2);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;position:sticky;top:0;z-index:100}
 .topbar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent2),transparent);opacity:.5}
@@ -4272,7 +4270,7 @@ async function renderPlanSemanal() {
         <td style="padding:10px 8px;text-align:center;font-weight:700">${prioridad}</td>
         <td style="padding:10px 8px;font-weight:700;color:var(--accent)">
           ${sm}
-          ${listoParaCorrer ? `<div class="plan-listo-badge" id="plan-listo-${sm.replace(/[^a-zA-Z0-9]/g, '_')}" data-cap="${Math.floor(capMaterial)}" title="Strip/Gift Top/Lower Bottom/Bundle tienen material suficiente para arrancar, con el inventario que queda tras los modelos de mayor prioridad"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterial).toLocaleString()} pzas</div>` : ''}
+          ${listoParaCorrer ? `<div class="plan-listo-badge" title="Strip/Gift Top/Lower Bottom/Bundle tienen material suficiente para arrancar, con el inventario que queda tras los modelos de mayor prioridad">⚡ Listo: ${Math.floor(capMaterial).toLocaleString()} pzas</div>` : ''}
         </td>
         <td style="padding:10px 8px;color:var(--text2);font-size:12px">${numParte}</td>
         <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${target.toLocaleString()}</td>
@@ -4530,35 +4528,6 @@ async function renderPlanSemanal() {
       <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString()} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 11:00am</div>
     </div>
   `;
-
-  iniciarParpadeoPlanListo();
-}
-
-// Numera las etiquetas "⚡ Listo: X pzas" de mayor a menor cantidad disponible
-// (sin mover las filas de su posición/prioridad actual) y hace que el
-// parpadeo recorra una por una en ese mismo orden, en vez de parpadear todas
-// juntas al mismo tiempo.
-function iniciarParpadeoPlanListo() {
-  if (window._planListoBlinkTimer) clearInterval(window._planListoBlinkTimer);
-
-  const badges = Array.from(document.querySelectorAll('.plan-listo-badge'))
-    .sort((a, b) => Number(b.dataset.cap) - Number(a.dataset.cap));
-
-  if (!badges.length) return;
-
-  badges.forEach((el, i) => {
-    const num = el.querySelector('.plan-listo-num');
-    if (num) num.textContent = i + 1;
-  });
-
-  let idx = 0;
-  const activar = () => {
-    badges.forEach(el => el.classList.remove('is-active'));
-    badges[idx].classList.add('is-active');
-    idx = (idx + 1) % badges.length;
-  };
-  activar();
-  window._planListoBlinkTimer = setInterval(activar, 900);
 }
 window.renderPlanSemanal = renderPlanSemanal;
 

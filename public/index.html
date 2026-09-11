@@ -1074,7 +1074,42 @@ function renderMultiModelos() {
   });
 }
 
+// Quita del plan (targets, prioridades, fechas, "Analizar varios modelos")
+// cualquier modelo que ya no exista en el BOM actualmente cargado. Se corre
+// cada vez que se carga/cambia el BOM, para que un modelo renombrado o un
+// typo de una carga anterior no se quede huérfano en el navegador para siempre.
+function limpiarPlanHuerfano() {
+  if (!BOM || !BOM.length) return;
+  const modelosBOM = new Set(BOM.map(r => r.sm));
+  let cambiado = false;
+
+  Object.keys(simTargetsPorModelo).forEach(sm => {
+    if (!modelosBOM.has(sm)) { delete simTargetsPorModelo[sm]; cambiado = true; }
+  });
+  const antes = multiModelosActivos.length;
+  multiModelosActivos = multiModelosActivos.filter(sm => modelosBOM.has(sm));
+  if (multiModelosActivos.length !== antes) cambiado = true;
+  if (window.simPrioridadPorModelo) {
+    Object.keys(window.simPrioridadPorModelo).forEach(sm => {
+      if (!modelosBOM.has(sm)) { delete window.simPrioridadPorModelo[sm]; cambiado = true; }
+    });
+  }
+  if (window.simFechaEntregaPorModelo) {
+    Object.keys(window.simFechaEntregaPorModelo).forEach(sm => {
+      if (!modelosBOM.has(sm)) { delete window.simFechaEntregaPorModelo[sm]; cambiado = true; }
+    });
+  }
+
+  if (cambiado && typeof guardarPlanCompleto === 'function') guardarPlanCompleto();
+}
+
 function renderSim() {
+  // Autolimpieza: si un modelo guardado en el plan (target/prioridad/fecha/
+  // Analizar varios modelos) ya no existe en el BOM actual — por ejemplo un
+  // typo viejo como "SM-S948ULBAXAU-N" cuando el Excel real trae "-O" — se
+  // quita solo, para que no se quede pegado sin poder verlo ni borrarlo.
+  limpiarPlanHuerfano();
+
   const modelos = [...new Set(BOM.map(r => r.sm))].sort();
   const gh90s   = [...new Set(BOM.filter(r => r.familia === 'GH90').map(r => r.pn.trim()))].sort();
 

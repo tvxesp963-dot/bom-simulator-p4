@@ -2654,6 +2654,7 @@ function exportarTodosLosBomsExcel() {
   };
 
   const hojas = [];
+  const filasVertical = [];
   modelos.forEach(sm => {
     // Modelos sin target asignado (ni en el Plan ni en el BOM importado):
     // usar 1 como target mínimo SOLO para forzar que se listen sus componentes
@@ -2664,8 +2665,20 @@ function exportarTodosLosBomsExcel() {
     selPrincipal.value = sm;
     targetPrincipal.value = simTargetsPorModelo[sm];
     calcSim();
-    const ws = construirHojaModeloExcel(document.getElementById('simTable'));
+    const tabla = document.getElementById('simTable');
+    const ws = construirHojaModeloExcel(tabla);
     if (ws) hojas.push({ nombre: nombreUnico(sm), ws });
+    // Mismas filas, pero para la hoja vertical: una debajo de otra con el
+    // nombre del modelo como primera columna, en vez de una hoja por modelo.
+    tabla.querySelectorAll('tr').forEach(tr => {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length < 9) return;
+      const pnRaw = tds[0].innerText.trim();
+      const esSub = pnRaw.indexOf('└─') === 0;
+      const pn = esSub ? pnRaw.replace('└─', '').trim() : pnRaw;
+      const level = esSub ? 2 : 1;
+      filasVertical.push([sm, level, pn, tds[1].innerText.trim(), tds[4].innerText.trim(), tds[7].innerText.trim()]);
+    });
   });
 
   // Restaurar el Simulador principal exactamente como estaba antes de exportar
@@ -2676,10 +2689,42 @@ function exportarTodosLosBomsExcel() {
 
   if (!hojas.length) { alert('No se pudo generar ninguna hoja.'); return; }
 
+  const fecha = new Date().toISOString().slice(0,10);
+
+  // Archivo 1 (igual que siempre): un modelo por hoja
   const wb = XLSX.utils.book_new();
   hojas.forEach(h => XLSX.utils.book_append_sheet(wb, h.ws, h.nombre));
-  const fecha = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `BOM_Simulador_TODOS_${fecha}.xlsx`);
+  XLSX.writeFile(wb, `BOM_Simulador_TODOS_HORIZONTAL_${fecha}.xlsx`);
+
+  // Archivo 2 (nuevo): todos los modelos apilados en una sola hoja, en orden
+  // alfabético (mismo orden en que se procesaron), con "Modelo" como primera columna.
+  const headerVert = ['Modelo','Level','Part No.','Description','Inventory','Price'];
+  const dataVert = [headerVert, ...filasVertical];
+  const wsVert = XLSX.utils.aoa_to_sheet(dataVert);
+  wsVert['!cols'] = [{wch:20},{wch:8},{wch:16},{wch:42},{wch:12},{wch:12}];
+  const borderThinV = {
+    top:{style:'thin',color:{rgb:'BBBBBB'}}, bottom:{style:'thin',color:{rgb:'BBBBBB'}},
+    left:{style:'thin',color:{rgb:'BBBBBB'}}, right:{style:'thin',color:{rgb:'BBBBBB'}}
+  };
+  const rangeVert = XLSX.utils.decode_range(wsVert['!ref']);
+  for (let R = rangeVert.s.r; R <= rangeVert.e.r; R++) {
+    const isHeader = R === 0;
+    const isLevel1 = !isHeader && dataVert[R][1] === 1;
+    for (let C = rangeVert.s.c; C <= rangeVert.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = wsVert[addr];
+      if (!cell) continue;
+      cell.s = {
+        font: { bold: isHeader || isLevel1, color: { rgb: '000000' } },
+        fill: isLevel1 ? { patternType: 'solid', fgColor: { rgb: 'D9E1F2' } } : { patternType: 'none' },
+        alignment: { horizontal: C <= 1 ? 'center' : (C >= 4 ? 'right' : 'left'), vertical: 'center' },
+        border: borderThinV
+      };
+    }
+  }
+  const wbVert = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wbVert, wsVert, 'Todos los BOM');
+  XLSX.writeFile(wbVert, `BOM_Simulador_TODOS_VERTICAL_${fecha}.xlsx`);
 }
 
 function exportarExcel() {

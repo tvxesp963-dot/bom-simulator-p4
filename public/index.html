@@ -799,6 +799,10 @@ function actualizarProducidoManual(sm, valor) {
   window.simProducidoManualPorModelo[sm] = parseInt(valor) || 0;
   try { localStorage.setItem('simProducidoManual_p4', JSON.stringify(window.simProducidoManualPorModelo)); } catch (e) {}
   renderPlanSemanal();
+  // El panel "Analizar varios modelos" lee el mismo Producido pero no se
+  // repinta solo — sin esto se queda mostrando el Requerido viejo (como si
+  // nada se hubiera producido) hasta que el usuario lo abre de nuevo a mano.
+  if (typeof renderMultiModelos === 'function') renderMultiModelos();
 }
 window.actualizarProducidoManual = actualizarProducidoManual;
 
@@ -3900,6 +3904,9 @@ async function sincronizarProducidoDesdeMES() {
   });
   try { localStorage.setItem('simProducidoManual_p4', JSON.stringify(window.simProducidoManualPorModelo)); } catch (e) {}
   renderPlanSemanal();
+  // Mismo motivo que en actualizarProducidoManual: refrescar también el panel
+  // "Analizar varios modelos" para que no se quede con el Requerido desfasado.
+  if (typeof renderMultiModelos === 'function') renderMultiModelos();
 }
 window.sincronizarProducidoDesdeMES = sincronizarProducidoDesdeMES;
 

@@ -855,13 +855,6 @@ function cargarPlanMultiExcel(file) {
         return obj;
       });
 
-      // Limpiar el plan anterior: al subir un archivo nuevo, éste reemplaza
-      // por completo al anterior (ya no se queda "pegado"/mezclado con la carga previa).
-      multiModelosActivos.forEach(sm => { simTargetsPorModelo[sm] = 0; });
-      multiModelosActivos = [];
-      window.simPrioridadPorModelo = {};
-      window.simFechaEntregaPorModelo = {};
-
       const modelosBOM = [...new Set(BOM.map(r => r.sm))];
       let agregados = 0, noEncontrados = [];
 

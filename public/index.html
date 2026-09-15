@@ -211,10 +211,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </div>
         <input type="file" id="fi" accept=".xlsx,.xls" style="display:none" onchange="cargarArchivo(this.files[0])">
         <div id="fileChip"></div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border)">
-          <input type="checkbox" id="pinBomExcel" onchange="togglePinBOM(this)" style="width:16px;height:16px;cursor:pointer">
-          <label for="pinBomExcel" style="font-size:11px;color:var(--text2);cursor:pointer">📌 Mantener este Excel al hacer refresh (hasta que cargues otro o lo quites)</label>
-        </div>
       </div>
       <div class="card">
         <div class="card-title">⚙️ Parámetros</div>
@@ -325,6 +321,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <span>📊 Analizar varios modelos</span>
         <span id="multiCount" style="font-size:11px;color:var(--text2)"></span>
       </div>
+
+      <div id="pinCheckboxRow" style="display:flex;align-items:center;gap:6px;margin-bottom:.6rem">
+        <input type="checkbox" id="pinBomExcel" onchange="togglePinBOM(this)" style="width:14px;height:14px;cursor:pointer">
+        <label for="pinBomExcel" style="font-size:10px;color:var(--text3);cursor:pointer">📌 Fijar este BOM (no recomendado — deja de actualizarse solo)</label>
+      </div>
+      <div id="pinWarningBanner" style="display:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;background:rgba(255,152,0,.12);border:1px solid rgba(255,152,0,.4);border-radius:8px;padding:.6rem .8rem;margin-bottom:.7rem">
+        <span style="font-size:12px;color:#FFB74D">📌 <b>BOM FIJADO</b> — viendo <b id="pinNombreArchivo"></b>, fijado el <b id="pinFechaTexto"></b>. No es necesariamente el más reciente.</span>
+        <button class="btn btn-secondary btn-sm" onclick="quitarPinBOM()">Quitar fijación y usar el actual</button>
+      </div>
+
       <div style="display:flex;gap:.5rem;margin-bottom:.7rem;flex-wrap:wrap">
         <select class="select" id="multiModeloSel" style="flex:1;min-width:200px">
           <option value="">— Agregar modelo a analizar —</option>
@@ -605,21 +611,75 @@ function guardarBomFijado() {
     localStorage.setItem('bomPinned_p4', JSON.stringify({
       bom: BOM,
       nombre: bomNombreArchivo || 'BOM.xlsx',
-      semana: document.getElementById('semanaRef').value || ''
+      semana: document.getElementById('semanaRef').value || '',
+      fecha: new Date().toISOString()
     }));
   } catch (e) {
     alert('No se pudo fijar el Excel: es demasiado grande para guardar en este navegador.');
     document.getElementById('pinBomExcel').checked = false;
   }
+  actualizarUIPin();
 }
 
 function togglePinBOM(chk) {
   if (chk.checked) {
     if (BOM && BOM.length) guardarBomFijado();
-    else { alert('Primero procesa un Excel para poder fijarlo.'); chk.checked = false; }
+    else { alert('Primero carga un BOM para poder fijarlo.'); chk.checked = false; }
   } else {
     localStorage.removeItem('bomPinned_p4');
   }
+  actualizarUIPin();
+}
+
+// Muestra el aviso naranja "BOM FIJADO" (con nombre y fecha) cuando el pin
+// está activo, o el checkbox discreto cuando no lo está — para que nunca
+// quede oculto que se está viendo una versión vieja del BOM.
+function actualizarUIPin() {
+  let pinData = null;
+  try { pinData = JSON.parse(localStorage.getItem('bomPinned_p4')); } catch (e) {}
+  const rowChk = document.getElementById('pinCheckboxRow');
+  const banner = document.getElementById('pinWarningBanner');
+  if (pinData && pinData.bom && pinData.bom.length) {
+    if (rowChk) rowChk.style.display = 'none';
+    if (banner) {
+      banner.style.display = 'flex';
+      const nombreEl = document.getElementById('pinNombreArchivo');
+      const fechaEl = document.getElementById('pinFechaTexto');
+      if (nombreEl) nombreEl.textContent = pinData.nombre || 'BOM.xlsx';
+      if (fechaEl) {
+        let txt = 'fecha desconocida';
+        if (pinData.fecha) {
+          const f = new Date(pinData.fecha);
+          if (!isNaN(f)) txt = f.toLocaleString('es-MX');
+        }
+        fechaEl.textContent = txt;
+      }
+    }
+  } else {
+    if (rowChk) rowChk.style.display = 'flex';
+    if (banner) banner.style.display = 'none';
+  }
+}
+
+// Quita el pin y trae de inmediato el BOM vigente de Firebase, sin esperar
+// a un refresh manual de la página.
+function quitarPinBOM() {
+  try { localStorage.removeItem('bomPinned_p4'); } catch (e) {}
+  const chk = document.getElementById('pinBomExcel');
+  if (chk) chk.checked = false;
+  if (!db) { actualizarUIPin(); return; }
+  db.collection('bom_simulator_p4').doc('bom_activo').get().then(function (doc) {
+    if (doc.exists) {
+      const d = doc.data();
+      BOM = JSON.parse(d.bom);
+      document.getElementById('semanaRef').value = d.semana || '';
+      if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
+      const fc = document.getElementById('fileChip');
+      if (fc) fc.innerHTML = `<div class="file-chip">✅ BOM actual de Firebase · ${BOM.length.toLocaleString()} filas</div>`;
+      renderPreview(); renderSim(); renderCons(); renderProd();
+    }
+    actualizarUIPin();
+  }).catch(function () { actualizarUIPin(); });
 }
 
 // Se llama al cargar la página, ANTES que autoCargarBOM() (que solo actúa si
@@ -5497,6 +5557,7 @@ window._admMostrarToast = _admMostrarToast;
 window.addEventListener('DOMContentLoaded', function() {
   // targets siempre arrancan en 0 al cargar la página
   restaurarBomFijado(); // si hay un Excel fijado, se restaura primero (gana sobre el BOM activo de Firebase)
+  actualizarUIPin();
   setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
 });
 </script>

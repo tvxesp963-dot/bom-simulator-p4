@@ -3846,6 +3846,20 @@ function capacidadDelDia(fecha) {
   return CAPACIDAD_DIARIA_ASSY1;
 }
 
+// ── CORTES ESPECIALES ──
+// Permite mover un corte automático (miércoles 3:30pm / sábado 11:00am) a otra
+// fecha/hora sin tocar código — ej. adelantar el embarque un día festivo o por
+// petición del cliente. Se guarda en Firebase (bom_simulator_p4/cortes_especiales)
+// para que lo vea todo el equipo, y solo se edita desde Admin BOM.
+// Cada entrada: { original: <ms del corte automático>, nuevo: <ms de la fecha/hora real> }
+window.cortesEspeciales = window.cortesEspeciales || [];
+
+function aplicarCorteEspecial(corte) {
+  if (!corte || !window.cortesEspeciales || !window.cortesEspeciales.length) return corte;
+  const match = window.cortesEspeciales.find(c => c.original === corte.getTime());
+  return match ? new Date(match.nuevo) : corte;
+}
+
 // Corte de envío al que pertenece un día: Lun-Mar-Mié → corte miércoles 3:30pm de esa semana;
 // Jue-Vie-Sáb → corte sábado 11:00am de esa semana. Domingo no aplica (no se produce).
 function cicloDeEnvioDelDia(fecha) {
@@ -3859,53 +3873,157 @@ function cicloDeEnvioDelDia(fecha) {
     d.setDate(d.getDate() + (6 - dow)); // avanza al sábado de esa semana (jue=4,vie=5,sáb=6)
     d.setHours(11, 0, 0, 0);
   }
-  return d;
+  return aplicarCorteEspecial(d);
 }
 
-// Próximo corte de envío (miércoles 3:30pm o sábado 11:00am) estrictamente posterior a 'desde'.
-// Si ya pasó el corte de hoy, salta automáticamente al siguiente.
+// Genera los cortes automáticos (miércoles 3:30pm / sábado 11:00am) dentro de
+// una ventana de +/- 'dias' alrededor de 'centro', YA con las excepciones
+// aplicadas, ordenados de más viejo a más nuevo. Se escanea en ambas
+// direcciones porque un corte especial puede moverse hacia atrás (como hoy)
+// o hacia adelante — si solo se buscara hacia un lado se podía "perder" el
+// corte movido.
+function generarCortesFinales(centro, dias) {
+  dias = dias || 21;
+  const out = [];
+  for (let i = -dias; i <= dias; i++) {
+    const dia = new Date(centro);
+    dia.setDate(dia.getDate() + i);
+    dia.setHours(0, 0, 0, 0);
+    const dow = dia.getDay();
+    if (dow === 3) {
+      const c = new Date(dia); c.setHours(15, 30, 0, 0);
+      out.push(aplicarCorteEspecial(c));
+    } else if (dow === 6) {
+      const c = new Date(dia); c.setHours(11, 0, 0, 0);
+      out.push(aplicarCorteEspecial(c));
+    }
+  }
+  out.sort((a, b) => a - b);
+  return out;
+}
+
+// Próximo corte de envío estrictamente posterior a 'desde'.
 function proximoCorteEnvio(desde) {
-  for (let i = 0; i < 14; i++) {
+  const cortes = generarCortesFinales(desde);
+  for (let i = 0; i < cortes.length; i++) if (cortes[i] > desde) return cortes[i];
+  return null;
+}
+
+function formatCorteLabel(corte) {
+  const diasSemana = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const diaTxt = diasSemana[corte.getDay()];
+  let h = corte.getHours(), m = corte.getMinutes();
+  const ampm = h >= 12 ? 'pm' : 'am';
+  let h12 = h % 12; if (h12 === 0) h12 = 12;
+  const horaTxt = `${h12}:${String(m).padStart(2, '0')}${ampm}`;
+  return `📦 Envío ${diaTxt} ${formatFechaCorta(corte)} ${horaTxt}`;
+}
+
+// Corte de envío más reciente que ya pasó (<= 'hasta'). Complemento de
+// proximoCorteEnvio: define el INICIO del ciclo actual.
+function corteAnteriorEnvio(hasta) {
+  const cortes = generarCortesFinales(hasta);
+  let mejor = null;
+  for (let i = 0; i < cortes.length; i++) if (cortes[i] <= hasta) mejor = cortes[i];
+  return mejor;
+}
+
+// Genera los próximos N cortes AUTOMÁTICOS (sin aplicar excepciones) — se usa
+// solo para llenar el selector de "qué corte quiero mover" en Admin BOM.
+function generarCortesAutomaticos(desde, cantidad) {
+  const out = [];
+  for (let i = 0; out.length < cantidad && i < 60; i++) {
     const dia = new Date(desde);
     dia.setDate(dia.getDate() + i);
     dia.setHours(0, 0, 0, 0);
     const dow = dia.getDay();
     if (dow === 3) {
-      const corte = new Date(dia); corte.setHours(15, 30, 0, 0);
-      if (corte > desde) return corte;
+      const c = new Date(dia); c.setHours(15, 30, 0, 0);
+      if (c > desde) out.push(c);
     } else if (dow === 6) {
-      const corte = new Date(dia); corte.setHours(11, 0, 0, 0);
-      if (corte > desde) return corte;
+      const c = new Date(dia); c.setHours(11, 0, 0, 0);
+      if (c > desde) out.push(c);
     }
   }
-  return null;
+  return out;
 }
 
-function formatCorteLabel(corte) {
-  const diaTxt = corte.getDay() === 3 ? 'Miércoles' : 'Sábado';
-  const horaTxt = corte.getDay() === 3 ? '3:30pm' : '11:00am';
-  return `📦 Envío ${diaTxt} ${formatFechaCorta(corte)} ${horaTxt}`;
+function refrescarVistasPorCorte() {
+  if (typeof renderPlanSemanal === 'function') renderPlanSemanal();
+  if (typeof renderMultiModelos === 'function') renderMultiModelos();
 }
 
-// Corte de envío (miércoles 3:30pm o sábado 11:00am) más reciente que ya pasó, estrictamente
-// anterior o igual a 'hasta'. Es el complemento de proximoCorteEnvio: define el INICIO del ciclo
-// actual — todo lo producido después de este corte pertenece al ciclo que se está armando ahora.
-function corteAnteriorEnvio(hasta) {
-  for (let i = 0; i < 14; i++) {
-    const dia = new Date(hasta);
-    dia.setDate(dia.getDate() - i);
-    dia.setHours(0, 0, 0, 0);
-    const dow = dia.getDay();
-    if (dow === 3) {
-      const corte = new Date(dia); corte.setHours(15, 30, 0, 0);
-      if (corte <= hasta) return corte;
-    } else if (dow === 6) {
-      const corte = new Date(dia); corte.setHours(11, 0, 0, 0);
-      if (corte <= hasta) return corte;
+function guardarCortesEspecialesFirebase() {
+  if (!db) return;
+  db.collection('bom_simulator_p4').doc('cortes_especiales').set({ lista: window.cortesEspeciales || [] }).catch(function () {});
+}
+
+function cargarCortesEspecialesFirebase() {
+  if (!db) return;
+  db.collection('bom_simulator_p4').doc('cortes_especiales').get().then(function (doc) {
+    if (doc.exists) {
+      const d = doc.data();
+      window.cortesEspeciales = Array.isArray(d.lista) ? d.lista : [];
+      refrescarVistasPorCorte();
+      if (typeof renderCortesEspeciales === 'function') renderCortesEspeciales();
     }
-  }
-  return null;
+  }).catch(function () {});
 }
+
+function renderCortesEspeciales() {
+  const wrap = document.getElementById('cortesEspecialesWrap');
+  if (!wrap) return;
+  const proximos = generarCortesAutomaticos(new Date(), 8);
+  const selHtml = proximos.map(c => `<option value="${c.getTime()}">${formatCorteLabel(c).replace('📦 Envío ', '')}</option>`).join('');
+  const activas = window.cortesEspeciales || [];
+  const listaHtml = activas.length ? activas.map((ce, idx) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem 0;border-bottom:1px solid var(--border2);font-size:12px">
+      <span>${formatCorteLabel(new Date(ce.original)).replace('📦 Envío ', '')} → <b style="color:#FFB74D">${formatCorteLabel(new Date(ce.nuevo)).replace('📦 Envío ', '')}</b></span>
+      <button class="btn btn-secondary btn-sm" onclick="quitarCorteEspecial(${idx})">✕ Quitar</button>
+    </div>`).join('') : `<div style="font-size:11px;color:var(--text3);padding:.3rem 0">No hay cortes especiales activos — todo corre en automático.</div>`;
+
+  wrap.innerHTML = `
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.8rem">
+      <div>
+        <label class="label">Mover este corte</label>
+        <select class="select" id="corteEspecialOriginal">${selHtml}</select>
+      </div>
+      <div>
+        <label class="label">Nueva fecha</label>
+        <input class="input" type="date" id="corteEspecialFecha">
+      </div>
+      <div>
+        <label class="label">Nueva hora</label>
+        <input class="input" type="time" id="corteEspecialHora" value="15:30">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="guardarCorteEspecial()">💾 Guardar</button>
+    </div>
+    <div>${listaHtml}</div>
+  `;
+}
+
+function guardarCorteEspecial() {
+  const original = parseInt(document.getElementById('corteEspecialOriginal').value);
+  const fecha = document.getElementById('corteEspecialFecha').value;
+  const hora = document.getElementById('corteEspecialHora').value || '15:30';
+  if (!fecha) { alert('Selecciona la nueva fecha.'); return; }
+  const [hh, mm] = hora.split(':').map(Number);
+  const nuevo = new Date(fecha + 'T00:00:00');
+  nuevo.setHours(hh, mm, 0, 0);
+  window.cortesEspeciales = (window.cortesEspeciales || []).filter(c => c.original !== original);
+  window.cortesEspeciales.push({ original, nuevo: nuevo.getTime() });
+  guardarCortesEspecialesFirebase();
+  renderCortesEspeciales();
+  refrescarVistasPorCorte();
+}
+
+function quitarCorteEspecial(idx) {
+  window.cortesEspeciales.splice(idx, 1);
+  guardarCortesEspecialesFirebase();
+  renderCortesEspeciales();
+  refrescarVistasPorCorte();
+}
+window.renderCortesEspeciales = renderCortesEspeciales;
 
 // Lee lo que hay DISPONIBLE ahora mismo en piso de P4, directo de la app ShipQR (fuente real de verdad).
 // Esta pantalla (Plan Requerido) responde: "¿cuánto me falta por producir para cubrir el requerimiento?"
@@ -5549,6 +5667,7 @@ window._admMostrarToast = _admMostrarToast;
     window.checkAdminKey = function() {
       var r = oldCheck.apply(this, arguments);
       setTimeout(function(){ try { renderAdminPartes(); } catch(e){} }, 100);
+      setTimeout(function(){ try { renderCortesEspeciales(); } catch(e){} }, 100);
       return r;
     };
   }
@@ -5559,6 +5678,7 @@ window.addEventListener('DOMContentLoaded', function() {
   restaurarBomFijado(); // si hay un Excel fijado, se restaura primero (gana sobre el BOM activo de Firebase)
   actualizarUIPin();
   setTimeout(function() { initIMS(); sincIMS(); setTimeout(autoCargarBOM,2000); }, 500);
+  setTimeout(cargarCortesEspecialesFirebase, 800);
 });
 </script>
 
@@ -5576,6 +5696,13 @@ window.addEventListener('DOMContentLoaded', function() {
     <div class="card" style="margin-bottom:1rem">
       <div class="card-title">📊 BOM Activo en Firebase</div>
       <div id="adminBomActivo"><div style="color:var(--text2);font-size:13px;padding:1rem;text-align:center">⏳ Verificando...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 Cortes especiales de envío</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
+        Mueve un corte automático (miércoles 3:30pm / sábado 11:00am) a otra fecha u hora — por ejemplo, adelantar el embarque de esta semana. Afecta Plan Semanal, Pick List y Producido para todos.
+      </div>
+      <div id="cortesEspecialesWrap"><div style="color:var(--text2);font-size:12px;padding:.5rem;text-align:center">⏳ Cargando...</div></div>
     </div>
     <div class="card">
       <div class="card-title">📥 Subir nuevo BOM</div>

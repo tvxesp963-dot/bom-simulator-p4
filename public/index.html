@@ -3278,6 +3278,7 @@ function iniciarAuthListener() {
         document.getElementById('adminPanel').style.display = 'block';
         cargarBomActivo();
         cargarUsuariosBom();
+        if (typeof renderCortesEspeciales === 'function') renderCortesEspeciales();
         var bp3 = document.getElementById('btnPublicar'); if (bp3) bp3.style.display = '';
       } else {
         activarModoSoloSimulador();

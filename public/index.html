@@ -4360,6 +4360,7 @@ async function renderPlanSemanal() {
     return pa - pb;
   });
   const faltantesPorModelo = calcularFaltantesPorModeloPlan(conTargetOrdenado, produccionReal);
+  const faltantesRGB = calcularFaltantesRGBPorModelo(conTargetOrdenado, produccionReal);
   const materialCapPorModelo = window._planMaterialCapPorModelo || {};
 
   const { semanas, sinFecha } = calcularPlanSemanal(produccionReal, materialCapPorModelo);
@@ -4666,6 +4667,84 @@ async function renderPlanSemanal() {
   const thCenter = thStyle.replace('text-align:left', 'text-align:center');
   const thDia = thCenter + ';white-space:nowrap';
 
+  // ── TABLA RGB: Plan Requerido RGB (Tapa/Base) — mismo Excel/target que la tabla 1 ──
+  const modelosRGBOrdenados = (window._planModelosRGB || []).slice().sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
+
+  const badgeRGB = (falta) => falta
+    ? '<span style="background:rgba(255,68,68,.15);color:var(--red);padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">⚠ Falta</span>'
+    : '<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">✓ Completo</span>';
+
+  const filasRGB = modelosRGBOrdenados.map(sm => {
+    const producidoSm = produccionReal[sm] || 0;
+    const pendienteRGB = Math.max(0, (simTargetsPorModelo[sm] || 0) - producidoSm);
+    const items = faltantesRGB[sm] || [];
+    const faltaTapa = items.some(i => i.grupo === 'Tapa');
+    const faltaBase = items.some(i => i.grupo === 'Base');
+    const code = codePorModelo[sm] || '—';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
+      <td style="padding:10px 8px;color:var(--text2);font-size:12px">${code}</td>
+      <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${pendienteRGB.toLocaleString()}</td>
+      <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaTapa)}</td>
+      <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaBase)}</td>
+    </tr>`;
+  }).join('');
+
+  const desgloseRGB = (window._planPickListRGB || []).filter(p => !p.ok);
+  const alertasRGB = !desgloseRGB.length ? '' : `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid rgba(255,68,68,.35);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--red);text-transform:uppercase;margin-bottom:.8rem">⚠ RGB — Desglose de materiales insuficientes</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thStyle}">Modelo</th>
+          <th style="${thStyle}">Grupo</th>
+          <th style="${thStyle}">Material</th>
+          <th style="${thStyle}">N° Parte</th>
+          <th style="${thRight}">Requerido</th>
+          <th style="${thRight}">Disponible</th>
+          <th style="${thRight};color:var(--red)">Falta</th>
+        </tr></thead>
+        <tbody>
+          ${desgloseRGB.map(f => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px 6px;font-weight:700;color:var(--accent)">${f.modelo}</td>
+              <td style="padding:8px 6px;color:var(--text2)">${f.grupo}</td>
+              <td style="padding:8px 6px;color:var(--text2)">${f.etiqueta}</td>
+              <td style="padding:8px 6px;color:var(--text2);font-size:12px">${f.pn}</td>
+              <td style="padding:8px 6px;text-align:right">${f.requerido.toLocaleString()}</td>
+              <td style="padding:8px 6px;text-align:right">${f.disponible.toLocaleString()}</td>
+              <td style="padding:8px 6px;text-align:right;font-weight:700;color:var(--red)">${(f.requerido - f.disponible).toLocaleString()}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+
+  const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido RGB · Tapa / Base</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba. Compara el Pendiente (Target − Producido) de cada modelo contra el inventario actual de Sheet / Chip Board Ranurado / Pulp Tray / Set Pad / Galleta / Sticker.</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thStyle}">Modelo</th>
+          <th style="${thStyle}">Code</th>
+          <th style="${thRight}">Pendiente</th>
+          <th style="${thCenter}">Tapa</th>
+          <th style="${thCenter}">Base</th>
+        </tr></thead>
+        <tbody>${filasRGB}</tbody>
+      </table>
+      </div>
+    </div>
+    ${alertasRGB}
+  `;
+
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Modelo y partes</div>
@@ -4686,6 +4765,7 @@ async function renderPlanSemanal() {
       </table>
       </div>
     </div>
+    ${tablaRGBHtml}
     ${alertasMateriales}
     ${planPreEnsambleHtml}
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
@@ -4940,6 +5020,58 @@ window.exportarEmpaqueExcel = exportarEmpaqueExcel;
 // Identifica los 4 materiales de ensamble de un modelo (Strip, Top, Bot, Bundle),
 // usando exactamente la misma agrupación jerárquica del BOM (getSectionByRow)
 // que ya usa el Simulador — no una lista aparte.
+// Los 8 materiales de RGB (Rigid Box): 2 para Tapa, 6 para Base.
+// Se buscan dentro de las filas del BOM de ESTE modelo (mismos ítems físicos
+// que ya usa Producción para Gift Box Top / Lower Box Bottom).
+function obtenerMaterialesRGB(sm) {
+  return [
+    { grupo: 'Tapa', etiqueta: 'Sheet Top',                 row: getComp(sm, ['SHEET TOP']) || null },
+    { grupo: 'Tapa', etiqueta: 'Chip Board Top (Ranurado)',  row: getComp(sm, ['CHIP BOARD TOP', 'RANURADO']) || null },
+    { grupo: 'Base', etiqueta: 'Sheet Lower Box',            row: getComp(sm, ['SHEET LOWER']) || null },
+    { grupo: 'Base', etiqueta: 'Chip Board Bot (Ranurado)',  row: getComp(sm, ['CHIP BOARD BOTTOM', 'RANURADO']) || null },
+    { grupo: 'Base', etiqueta: 'Pulp Tray',                  row: getComp(sm, ['PULP TRAY']) || null },
+    { grupo: 'Base', etiqueta: 'Set Pad',                    row: getComp(sm, ['SET PAD']) || null },
+    // Galleta = PN GH69-46113G (por número de parte, no por descripción)
+    { grupo: 'Base', etiqueta: 'Galleta',                    row: BOM.find(r => r.sm === sm && (r.pn || '').trim().toUpperCase() === 'GH69-46113G') || null },
+    { grupo: 'Base', etiqueta: 'Sticker',                    row: getComp(sm, ['BACK STICKER']) || null },
+  ];
+}
+window.obtenerMaterialesRGB = obtenerMaterialesRGB;
+
+// Plan Requerido RGB: usa el MISMO Excel/target que la tabla 1 (Plan Requerido
+// de ensamble) — no un archivo aparte. El requerido de cada material RGB es el
+// Pendiente del modelo (Target - Producido), igual criterio que la tabla 1.
+// Compara ese pendiente contra el inventario actual (ya sincronizado por
+// sincIMSFresco en renderPlanSemanal) de los 8 materiales de Tapa/Base —
+// sin tocar el pool/cascada de Strip/Top/Bot/Bundle.
+function calcularFaltantesRGBPorModelo(modelosOrdenados, produccionReal) {
+  produccionReal = produccionReal || {};
+  const faltantesRGB = {}; // sm -> [{grupo, etiqueta, pn, falta}]
+  const pickListRGB = [];  // [{modelo, grupo, etiqueta, pn, requerido, disponible, ok}]
+
+  modelosOrdenados.forEach(sm => {
+    const target = simTargetsPorModelo[sm] || 0;
+    const producidoSm = produccionReal[sm] || 0;
+    const pendiente = Math.max(0, target - producidoSm);
+    const items = [];
+    obtenerMaterialesRGB(sm).forEach(m => {
+      if (!m.row) return; // este modelo no tiene ese material en el BOM
+      const disponible = m.row.inv || 0;
+      const falta = pendiente - disponible;
+      const ok = falta <= 0;
+      pickListRGB.push({ modelo: sm, grupo: m.grupo, etiqueta: m.etiqueta, pn: m.row.pn || '—', requerido: pendiente, disponible, ok });
+      if (!ok) items.push({ grupo: m.grupo, etiqueta: m.etiqueta, pn: m.row.pn || '—', falta });
+    });
+    faltantesRGB[sm] = items;
+  });
+
+  window._planFaltantesRGBPorModelo = faltantesRGB;
+  window._planPickListRGB = pickListRGB;
+  window._planModelosRGB = modelosOrdenados;
+  return faltantesRGB;
+}
+window.calcularFaltantesRGBPorModelo = calcularFaltantesRGBPorModelo;
+
 function obtener4MaterialesEnsamble(sm) {
   const allData = BOM.filter(r => r.sm === sm);
   const bomGroups = [];

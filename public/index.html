@@ -4694,6 +4694,25 @@ async function renderPlanSemanal() {
     </tr>`;
   }).join('');
 
+  const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido RGB · Tapa / Base</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba. Compara el Pendiente (Target − Producido) de cada modelo contra el inventario actual de Sheet / Chip Board Ranurado / Pulp Tray / Set Pad / Galleta / Sticker.</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thStyle}">Modelo</th>
+          <th style="${thStyle}">Code</th>
+          <th style="${thRight}">Pendiente</th>
+          <th style="${thCenter}">Tapa</th>
+          <th style="${thCenter}">Base</th>
+        </tr></thead>
+        <tbody>${filasRGB}</tbody>
+      </table>
+      </div>
+    </div>
+  `;
+
   const desgloseRGB = (window._planPickListRGB || []).filter(p => !p.ok);
   const alertasRGB = !desgloseRGB.length ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid rgba(255,68,68,.35);border-radius:12px;padding:1.2rem">
@@ -4725,26 +4744,6 @@ async function renderPlanSemanal() {
       </div>
     </div>`;
 
-  const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
-    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido RGB · Tapa / Base</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba. Compara el Pendiente (Target − Producido) de cada modelo contra el inventario actual de Sheet / Chip Board Ranurado / Pulp Tray / Set Pad / Galleta / Sticker.</div>
-      <div style="overflow-x:auto">
-      <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <thead><tr>
-          <th style="${thStyle}">Modelo</th>
-          <th style="${thStyle}">Code</th>
-          <th style="${thRight}">Pendiente</th>
-          <th style="${thCenter}">Tapa</th>
-          <th style="${thCenter}">Base</th>
-        </tr></thead>
-        <tbody>${filasRGB}</tbody>
-      </table>
-      </div>
-    </div>
-    ${alertasRGB}
-  `;
-
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Modelo y partes</div>
@@ -4765,8 +4764,9 @@ async function renderPlanSemanal() {
       </table>
       </div>
     </div>
-    ${tablaRGBHtml}
     ${alertasMateriales}
+    ${tablaRGBHtml}
+    ${alertasRGB}
     ${planPreEnsambleHtml}
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">
@@ -5050,6 +5050,7 @@ function calcularFaltantesRGBPorModelo(modelosOrdenados, produccionReal) {
   const pickListRGB = [];  // [{modelo, grupo, etiqueta, pn, requerido, disponible, ok}]
 
   modelosOrdenados.forEach(sm => {
+    const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     const target = simTargetsPorModelo[sm] || 0;
     const producidoSm = produccionReal[sm] || 0;
     const pendiente = Math.max(0, target - producidoSm);
@@ -5059,7 +5060,7 @@ function calcularFaltantesRGBPorModelo(modelosOrdenados, produccionReal) {
       const disponible = m.row.inv || 0;
       const falta = pendiente - disponible;
       const ok = falta <= 0;
-      pickListRGB.push({ modelo: sm, grupo: m.grupo, etiqueta: m.etiqueta, pn: m.row.pn || '—', requerido: pendiente, disponible, ok });
+      pickListRGB.push({ modelo: sm, prioridad, grupo: m.grupo, etiqueta: m.etiqueta, pn: m.row.pn || '—', requerido: pendiente, disponible, ok });
       if (!ok) items.push({ grupo: m.grupo, etiqueta: m.etiqueta, pn: m.row.pn || '—', falta });
     });
     faltantesRGB[sm] = items;

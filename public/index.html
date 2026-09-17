@@ -4685,8 +4685,14 @@ async function renderPlanSemanal() {
     const faltaTapa = items.some(i => i.grupo === 'Tapa');
     const faltaBase = items.some(i => i.grupo === 'Base');
     const code = codePorModelo[sm] || '—';
+    const capMaterialRGB = (window._planMaterialCapRGBPorModelo && window._planMaterialCapRGBPorModelo[sm] !== undefined)
+      ? window._planMaterialCapRGBPorModelo[sm] : 0;
+    const listoParaCorrerRGB = pendienteRGB > 0 && isFinite(capMaterialRGB) && capMaterialRGB > 0;
     return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
+      <td style="padding:10px 8px;font-weight:700;color:var(--accent)">
+        ${sm}
+        ${listoParaCorrerRGB ? `<div class="plan-listo-badge" id="plan-listo-rgb-${sm.replace(/[^a-zA-Z0-9]/g, '_')}" data-cap="${Math.floor(capMaterialRGB)}" title="Tapa/Base (Sheet, Chip Board Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) tienen material suficiente para arrancar"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterialRGB).toLocaleString()} pzas</div>` : ''}
+      </td>
       <td style="padding:10px 8px;color:var(--text2);font-size:12px">${code}</td>
       <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${pendienteRGB.toLocaleString()}</td>
       <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaTapa)}</td>
@@ -5048,6 +5054,7 @@ function calcularFaltantesRGBPorModelo(modelosOrdenados, produccionReal) {
   produccionReal = produccionReal || {};
   const faltantesRGB = {}; // sm -> [{grupo, etiqueta, pn, falta}]
   const pickListRGB = [];  // [{modelo, grupo, etiqueta, pn, requerido, disponible, ok}]
+  const materialCapRGBPorModelo = {}; // sm -> mín. disponible entre los 8 materiales (cuánto se puede armar)
 
   modelosOrdenados.forEach(sm => {
     const prioridad = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
@@ -5055,20 +5062,24 @@ function calcularFaltantesRGBPorModelo(modelosOrdenados, produccionReal) {
     const producidoSm = produccionReal[sm] || 0;
     const pendiente = Math.max(0, target - producidoSm);
     const items = [];
+    const disponiblesEsteModelo = [];
     obtenerMaterialesRGB(sm).forEach(m => {
       if (!m.row) return; // este modelo no tiene ese material en el BOM
       const disponible = m.row.inv || 0;
       const falta = pendiente - disponible;
       const ok = falta <= 0;
       pickListRGB.push({ modelo: sm, prioridad, grupo: m.grupo, etiqueta: m.etiqueta, pn: m.row.pn || '—', requerido: pendiente, disponible, ok });
+      disponiblesEsteModelo.push(disponible);
       if (!ok) items.push({ grupo: m.grupo, etiqueta: m.etiqueta, pn: m.row.pn || '—', falta });
     });
     faltantesRGB[sm] = items;
+    materialCapRGBPorModelo[sm] = disponiblesEsteModelo.length ? Math.min(...disponiblesEsteModelo) : Infinity;
   });
 
   window._planFaltantesRGBPorModelo = faltantesRGB;
   window._planPickListRGB = pickListRGB;
   window._planModelosRGB = modelosOrdenados;
+  window._planMaterialCapRGBPorModelo = materialCapRGBPorModelo;
   return faltantesRGB;
 }
 window.calcularFaltantesRGBPorModelo = calcularFaltantesRGBPorModelo;

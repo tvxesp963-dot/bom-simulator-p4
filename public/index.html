@@ -4820,15 +4820,25 @@ async function renderPlanSemanal() {
 function iniciarParpadeoPlanListo() {
   if (window._planListoBlinkTimer) clearInterval(window._planListoBlinkTimer);
 
-  const badges = Array.from(document.querySelectorAll('.plan-listo-badge'))
-    .sort((a, b) => Number(b.dataset.cap) - Number(a.dataset.cap));
+  // Se numeran por separado: los badges de la tabla de ensamble (id empieza con
+  // "plan-listo-") y los de la tabla RGB (id empieza con "plan-listo-rgb-") NO
+  // deben compartir la misma numeración, porque son dos tablas distintas.
+  const todos = Array.from(document.querySelectorAll('.plan-listo-badge'));
+  const badgesRGB = todos.filter(el => el.id.startsWith('plan-listo-rgb-'));
+  const badgesAssy = todos.filter(el => !el.id.startsWith('plan-listo-rgb-'));
 
+  const numerar = (grupo) => {
+    grupo.sort((a, b) => Number(b.dataset.cap) - Number(a.dataset.cap));
+    grupo.forEach((el, i) => {
+      const num = el.querySelector('.plan-listo-num');
+      if (num) num.textContent = i + 1;
+    });
+  };
+  numerar(badgesAssy);
+  numerar(badgesRGB);
+
+  const badges = todos;
   if (!badges.length) return;
-
-  badges.forEach((el, i) => {
-    const num = el.querySelector('.plan-listo-num');
-    if (num) num.textContent = i + 1;
-  });
 
   let idx = 0;
   const activar = () => {

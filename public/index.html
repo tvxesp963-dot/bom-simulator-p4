@@ -4698,22 +4698,34 @@ async function renderPlanSemanal() {
   // con id "plan-listo-maq-<MAQUINA>__<modelo>_<tipo>" — iniciarParpadeoPlanListo() detecta el prefijo
   // "plan-listo-maq-" y numera la cola de CADA máquina por separado (S1 su propia cola, S2 la suya, etc.),
   // sin mezclarse con la numeración de la tabla de ensamble ni con la de ninguna otra máquina.
+  // El Code Hijo (GH69) y si está Completo/Falta para Top y Bot salen del MISMO
+  // desglose que ya usa la tabla 1 (window._planPickList, del "⚠ Desglose de
+  // materiales insuficientes" de ensamble — Strip/Top/Bot/Bundle, identificados por
+  // la estructura real de grupos del BOM, no por buscar palabras en la descripción).
+  // Así esta tabla y la tabla 1 SIEMPRE coinciden: si un modelo tiene faltante de Bot
+  // en la tabla 1, aquí también va a aparecer con el mismo Code Hijo y el mismo estatus.
+  const pickPorModelo = {};
+  (window._planPickList || []).forEach(p => {
+    if (!pickPorModelo[p.modelo]) pickPorModelo[p.modelo] = {};
+    pickPorModelo[p.modelo][p.etiqueta] = p;
+  });
+
   const filasRGB = modelosRGBOrdenados.map(sm => {
     const producidoSm = produccionReal[sm] || 0;
     const pendienteRGB = Math.max(0, (simTargetsPorModelo[sm] || 0) - producidoSm);
     const codePadre = codePorModelo[sm] || '—';
-    const materialesRGB = obtenerMaterialesRGB(sm);
+    const pickModelo = pickPorModelo[sm] || {};
+    const topPick = pickModelo['Top'];
+    const botPick = pickModelo['Bot'];
 
+    // Material CRUDO en almacén (Sheet, Chip Board Ranurado, Pulp Tray, etc.) — esto sí
+    // sigue igual, es aparte del Code Hijo/Materiales de arriba: aquí solo se checa si
+    // hay con qué correr la máquina hoy.
+    const materialesRGB = obtenerMaterialesRGB(sm);
     const itemsTapa = materialesRGB.filter(m => m.grupo === 'Tapa' && m.row);
     const itemsBase = materialesRGB.filter(m => m.grupo === 'Base' && m.row);
-    const sheetTop = materialesRGB.find(m => m.etiqueta === 'Sheet Top' && m.row);
-    const sheetBase = materialesRGB.find(m => m.etiqueta === 'Sheet Lower Box' && m.row);
-
     const capTapa = itemsTapa.length ? Math.min(...itemsTapa.map(m => m.row.inv || 0)) : 0;
     const capBase = itemsBase.length ? Math.min(...itemsBase.map(m => m.row.inv || 0)) : 0;
-    const faltaTapa = itemsTapa.some(m => (pendienteRGB - (m.row.inv || 0)) > 0);
-    const faltaBase = itemsBase.some(m => (pendienteRGB - (m.row.inv || 0)) > 0);
-
     const listoTop = pendienteRGB > 0 && isFinite(capTapa) && capTapa > 0;
     const listoBase = pendienteRGB > 0 && isFinite(capBase) && capBase > 0;
 
@@ -4741,15 +4753,15 @@ async function renderPlanSemanal() {
     };
 
     const filasModelo = [];
-    if (sheetTop) maquinasTop.forEach(maq => filasModelo.push(filaMaquina(maq, 'Top', sheetTop.row.pn || '—', listoTop, faltaTapa, capTapa)));
-    if (sheetBase) maquinasBot.forEach(maq => filasModelo.push(filaMaquina(maq, 'Bottom', sheetBase.row.pn || '—', listoBase, faltaBase, capBase)));
+    if (topPick) maquinasTop.forEach(maq => filasModelo.push(filaMaquina(maq, 'Top', topPick.pn || '—', listoTop, !topPick.ok, capTapa)));
+    if (botPick) maquinasBot.forEach(maq => filasModelo.push(filaMaquina(maq, 'Bottom', botPick.pn || '—', listoBase, !botPick.ok, capBase)));
     return filasModelo.join('');
   }).join('');
 
   const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Medio Proceso (Top / Bottom)</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido). Un renglón por CADA MÁQUINA que puede correr ese modelo (Top: ${maquinasTop.join('/')}; Bottom: ${maquinasBot.join('/')} — según cómo asignes S5 en la sección 2️⃣). Code Padre = modelo GH90, Code Hijo = medio proceso GH69. La etiqueta "⚡ Listo" parpadea y numera la cola de producción de esa máquina en específico (igual que en la tabla de ensamble); Días es un estimado usando el target diario real de esa máquina.</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido). El modelo, el Code Hijo y si está Completo/Falta salen del mismo "⚠ Desglose de materiales insuficientes" de ensamble de abajo (Top/Bot por estructura real del BOM) — nunca se desincroniza de la tabla 1. Un renglón por CADA MÁQUINA que puede correr ese modelo (Top: ${maquinasTop.join('/')}; Bottom: ${maquinasBot.join('/')} — según cómo asignes S5 en la sección 2️⃣). La etiqueta "⚡ Listo" (material crudo en almacén: Sheet/Chip Board Ranurado/etc.) parpadea y numera la cola de producción de esa máquina en específico; Días es un estimado usando el target diario real de esa máquina.</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>

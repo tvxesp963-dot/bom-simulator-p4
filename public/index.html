@@ -4215,6 +4215,87 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
   return { semanas, sinFecha, producidoPorModelo, proximoCorte: proximoCorteEnvio(ahoraConHora) };
 }
 
+// ── PLAN DE ASIGNACIÓN — MEDIO PROCESO (Top / Bottom) ──
+// Reparte, día por día y por prioridad, qué modelo le toca a CADA máquina — igual
+// principio que calcularPlanSemanal (ASSY1), pero con dos diferencias clave:
+// 1) Aquí SÍ hay varias "líneas" (máquinas) en paralelo, no una sola capacidad.
+// 2) El material crudo (Sheet/Chip Board Ranurado/etc.) es un tope DURO total por
+//    modelo — a diferencia de ASSY1 (que planea ideal y muestra material aparte),
+//    aquí un modelo deja de recibir más días en cuanto se agota su material.
+// tipo: 'Top' o 'Bot' (coincide con la etiqueta de window._planPickList).
+function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModelo, produccionReal, targetsMaquinasObj) {
+  produccionReal = produccionReal || {};
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const grupoMaterial = tipo === 'Top' ? 'Tapa' : 'Base';
+
+  const items = modelosOrdenados.map(sm => {
+    const pick = (pickPorModelo[sm] || {})[tipo];
+    if (!pick) return null;
+    const target = simTargetsPorModelo[sm] || 0;
+    const producido = produccionReal[sm] || 0;
+    const restanteInicial = Math.max(0, target - producido);
+    if (restanteInicial <= 0) return null;
+    const itemsMat = obtenerMaterialesRGB(sm).filter(m => m.grupo === grupoMaterial && m.row);
+    const materialCapRaw = itemsMat.length ? Math.min(...itemsMat.map(m => m.row.inv || 0)) : 0;
+    return {
+      sm,
+      codeHijo: pick.pn || '—',
+      prioridad: (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999,
+      restante: restanteInicial,
+      materialCap: isFinite(materialCapRaw) ? materialCapRaw : 0,
+      materialUsado: 0
+    };
+  }).filter(Boolean);
+
+  if (!items.length || !maquinas.length) return { dias: [], sinMaterial: items.filter(it => it.materialCap <= 0) };
+
+  const diasGenerados = [];
+  let cursor = new Date(hoy);
+  const MAX_DIAS = 60;
+  let diasSinAvanceSeguidos = 0;
+
+  for (let i = 0; i < MAX_DIAS; i++) {
+    const quedaAlgo = items.some(it => it.restante > 0 && it.materialUsado < it.materialCap);
+    if (!quedaAlgo) break;
+
+    if (cursor.getDay() !== 0) {
+      const activos = items.filter(it => it.restante > 0 && it.materialUsado < it.materialCap)
+        .sort((a, b) => a.prioridad - b.prioridad);
+      let idx = 0;
+      const asignacionesPorMaquina = {};
+
+      maquinas.forEach(maquina => {
+        let capacidadRestante = targetsMaquinasObj[maquina] || 0;
+        const asignacionesMaquina = [];
+        while (capacidadRestante > 0 && idx < activos.length) {
+          const it = activos[idx];
+          if (it.restante <= 0 || it.materialUsado >= it.materialCap) { idx++; continue; }
+          const disponibleMaterial = it.materialCap - it.materialUsado;
+          const toma = Math.min(it.restante, capacidadRestante, disponibleMaterial);
+          if (toma <= 0) { idx++; continue; }
+          asignacionesMaquina.push({ sm: it.sm, codeHijo: it.codeHijo, qty: toma });
+          it.restante -= toma;
+          it.materialUsado += toma;
+          capacidadRestante -= toma;
+          if (it.restante <= 0 || it.materialUsado >= it.materialCap) idx++;
+        }
+        asignacionesPorMaquina[maquina] = asignacionesMaquina;
+      });
+
+      const usoTotal = Object.values(asignacionesPorMaquina).reduce((s, arr) => s + arr.reduce((s2, a) => s2 + a.qty, 0), 0);
+      diasGenerados.push({ fecha: new Date(cursor), asignacionesPorMaquina, corteEnvio: cicloDeEnvioDelDia(cursor) });
+      diasSinAvanceSeguidos = usoTotal > 0 ? 0 : diasSinAvanceSeguidos + 1;
+      if (diasSinAvanceSeguidos > 14) break;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  // "Sin material" se calcula al final con lo que de verdad quedó sin cubrir —
+  // así avisa tanto al que nunca tuvo nada de material (restante = inicial)
+  // como al que se le acabó a medias (restante > 0 después de repartir todos los días).
+  return { dias: diasGenerados, sinMaterial: items.filter(it => it.restante > 0) };
+}
+
 // Sincroniza IMS (P4 + P3) fresco desde Firestore y actualiza BOM.inv — reutilizable
 // desde "Publicar Plan al MES" y desde el Plan Semanal, para no depender de que el
 // usuario le dé clic manual a "Sync IMS" antes de revisar disponibilidad de material.
@@ -4687,99 +4768,101 @@ async function renderPlanSemanal() {
   const maquinasTop = ['Zhongke', ...['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'TOP')];
   const maquinasBot = ['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'BOT');
 
-  const diasCelda = (dias) => (dias !== null) ? dias.toLocaleString() : '—';
-
-  // Un renglón por CADA MÁQUINA que puede correr ese modelo (no una sola línea combinada):
-  // Top = Sheet Top + Chip Board Top Ranurado → un renglón por cada máquina en maquinasTop.
-  // Bottom = Sheet Lower Box + Chip Board Bot Ranurado + Pulp Tray + Set Pad + Galleta + Sticker → un renglón por cada máquina en maquinasBot.
-  // Código padre = modelo GH90 (mismo de la tabla 1). Código hijo = medio proceso GH69 (Sheet Top / Sheet Lower Box).
-  // Pendiente = mismo Target − Producido de la tabla 1 (sin cálculo aparte).
-  // El orden usa la MISMA etiqueta "⚡ Listo" parpadeante que ya usa la tabla de ensamble (tabla 1),
-  // con id "plan-listo-maq-<MAQUINA>__<modelo>_<tipo>" — iniciarParpadeoPlanListo() detecta el prefijo
-  // "plan-listo-maq-" y numera la cola de CADA máquina por separado (S1 su propia cola, S2 la suya, etc.),
-  // sin mezclarse con la numeración de la tabla de ensamble ni con la de ninguna otra máquina.
-  // El Code Hijo (GH69) y si está Completo/Falta para Top y Bot salen del MISMO
-  // desglose que ya usa la tabla 1 (window._planPickList, del "⚠ Desglose de
-  // materiales insuficientes" de ensamble — Strip/Top/Bot/Bundle, identificados por
+  // El Code Hijo (GH69) y si un modelo necesita Top/Bot salen del MISMO desglose que
+  // ya usa la tabla 1 (window._planPickList — Strip/Top/Bot/Bundle, identificados por
   // la estructura real de grupos del BOM, no por buscar palabras en la descripción).
-  // Así esta tabla y la tabla 1 SIEMPRE coinciden: si un modelo tiene faltante de Bot
-  // en la tabla 1, aquí también va a aparecer con el mismo Code Hijo y el mismo estatus.
+  // Así esta tabla y la tabla 1 nunca se desincronizan.
   const pickPorModelo = {};
   (window._planPickList || []).forEach(p => {
     if (!pickPorModelo[p.modelo]) pickPorModelo[p.modelo] = {};
     pickPorModelo[p.modelo][p.etiqueta] = p;
   });
 
-  const filasRGB = modelosRGBOrdenados.map(sm => {
-    const producidoSm = produccionReal[sm] || 0;
-    const pendienteRGB = Math.max(0, (simTargetsPorModelo[sm] || 0) - producidoSm);
-    const codePadre = codePorModelo[sm] || '—';
-    const pickModelo = pickPorModelo[sm] || {};
-    const topPick = pickModelo['Top'];
-    const botPick = pickModelo['Bot'];
+  // Asigna, día por día y por prioridad, qué modelo le toca a CADA máquina —
+  // llenando el target diario completo de cada una antes de pasar al siguiente
+  // modelo de la fila, con el material crudo en almacén como tope duro total por
+  // modelo (ver calcularPlanMedioProceso, arriba en el archivo).
+  const planTop = calcularPlanMedioProceso('Top', maquinasTop, modelosRGBOrdenados, pickPorModelo, produccionReal, targetsMaquinas);
+  const planBot = calcularPlanMedioProceso('Bot', maquinasBot, modelosRGBOrdenados, pickPorModelo, produccionReal, targetsMaquinas);
 
-    // Material CRUDO en almacén (Sheet, Chip Board Ranurado, Pulp Tray, etc.) — esto sí
-    // sigue igual, es aparte del Code Hijo/Materiales de arriba: aquí solo se checa si
-    // hay con qué correr la máquina hoy.
-    const materialesRGB = obtenerMaterialesRGB(sm);
-    const itemsTapa = materialesRGB.filter(m => m.grupo === 'Tapa' && m.row);
-    const itemsBase = materialesRGB.filter(m => m.grupo === 'Base' && m.row);
-    const capTapa = itemsTapa.length ? Math.min(...itemsTapa.map(m => m.row.inv || 0)) : 0;
-    const capBase = itemsBase.length ? Math.min(...itemsBase.map(m => m.row.inv || 0)) : 0;
-    const listoTop = pendienteRGB > 0 && isFinite(capTapa) && capTapa > 0;
-    const listoBase = pendienteRGB > 0 && isFinite(capBase) && capBase > 0;
+  const celdaAsignacion = (dia, maquina) => {
+    const asigns = dia.asignacionesPorMaquina[maquina] || [];
+    if (!asigns.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
+    const partes = asigns.map(a =>
+      `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:10px;color:var(--text2)">${a.codeHijo}</div><div style="font-size:11px">${a.qty.toLocaleString()}</div>`
+    ).join('<div style="height:4px"></div>');
+    return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}</td>`;
+  };
 
-    const filaMaquina = (maquina, tipo, codeHijo, listo, falta, capMaterial) => {
-      const targetMaquina = targetsMaquinas[maquina] || 0;
-      const listoConTarget = listo && targetMaquina > 0;
-      let dias = null;
-      let ordenCeldaHtml = '<span style="color:var(--text3)">—</span>';
-      if (listoConTarget) {
-        dias = Math.ceil(pendienteRGB / targetMaquina);
-        const idSeguro = `plan-listo-maq-${maquina}__${sm.replace(/[^a-zA-Z0-9]/g, '_')}_${tipo}`;
-        ordenCeldaHtml = `<div class="plan-listo-badge" id="${idSeguro}" data-cap="${Math.floor(capMaterial)}" title="Listo para correr en ${maquina}"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterial).toLocaleString()} pzas</div>`;
-      }
-      return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:10px 8px;font-weight:700;color:var(--accent2, var(--accent))">${maquina}</td>
-        <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
-        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codePadre}</td>
-        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codeHijo}</td>
-        <td style="padding:10px 8px;text-align:center;color:var(--text2)">${tipo}</td>
-        <td style="padding:10px 8px;text-align:right;color:var(--text2)">${targetMaquina ? targetMaquina.toLocaleString() : '—'}</td>
-        <td style="padding:10px 8px;text-align:center">${ordenCeldaHtml}</td>
-        <td style="padding:10px 8px;text-align:center;color:var(--text2)">${diasCelda(dias)}</td>
-        <td style="padding:10px 8px;text-align:center">${badgeRGB(falta)}</td>
-      </tr>`;
-    };
+  const construirGrupoCiclosRGB = (dias) => {
+    const grupos = [];
+    dias.forEach(d => {
+      const key = d.corteEnvio.toISOString();
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.key === key) ultimo.count++;
+      else grupos.push({ key, label: formatCorteLabel(d.corteEnvio), count: 1 });
+    });
+    return grupos.map(g => `<th colspan="${g.count}" style="${thCiclo}">${g.label}</th>`).join('');
+  };
+  const construirColHeadersRGB = (dias) => dias.map(d =>
+    `<th style="${thDia}">${(d.fecha.getMonth() + 1)}/${d.fecha.getDate()}(${d.fecha.toLocaleDateString('es-MX', { weekday: 'short' })})</th>`
+  ).join('');
 
-    const filasModelo = [];
-    if (topPick) maquinasTop.forEach(maq => filasModelo.push(filaMaquina(maq, 'Top', topPick.pn || '—', listoTop, !topPick.ok, capTapa)));
-    if (botPick) maquinasBot.forEach(maq => filasModelo.push(filaMaquina(maq, 'Bottom', botPick.pn || '—', listoBase, !botPick.ok, capBase)));
-    return filasModelo.join('');
-  }).join('');
+  const construirGridMedioProceso = (titulo, descripcion, maquinasTipo, plan) => {
+    if (!maquinasTipo.length) return '';
+    if (!plan.dias.length) {
+      return `
+        <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+          <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">${titulo}</div>
+          <div style="font-size:11px;color:var(--text3)">${descripcion}</div>
+          <div class="empty" style="padding:1.2rem 0"><div class="empty-title">Nada pendiente por asignar ahorita.</div></div>
+        </div>`;
+    }
+    const filas = maquinasTipo.map(maq => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 6px;font-weight:700;position:sticky;left:0;background:#0d1220">${maq}</td>
+        ${plan.dias.map(d => celdaAsignacion(d, maq)).join('')}
+      </tr>`).join('');
 
-  const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
-    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Medio Proceso (Top / Bottom)</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido). El modelo, el Code Hijo y si está Completo/Falta salen del mismo "⚠ Desglose de materiales insuficientes" de ensamble de abajo (Top/Bot por estructura real del BOM) — nunca se desincroniza de la tabla 1. Un renglón por CADA MÁQUINA que puede correr ese modelo (Top: ${maquinasTop.join('/')}; Bottom: ${maquinasBot.join('/')} — según cómo asignes S5 en la sección 2️⃣). La etiqueta "⚡ Listo" (material crudo en almacén: Sheet/Chip Board Ranurado/etc.) parpadea y numera la cola de producción de esa máquina en específico; Días es un estimado usando el target diario real de esa máquina.</div>
-      <div style="overflow-x:auto">
-      <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <thead><tr>
-          <th style="${thStyle}">Máquina</th>
-          <th style="${thStyle}">Modelo</th>
-          <th style="${thStyle}">Code Padre</th>
-          <th style="${thStyle}">Code Hijo</th>
-          <th style="${thCenter}">Tipo</th>
-          <th style="${thRight}">Target/día</th>
-          <th style="${thCenter}">Orden</th>
-          <th style="${thCenter}">Días</th>
-          <th style="${thCenter}">Materiales</th>
-        </tr></thead>
-        <tbody>${filasRGB}</tbody>
-      </table>
-      </div>
-    </div>
-  `;
+    const avisoSinMaterial = !plan.sinMaterial.length ? '' : `
+      <div style="margin-top:.8rem;padding:.6rem .8rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.35);border-radius:8px;font-size:11px;color:var(--red)">
+        ⚠ Sin material para completar: ${plan.sinMaterial.map(it => `${it.sm} (${it.codeHijo}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
+      </div>`;
+
+    return `
+      <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">${titulo}</div>
+        <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">${descripcion}</div>
+        <div style="overflow-x:auto">
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+          <thead>
+          <tr>
+            <th style="${thCiclo};position:sticky;left:0;background:rgba(0,188,212,.08)"></th>
+            ${construirGrupoCiclosRGB(plan.dias)}
+          </tr>
+          <tr>
+            <th style="${thStyle};position:sticky;left:0;background:#0d1220">Línea</th>
+            ${construirColHeadersRGB(plan.dias)}
+          </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+        </div>
+        ${avisoSinMaterial}
+      </div>`;
+  };
+
+  const tablaRGBHtml =
+    construirGridMedioProceso(
+      '1️⃣ Plan de Asignación · Top (' + maquinasTop.join('/') + ')',
+      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Top, Chip Board Top Ranurado) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo.',
+      maquinasTop, planTop
+    ) +
+    construirGridMedioProceso(
+      '1️⃣ Plan de Asignación · Bottom (' + maquinasBot.join('/') + ')',
+      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo.',
+      maquinasBot, planBot
+    );
 
   const desgloseRGB = (window._planPickListRGB || []).filter(p => !p.ok);
   const alertasRGB = !desgloseRGB.length ? '' : `

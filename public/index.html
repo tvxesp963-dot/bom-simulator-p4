@@ -821,6 +821,9 @@ function toggleTree(idx) {
 let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
 window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
+// Zhongke por definición solo corre el modelo 625A y, en algunos casos, otros
+// modelos puntuales — no hay regla automática, se marca a mano por modelo.
+window.simZhongkeElegiblePorModelo = window.simZhongkeElegiblePorModelo || {};
 
 // Restaura el plan (modelos activos, prioridad, target y fecha de entrega)
 // guardado en este navegador — así "Analizar varios modelos" y "Plan Requerido"
@@ -834,6 +837,7 @@ try {
     if (d.targets) simTargetsPorModelo = Object.assign(simTargetsPorModelo, d.targets);
     if (d.prioridades) window.simPrioridadPorModelo = Object.assign(window.simPrioridadPorModelo, d.prioridades);
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
+    if (d.zhongkeElegible) window.simZhongkeElegiblePorModelo = Object.assign(window.simZhongkeElegiblePorModelo, d.zhongkeElegible);
   }
 } catch (e) {}
 
@@ -843,10 +847,20 @@ function guardarPlanCompleto() {
       modelos: multiModelosActivos,
       targets: simTargetsPorModelo,
       prioridades: window.simPrioridadPorModelo || {},
-      fechas: window.simFechaEntregaPorModelo || {}
+      fechas: window.simFechaEntregaPorModelo || {},
+      zhongkeElegible: window.simZhongkeElegiblePorModelo || {}
     }));
   } catch (e) {}
 }
+
+// Marca/desmarca si un modelo puede correr en Zhongke (checkbox del Plan de
+// Asignación Top) y vuelve a calcular el reparto.
+function actualizarZhongkeElegible(sm, checked) {
+  window.simZhongkeElegiblePorModelo[sm] = !!checked;
+  guardarPlanCompleto();
+  renderPlanSemanal();
+}
+window.actualizarZhongkeElegible = actualizarZhongkeElegible;
 
 // Producido manual por modelo (Plan Semanal) — el usuario lo captura a mano;
 // más adelante se puede traer automático o con un botón desde el MES.
@@ -4223,6 +4237,15 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
 //    modelo — a diferencia de ASSY1 (que planea ideal y muestra material aparte),
 //    aquí un modelo deja de recibir más días en cuanto se agota su material.
 // tipo: 'Top' o 'Bot' (coincide con la etiqueta de window._planPickList).
+// Zhongke por definición solo corre el modelo 625A y, en casos puntuales, otros
+// modelos que se marquen a mano (checkbox en el Plan de Asignación Top) — no hay
+// forma de deducirlo del BOM/Excel. El resto de las máquinas (S1-S5) no tienen
+// esta restricción, aceptan cualquier modelo.
+function esElegibleParaMaquina(sm, maquina) {
+  if (maquina !== 'Zhongke') return true;
+  return !!(window.simZhongkeElegiblePorModelo && window.simZhongkeElegiblePorModelo[sm]);
+}
+
 function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModelo, produccionReal, targetsMaquinasObj) {
   produccionReal = produccionReal || {};
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
@@ -4259,25 +4282,27 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
     if (!quedaAlgo) break;
 
     if (cursor.getDay() !== 0) {
-      const activos = items.filter(it => it.restante > 0 && it.materialUsado < it.materialCap)
-        .sort((a, b) => a.prioridad - b.prioridad);
-      let idx = 0;
       const asignacionesPorMaquina = {};
 
+      // Cada máquina toma su propia cola filtrada y ordenada por prioridad —
+      // así Zhongke solo ve los modelos marcados como elegibles (625A y las
+      // excepciones que se marquen a mano), mientras S1-S5 ven todos.
       maquinas.forEach(maquina => {
         let capacidadRestante = targetsMaquinasObj[maquina] || 0;
         const asignacionesMaquina = [];
-        while (capacidadRestante > 0 && idx < activos.length) {
-          const it = activos[idx];
-          if (it.restante <= 0 || it.materialUsado >= it.materialCap) { idx++; continue; }
+        while (capacidadRestante > 0) {
+          const activosMaquina = items
+            .filter(it => it.restante > 0 && it.materialUsado < it.materialCap && esElegibleParaMaquina(it.sm, maquina))
+            .sort((a, b) => a.prioridad - b.prioridad);
+          if (!activosMaquina.length) break;
+          const it = activosMaquina[0];
           const disponibleMaterial = it.materialCap - it.materialUsado;
           const toma = Math.min(it.restante, capacidadRestante, disponibleMaterial);
-          if (toma <= 0) { idx++; continue; }
+          if (toma <= 0) break;
           asignacionesMaquina.push({ sm: it.sm, codeHijo: it.codeHijo, qty: toma });
           it.restante -= toma;
           it.materialUsado += toma;
           capacidadRestante -= toma;
-          if (it.restante <= 0 || it.materialUsado >= it.materialCap) idx++;
         }
         asignacionesPorMaquina[maquina] = asignacionesMaquina;
       });
@@ -4852,10 +4877,31 @@ async function renderPlanSemanal() {
       </div>`;
   };
 
+  const modelosConTop = modelosRGBOrdenados.filter(sm => {
+    const pick = (pickPorModelo[sm] || {})['Top'];
+    if (!pick) return false;
+    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
+    return pendiente > 0;
+  });
+  const panelZhongkeHtml = !modelosConTop.length ? '' : `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">¿Corre en Zhongke?</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Zhongke por definición solo corre el 625A y, en algunos casos, otros modelos puntuales — márcalos aquí a mano; sin marcar, Zhongke no los toma en el reparto de abajo.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.2rem">
+        ${modelosConTop.map(sm => `
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:12px;color:var(--text2)">
+            <input type="checkbox" ${window.simZhongkeElegiblePorModelo[sm] ? 'checked' : ''} onchange="actualizarZhongkeElegible('${sm.replace(/'/g, "\\'")}', this.checked)">
+            ${sm}
+          </label>`).join('')}
+      </div>
+    </div>
+  `;
+
   const tablaRGBHtml =
+    panelZhongkeHtml +
     construirGridMedioProceso(
       '1️⃣ Plan de Asignación · Top (' + maquinasTop.join('/') + ')',
-      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Top, Chip Board Top Ranurado) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo.',
+      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Top, Chip Board Top Ranurado) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Zhongke solo toma los modelos marcados arriba.',
       maquinasTop, planTop
     ) +
     construirGridMedioProceso(
@@ -4863,37 +4909,6 @@ async function renderPlanSemanal() {
       'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo.',
       maquinasBot, planBot
     );
-
-  const desgloseRGB = (window._planPickListRGB || []).filter(p => !p.ok);
-  const alertasRGB = !desgloseRGB.length ? '' : `
-    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid rgba(255,68,68,.35);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--red);text-transform:uppercase;margin-bottom:.8rem">⚠ RGB — Desglose de materiales insuficientes</div>
-      <div style="overflow-x:auto">
-      <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <thead><tr>
-          <th style="${thStyle}">Modelo</th>
-          <th style="${thStyle}">Grupo</th>
-          <th style="${thStyle}">Material</th>
-          <th style="${thStyle}">N° Parte</th>
-          <th style="${thRight}">Requerido</th>
-          <th style="${thRight}">Disponible</th>
-          <th style="${thRight};color:var(--red)">Falta</th>
-        </tr></thead>
-        <tbody>
-          ${desgloseRGB.map(f => `
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:8px 6px;font-weight:700;color:var(--accent)">${f.modelo}</td>
-              <td style="padding:8px 6px;color:var(--text2)">${f.grupo}</td>
-              <td style="padding:8px 6px;color:var(--text2)">${f.etiqueta}</td>
-              <td style="padding:8px 6px;color:var(--text2);font-size:12px">${f.pn}</td>
-              <td style="padding:8px 6px;text-align:right">${f.requerido.toLocaleString()}</td>
-              <td style="padding:8px 6px;text-align:right">${f.disponible.toLocaleString()}</td>
-              <td style="padding:8px 6px;text-align:right;font-weight:700;color:var(--red)">${(f.requerido - f.disponible).toLocaleString()}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>
-    </div>`;
 
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
@@ -4917,7 +4932,6 @@ async function renderPlanSemanal() {
     </div>
     ${alertasMateriales}
     ${tablaRGBHtml}
-    ${alertasRGB}
     ${planPreEnsambleHtml}
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">

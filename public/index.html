@@ -4687,9 +4687,6 @@ async function renderPlanSemanal() {
   const maquinasTop = ['Zhongke', ...['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'TOP')];
   const maquinasBot = ['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'BOT');
 
-  const ordenCelda = (orden) => orden
-    ? `<span style="color:#00e676;font-weight:700">#${orden}</span>`
-    : `<span style="color:var(--text3)">—</span>`;
   const diasCelda = (dias) => (dias !== null) ? dias.toLocaleString() : '—';
 
   // Un renglón por CADA MÁQUINA que puede correr ese modelo (no una sola línea combinada):
@@ -4697,10 +4694,10 @@ async function renderPlanSemanal() {
   // Bottom = Sheet Lower Box + Chip Board Bot Ranurado + Pulp Tray + Set Pad + Galleta + Sticker → un renglón por cada máquina en maquinasBot.
   // Código padre = modelo GH90 (mismo de la tabla 1). Código hijo = medio proceso GH69 (Sheet Top / Sheet Lower Box).
   // Pendiente = mismo Target − Producido de la tabla 1 (sin cálculo aparte).
-  // El # de orden es independiente POR MÁQUINA (la cola propia de S1, la propia de S2, etc.) —
-  // los modelos ya vienen en orden de prioridad (modelosRGBOrdenados), solo se numeran los
-  // renglones listos para correr (con material, con pendiente > 0 y con target de esa máquina > 0).
-  const ordenPorMaquina = {};
+  // El orden usa la MISMA etiqueta "⚡ Listo" parpadeante que ya usa la tabla de ensamble (tabla 1),
+  // con id "plan-listo-maq-<MAQUINA>__<modelo>_<tipo>" — iniciarParpadeoPlanListo() detecta el prefijo
+  // "plan-listo-maq-" y numera la cola de CADA máquina por separado (S1 su propia cola, S2 la suya, etc.),
+  // sin mezclarse con la numeración de la tabla de ensamble ni con la de ninguna otra máquina.
   const filasRGB = modelosRGBOrdenados.map(sm => {
     const producidoSm = produccionReal[sm] || 0;
     const pendienteRGB = Math.max(0, (simTargetsPorModelo[sm] || 0) - producidoSm);
@@ -4720,14 +4717,15 @@ async function renderPlanSemanal() {
     const listoTop = pendienteRGB > 0 && isFinite(capTapa) && capTapa > 0;
     const listoBase = pendienteRGB > 0 && isFinite(capBase) && capBase > 0;
 
-    const filaMaquina = (maquina, tipo, codeHijo, listo, falta) => {
+    const filaMaquina = (maquina, tipo, codeHijo, listo, falta, capMaterial) => {
       const targetMaquina = targetsMaquinas[maquina] || 0;
       const listoConTarget = listo && targetMaquina > 0;
-      let orden = null, dias = null;
+      let dias = null;
+      let ordenCeldaHtml = '<span style="color:var(--text3)">—</span>';
       if (listoConTarget) {
-        ordenPorMaquina[maquina] = (ordenPorMaquina[maquina] || 0) + 1;
-        orden = ordenPorMaquina[maquina];
         dias = Math.ceil(pendienteRGB / targetMaquina);
+        const idSeguro = `plan-listo-maq-${maquina}__${sm.replace(/[^a-zA-Z0-9]/g, '_')}_${tipo}`;
+        ordenCeldaHtml = `<div class="plan-listo-badge" id="${idSeguro}" data-cap="${Math.floor(capMaterial)}" title="Listo para correr en ${maquina}"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterial).toLocaleString()} pzas</div>`;
       }
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px 8px;font-weight:700;color:var(--accent2, var(--accent))">${maquina}</td>
@@ -4736,22 +4734,22 @@ async function renderPlanSemanal() {
         <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codeHijo}</td>
         <td style="padding:10px 8px;text-align:center;color:var(--text2)">${tipo}</td>
         <td style="padding:10px 8px;text-align:right;color:var(--text2)">${targetMaquina ? targetMaquina.toLocaleString() : '—'}</td>
-        <td style="padding:10px 8px;text-align:center">${ordenCelda(orden)}</td>
+        <td style="padding:10px 8px;text-align:center">${ordenCeldaHtml}</td>
         <td style="padding:10px 8px;text-align:center;color:var(--text2)">${diasCelda(dias)}</td>
         <td style="padding:10px 8px;text-align:center">${badgeRGB(falta)}</td>
       </tr>`;
     };
 
     const filasModelo = [];
-    if (sheetTop) maquinasTop.forEach(maq => filasModelo.push(filaMaquina(maq, 'Top', sheetTop.row.pn || '—', listoTop, faltaTapa)));
-    if (sheetBase) maquinasBot.forEach(maq => filasModelo.push(filaMaquina(maq, 'Bottom', sheetBase.row.pn || '—', listoBase, faltaBase)));
+    if (sheetTop) maquinasTop.forEach(maq => filasModelo.push(filaMaquina(maq, 'Top', sheetTop.row.pn || '—', listoTop, faltaTapa, capTapa)));
+    if (sheetBase) maquinasBot.forEach(maq => filasModelo.push(filaMaquina(maq, 'Bottom', sheetBase.row.pn || '—', listoBase, faltaBase, capBase)));
     return filasModelo.join('');
   }).join('');
 
   const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Medio Proceso (Top / Bottom)</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido, no se muestra aparte porque ya define el # y los Días). Un renglón por CADA MÁQUINA que puede correr ese modelo (Top: ${maquinasTop.join('/')}; Bottom: ${maquinasBot.join('/')} — según cómo asignes S5 en la sección 2️⃣). Code Padre = modelo GH90, Code Hijo = medio proceso GH69. El # es la cola de producción independiente de cada máquina; Días es un estimado usando el target diario real de esa máquina.</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido). Un renglón por CADA MÁQUINA que puede correr ese modelo (Top: ${maquinasTop.join('/')}; Bottom: ${maquinasBot.join('/')} — según cómo asignes S5 en la sección 2️⃣). Code Padre = modelo GH90, Code Hijo = medio proceso GH69. La etiqueta "⚡ Listo" parpadea y numera la cola de producción de esa máquina en específico (igual que en la tabla de ensamble); Días es un estimado usando el target diario real de esa máquina.</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>
@@ -4872,12 +4870,19 @@ async function renderPlanSemanal() {
 function iniciarParpadeoPlanListo() {
   if (window._planListoBlinkTimer) clearInterval(window._planListoBlinkTimer);
 
-  // Se numeran por separado: los badges de la tabla de ensamble (id empieza con
-  // "plan-listo-") y los de la tabla RGB (id empieza con "plan-listo-rgb-") NO
-  // deben compartir la misma numeración, porque son dos tablas distintas.
+  // Se numeran por separado y nunca se mezclan entre sí: los de la tabla de ensamble
+  // (id "plan-listo-"), los de la tabla RGB vieja si llegara a quedar alguno (id
+  // "plan-listo-rgb-"), y los de la tabla Medio Proceso por MÁQUINA (id
+  // "plan-listo-maq-<MAQUINA>__..." — cada máquina tiene su propia cola/numeración).
   const todos = Array.from(document.querySelectorAll('.plan-listo-badge'));
   const badgesRGB = todos.filter(el => el.id.startsWith('plan-listo-rgb-'));
-  const badgesAssy = todos.filter(el => !el.id.startsWith('plan-listo-rgb-'));
+  const badgesMaqPorMaquina = {};
+  todos.forEach(el => {
+    const m = el.id.match(/^plan-listo-maq-([^_]+)__/);
+    if (m) (badgesMaqPorMaquina[m[1]] = badgesMaqPorMaquina[m[1]] || []).push(el);
+  });
+  const idsMaq = new Set(Object.values(badgesMaqPorMaquina).flat());
+  const badgesAssy = todos.filter(el => !el.id.startsWith('plan-listo-rgb-') && !idsMaq.has(el));
 
   const numerar = (grupo) => {
     grupo.sort((a, b) => Number(b.dataset.cap) - Number(a.dataset.cap));
@@ -4888,6 +4893,7 @@ function iniciarParpadeoPlanListo() {
   };
   numerar(badgesAssy);
   numerar(badgesRGB);
+  Object.values(badgesMaqPorMaquina).forEach(numerar);
 
   const badges = todos;
   if (!badges.length) return;

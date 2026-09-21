@@ -821,10 +821,11 @@ function toggleTree(idx) {
 let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
 window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
-// Zhongke por definición solo corre el código de medio proceso (GH69) del 625A y,
-// en algunos casos, otros códigos puntuales — no hay regla automática, se marca a
-// mano por CÓDIGO (no por modelo GH90, porque varios modelos comparten el mismo GH69).
-window.simZhongkeElegiblePorCodigo = window.simZhongkeElegiblePorCodigo || {};
+// Qué máquinas pueden correr cada CÓDIGO de medio proceso (GH69) — editable a mano
+// por código (no por modelo GH90, porque varios modelos comparten el mismo GH69).
+// Default si el código no tiene override guardado: todas menos Zhongke (Zhongke por
+// definición solo corre el 625A y casos puntuales, se activa a mano).
+window.simMaquinasElegiblesPorCodigo = window.simMaquinasElegiblesPorCodigo || {};
 
 // Restaura el plan (modelos activos, prioridad, target y fecha de entrega)
 // guardado en este navegador — así "Analizar varios modelos" y "Plan Requerido"
@@ -838,7 +839,15 @@ try {
     if (d.targets) simTargetsPorModelo = Object.assign(simTargetsPorModelo, d.targets);
     if (d.prioridades) window.simPrioridadPorModelo = Object.assign(window.simPrioridadPorModelo, d.prioridades);
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
-    if (d.zhongkeElegiblePorCodigo) window.simZhongkeElegiblePorCodigo = Object.assign(window.simZhongkeElegiblePorCodigo, d.zhongkeElegiblePorCodigo);
+    if (d.maquinasElegiblesPorCodigo) window.simMaquinasElegiblesPorCodigo = Object.assign(window.simMaquinasElegiblesPorCodigo, d.maquinasElegiblesPorCodigo);
+    // Migración del ajuste anterior (solo Zhongke por código) al esquema nuevo (todas las máquinas).
+    if (d.zhongkeElegiblePorCodigo) {
+      Object.keys(d.zhongkeElegiblePorCodigo).forEach(codigo => {
+        if (!d.zhongkeElegiblePorCodigo[codigo]) return;
+        window.simMaquinasElegiblesPorCodigo[codigo] = window.simMaquinasElegiblesPorCodigo[codigo] || {};
+        if (window.simMaquinasElegiblesPorCodigo[codigo].Zhongke === undefined) window.simMaquinasElegiblesPorCodigo[codigo].Zhongke = true;
+      });
+    }
   }
 } catch (e) {}
 
@@ -849,19 +858,20 @@ function guardarPlanCompleto() {
       targets: simTargetsPorModelo,
       prioridades: window.simPrioridadPorModelo || {},
       fechas: window.simFechaEntregaPorModelo || {},
-      zhongkeElegiblePorCodigo: window.simZhongkeElegiblePorCodigo || {}
+      maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {}
     }));
   } catch (e) {}
 }
 
-// Marca/desmarca si un CÓDIGO de medio proceso (GH69) puede correr en Zhongke
-// (checkbox del Plan de Asignación Top) y vuelve a calcular el reparto.
-function actualizarZhongkeElegibleCodigo(codeHijo, checked) {
-  window.simZhongkeElegiblePorCodigo[codeHijo] = !!checked;
+// Marca/desmarca si una MÁQUINA puede correr un CÓDIGO de medio proceso (GH69)
+// (checkboxes del Plan de Asignación) y vuelve a calcular el reparto.
+function actualizarMaquinaElegibleCodigo(codeHijo, maquina, checked) {
+  window.simMaquinasElegiblesPorCodigo[codeHijo] = window.simMaquinasElegiblesPorCodigo[codeHijo] || {};
+  window.simMaquinasElegiblesPorCodigo[codeHijo][maquina] = !!checked;
   guardarPlanCompleto();
   renderPlanSemanal();
 }
-window.actualizarZhongkeElegibleCodigo = actualizarZhongkeElegibleCodigo;
+window.actualizarMaquinaElegibleCodigo = actualizarMaquinaElegibleCodigo;
 
 // Producido manual por modelo (Plan Semanal) — el usuario lo captura a mano;
 // más adelante se puede traer automático o con un botón desde el MES.
@@ -4238,18 +4248,15 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
 //    modelo — a diferencia de ASSY1 (que planea ideal y muestra material aparte),
 //    aquí un modelo deja de recibir más días en cuanto se agota su material.
 // tipo: 'Top' o 'Bot' (coincide con la etiqueta de window._planPickList).
-// Zhongke por definición solo corre el modelo 625A y, en casos puntuales, otros
-// modelos que se marquen a mano (checkbox en el Plan de Asignación Top) — no hay
-// forma de deducirlo del BOM/Excel. El resto de las máquinas (S1-S5) no tienen
-// esta restricción, aceptan cualquier modelo.
-// Zhongke por definición solo corre el 625A y, en casos puntuales, otros códigos
-// que se marquen a mano (checkbox en el Plan de Asignación Top) — no hay forma de
-// deducirlo del BOM/Excel. Se marca por CÓDIGO DE MEDIO PROCESO (GH69), no por
-// modelo, porque varios modelos GH90 pueden compartir el mismo Top/Bottom físico.
-// El resto de las máquinas (S1-S5) no tienen esta restricción, aceptan cualquiera.
+// Qué máquinas pueden correr cada CÓDIGO de medio proceso (GH69) se decide a mano
+// (checkboxes del Plan de Asignación) — no por modelo GH90, porque varios modelos
+// pueden compartir el mismo Top/Bottom físico. Si el código no tiene override
+// guardado: todas las máquinas lo aceptan MENOS Zhongke (por definición solo corre
+// el 625A y casos puntuales que se activan a mano).
 function esElegibleParaMaquina(codeHijo, maquina) {
-  if (maquina !== 'Zhongke') return true;
-  return !!(window.simZhongkeElegiblePorCodigo && window.simZhongkeElegiblePorCodigo[codeHijo]);
+  const overrides = window.simMaquinasElegiblesPorCodigo && window.simMaquinasElegiblesPorCodigo[codeHijo];
+  if (overrides && Object.prototype.hasOwnProperty.call(overrides, maquina)) return !!overrides[maquina];
+  return maquina !== 'Zhongke';
 }
 
 function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModelo, produccionReal, targetsMaquinasObj) {
@@ -4920,7 +4927,7 @@ async function renderPlanSemanal() {
   };
 
   // Agrupado por CÓDIGO de medio proceso (GH69), no por modelo — así un checkbox
-  // cubre a todos los modelos que comparten ese Top físico.
+  // cubre a todos los modelos que comparten ese Top/Bottom físico.
   const codigosTopMap = {};
   modelosRGBOrdenados.forEach(sm => {
     const pick = (pickPorModelo[sm] || {})['Top'];
@@ -4930,31 +4937,66 @@ async function renderPlanSemanal() {
     if (!codigosTopMap[pick.pn]) codigosTopMap[pick.pn] = [];
     codigosTopMap[pick.pn].push(sm);
   });
-  const codigosTop = Object.keys(codigosTopMap).sort();
-  const panelZhongkeHtml = !codigosTop.length ? '' : `
+  const codigosBotMap = {};
+  modelosRGBOrdenados.forEach(sm => {
+    const pick = (pickPorModelo[sm] || {})['Bot'];
+    if (!pick || !pick.pn) return;
+    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
+    if (pendiente <= 0) return;
+    if (!codigosBotMap[pick.pn]) codigosBotMap[pick.pn] = [];
+    codigosBotMap[pick.pn].push(sm);
+  });
+
+  const chkMaquinaCodigo = (codeHijo, maquina) => {
+    const marcado = esElegibleParaMaquina(codeHijo, maquina);
+    return `<td style="padding:6px 8px;text-align:center">
+      <input type="checkbox" ${marcado ? 'checked' : ''} onchange="actualizarMaquinaElegibleCodigo('${codeHijo.replace(/'/g, "\\'")}', '${maquina}', this.checked)">
+    </td>`;
+  };
+  const construirTablaMaquinasPorCodigo = (codigosMap, maquinasTipo) => {
+    const codigos = Object.keys(codigosMap).sort();
+    if (!codigos.length) return '<div style="font-size:11px;color:var(--text3)">Nada pendiente por asignar ahorita.</div>';
+    return `
+      <div style="overflow-x:auto">
+      <table style="font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thStyle}">Código</th>
+          <th style="${thStyle}">Modelos</th>
+          ${maquinasTipo.map(m => `<th style="${thCenter}">${m}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${codigos.map(codeHijo => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px;font-weight:700;color:var(--accent)">${codeHijo}</td>
+              <td style="padding:6px 8px;color:var(--text2);font-size:11px">${codigosMap[codeHijo].join(', ')}</td>
+              ${maquinasTipo.map(m => chkMaquinaCodigo(codeHijo, m)).join('')}
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>`;
+  };
+
+  const panelMaquinasHtml = (!Object.keys(codigosTopMap).length && !Object.keys(codigosBotMap).length) ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">¿Corre en Zhongke?</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Zhongke por definición solo corre el 625A y, en algunos casos, otros códigos puntuales — márcalos aquí a mano (por código de medio proceso GH69, cubre a todos los modelos que lo comparten); sin marcar, Zhongke no los toma en el reparto de abajo.</div>
-      <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.2rem">
-        ${codigosTop.map(codeHijo => `
-          <label style="display:flex;align-items:center;gap:.4rem;font-size:12px;color:var(--text2)" title="${codigosTopMap[codeHijo].join(', ')}">
-            <input type="checkbox" ${window.simZhongkeElegiblePorCodigo[codeHijo] ? 'checked' : ''} onchange="actualizarZhongkeElegibleCodigo('${codeHijo.replace(/'/g, "\\'")}', this.checked)">
-            ${codeHijo}
-          </label>`).join('')}
-      </div>
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">Máquinas por código</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Marca qué máquinas pueden correr cada código de medio proceso (GH69) — cubre a todos los modelos que lo comparten. Por default todas están marcadas menos Zhongke (por definición solo corre el 625A y casos puntuales). Desmarcada = esa máquina no lo toma en el reparto de abajo.</div>
+      <div style="margin-bottom:.4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Top</div>
+      ${construirTablaMaquinasPorCodigo(codigosTopMap, maquinasTop)}
+      <div style="margin:1rem 0 .4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Bottom</div>
+      ${construirTablaMaquinasPorCodigo(codigosBotMap, maquinasBot)}
     </div>
   `;
 
   const tablaRGBHtml =
-    panelZhongkeHtml +
+    panelMaquinasHtml +
     construirGridMedioProceso(
       '1️⃣ Plan de Asignación · Top (' + maquinasTop.join('/') + ')',
-      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Top, Chip Board Top Ranurado) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Zhongke solo toma los modelos marcados arriba.',
+      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Top, Chip Board Top Ranurado) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
       maquinasTop, planTop
     ) +
     construirGridMedioProceso(
       '1️⃣ Plan de Asignación · Bottom (' + maquinasBot.join('/') + ')',
-      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo.',
+      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
       maquinasBot, planBot
     );
 

@@ -4266,9 +4266,11 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
   modelosOrdenados.forEach(sm => {
     const pick = (pickPorModelo[sm] || {})[tipo];
     if (!pick || !pick.pn) return;
-    const target = simTargetsPorModelo[sm] || 0;
-    const producido = produccionReal[sm] || 0;
-    const restanteModelo = Math.max(0, target - producido);
+    // El faltante real a PRODUCIR es Pendiente menos lo que YA existe en inventario
+    // de ese Bottom/Top terminado (pick.disponible, ya con la cascada de prioridad
+    // aplicada por calcularFaltantesPorModeloPlan) — no el Pendiente completo. Si ya
+    // hay suficiente semi-terminado en almacén, no hace falta programar máquina.
+    const restanteModelo = Math.max(0, (pick.requerido || 0) - (pick.disponible || 0));
     if (restanteModelo <= 0) return;
     const codeHijo = pick.pn;
     const prioridadModelo = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;

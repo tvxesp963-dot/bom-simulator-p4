@@ -821,9 +821,10 @@ function toggleTree(idx) {
 let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
 window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
-// Zhongke por definición solo corre el modelo 625A y, en algunos casos, otros
-// modelos puntuales — no hay regla automática, se marca a mano por modelo.
-window.simZhongkeElegiblePorModelo = window.simZhongkeElegiblePorModelo || {};
+// Zhongke por definición solo corre el código de medio proceso (GH69) del 625A y,
+// en algunos casos, otros códigos puntuales — no hay regla automática, se marca a
+// mano por CÓDIGO (no por modelo GH90, porque varios modelos comparten el mismo GH69).
+window.simZhongkeElegiblePorCodigo = window.simZhongkeElegiblePorCodigo || {};
 
 // Restaura el plan (modelos activos, prioridad, target y fecha de entrega)
 // guardado en este navegador — así "Analizar varios modelos" y "Plan Requerido"
@@ -837,7 +838,7 @@ try {
     if (d.targets) simTargetsPorModelo = Object.assign(simTargetsPorModelo, d.targets);
     if (d.prioridades) window.simPrioridadPorModelo = Object.assign(window.simPrioridadPorModelo, d.prioridades);
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
-    if (d.zhongkeElegible) window.simZhongkeElegiblePorModelo = Object.assign(window.simZhongkeElegiblePorModelo, d.zhongkeElegible);
+    if (d.zhongkeElegiblePorCodigo) window.simZhongkeElegiblePorCodigo = Object.assign(window.simZhongkeElegiblePorCodigo, d.zhongkeElegiblePorCodigo);
   }
 } catch (e) {}
 
@@ -848,19 +849,19 @@ function guardarPlanCompleto() {
       targets: simTargetsPorModelo,
       prioridades: window.simPrioridadPorModelo || {},
       fechas: window.simFechaEntregaPorModelo || {},
-      zhongkeElegible: window.simZhongkeElegiblePorModelo || {}
+      zhongkeElegiblePorCodigo: window.simZhongkeElegiblePorCodigo || {}
     }));
   } catch (e) {}
 }
 
-// Marca/desmarca si un modelo puede correr en Zhongke (checkbox del Plan de
-// Asignación Top) y vuelve a calcular el reparto.
-function actualizarZhongkeElegible(sm, checked) {
-  window.simZhongkeElegiblePorModelo[sm] = !!checked;
+// Marca/desmarca si un CÓDIGO de medio proceso (GH69) puede correr en Zhongke
+// (checkbox del Plan de Asignación Top) y vuelve a calcular el reparto.
+function actualizarZhongkeElegibleCodigo(codeHijo, checked) {
+  window.simZhongkeElegiblePorCodigo[codeHijo] = !!checked;
   guardarPlanCompleto();
   renderPlanSemanal();
 }
-window.actualizarZhongkeElegible = actualizarZhongkeElegible;
+window.actualizarZhongkeElegibleCodigo = actualizarZhongkeElegibleCodigo;
 
 // Producido manual por modelo (Plan Semanal) — el usuario lo captura a mano;
 // más adelante se puede traer automático o con un botón desde el MES.
@@ -4241,9 +4242,14 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
 // modelos que se marquen a mano (checkbox en el Plan de Asignación Top) — no hay
 // forma de deducirlo del BOM/Excel. El resto de las máquinas (S1-S5) no tienen
 // esta restricción, aceptan cualquier modelo.
-function esElegibleParaMaquina(sm, maquina) {
+// Zhongke por definición solo corre el 625A y, en casos puntuales, otros códigos
+// que se marquen a mano (checkbox en el Plan de Asignación Top) — no hay forma de
+// deducirlo del BOM/Excel. Se marca por CÓDIGO DE MEDIO PROCESO (GH69), no por
+// modelo, porque varios modelos GH90 pueden compartir el mismo Top/Bottom físico.
+// El resto de las máquinas (S1-S5) no tienen esta restricción, aceptan cualquiera.
+function esElegibleParaMaquina(codeHijo, maquina) {
   if (maquina !== 'Zhongke') return true;
-  return !!(window.simZhongkeElegiblePorModelo && window.simZhongkeElegiblePorModelo[sm]);
+  return !!(window.simZhongkeElegiblePorCodigo && window.simZhongkeElegiblePorCodigo[codeHijo]);
 }
 
 function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModelo, produccionReal, targetsMaquinasObj) {
@@ -4251,24 +4257,41 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const grupoMaterial = tipo === 'Top' ? 'Tapa' : 'Base';
 
-  const items = modelosOrdenados.map(sm => {
+  // Se agrupa por CÓDIGO DE MEDIO PROCESO (GH69) — no por modelo. Varios modelos
+  // GH90 pueden compartir el mismo Top/Bottom físico (mismo GH69), y la máquina y
+  // el material se definen por ese código: si se planeara por modelo, dos modelos
+  // con el mismo GH69 verían cada uno el 100% del material disponible por separado
+  // y se sobre-prometería producción que en realidad comparten el mismo inventario.
+  const porCodigo = {};
+  modelosOrdenados.forEach(sm => {
     const pick = (pickPorModelo[sm] || {})[tipo];
-    if (!pick) return null;
+    if (!pick || !pick.pn) return;
     const target = simTargetsPorModelo[sm] || 0;
     const producido = produccionReal[sm] || 0;
-    const restanteInicial = Math.max(0, target - producido);
-    if (restanteInicial <= 0) return null;
-    const itemsMat = obtenerMaterialesRGB(sm).filter(m => m.grupo === grupoMaterial && m.row);
-    const materialCapRaw = itemsMat.length ? Math.min(...itemsMat.map(m => m.row.inv || 0)) : 0;
-    return {
-      sm,
-      codeHijo: pick.pn || '—',
-      prioridad: (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999,
-      restante: restanteInicial,
-      materialCap: isFinite(materialCapRaw) ? materialCapRaw : 0,
-      materialUsado: 0
-    };
-  }).filter(Boolean);
+    const restanteModelo = Math.max(0, target - producido);
+    if (restanteModelo <= 0) return;
+    const codeHijo = pick.pn;
+    const prioridadModelo = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+
+    if (!porCodigo[codeHijo]) {
+      const itemsMat = obtenerMaterialesRGB(sm).filter(m => m.grupo === grupoMaterial && m.row);
+      const materialCapRaw = itemsMat.length ? Math.min(...itemsMat.map(m => m.row.inv || 0)) : 0;
+      porCodigo[codeHijo] = {
+        codeHijo,
+        modelos: [],
+        restante: 0,
+        prioridad: prioridadModelo,
+        materialCap: isFinite(materialCapRaw) ? materialCapRaw : 0,
+        materialUsado: 0
+      };
+    }
+    const item = porCodigo[codeHijo];
+    item.modelos.push(sm);
+    item.restante += restanteModelo;
+    item.prioridad = Math.min(item.prioridad, prioridadModelo);
+  });
+
+  const items = Object.values(porCodigo);
 
   if (!items.length || !maquinas.length) return { dias: [], sinMaterial: items.filter(it => it.materialCap <= 0) };
 
@@ -4285,21 +4308,21 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
       const asignacionesPorMaquina = {};
 
       // Cada máquina toma su propia cola filtrada y ordenada por prioridad —
-      // así Zhongke solo ve los modelos marcados como elegibles (625A y las
+      // así Zhongke solo ve los códigos marcados como elegibles (625A y las
       // excepciones que se marquen a mano), mientras S1-S5 ven todos.
       maquinas.forEach(maquina => {
         let capacidadRestante = targetsMaquinasObj[maquina] || 0;
         const asignacionesMaquina = [];
         while (capacidadRestante > 0) {
           const activosMaquina = items
-            .filter(it => it.restante > 0 && it.materialUsado < it.materialCap && esElegibleParaMaquina(it.sm, maquina))
+            .filter(it => it.restante > 0 && it.materialUsado < it.materialCap && esElegibleParaMaquina(it.codeHijo, maquina))
             .sort((a, b) => a.prioridad - b.prioridad);
           if (!activosMaquina.length) break;
           const it = activosMaquina[0];
           const disponibleMaterial = it.materialCap - it.materialUsado;
           const toma = Math.min(it.restante, capacidadRestante, disponibleMaterial);
           if (toma <= 0) break;
-          asignacionesMaquina.push({ sm: it.sm, codeHijo: it.codeHijo, qty: toma });
+          asignacionesMaquina.push({ codeHijo: it.codeHijo, modelos: it.modelos, qty: toma });
           it.restante -= toma;
           it.materialUsado += toma;
           capacidadRestante -= toma;
@@ -4316,7 +4339,7 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
   }
 
   // "Sin material" se calcula al final con lo que de verdad quedó sin cubrir —
-  // así avisa tanto al que nunca tuvo nada de material (restante = inicial)
+  // así avisa tanto al código que nunca tuvo nada de material (restante = inicial)
   // como al que se le acabó a medias (restante > 0 después de repartir todos los días).
   return { dias: diasGenerados, sinMaterial: items.filter(it => it.restante > 0) };
 }
@@ -4369,6 +4392,22 @@ window.sincIMSFresco = sincIMSFresco;
 // (S1/S2 normalmente Top, S3/S4 normalmente Bot, pero se puede invertir).
 // S5 es flexible (puede ser Top o Bot según la necesidad del día), default Top.
 window.simTipoMaquinaPreEnsamble = window.simTipoMaquinaPreEnsamble || { S1: 'TOP', S2: 'TOP', S3: 'BOT', S4: 'BOT', S5: 'TOP' };
+// Sub-vista del Plan Semanal: 'ensamble' (Pre-Ensamble + ASSY1) o 'rgb' (Medio Proceso
+// Top/Bottom) — separados para no hacer un scroll tan largo con las dos rejillas juntas.
+window.simPlanSubTab = window.simPlanSubTab || 'ensamble';
+function mostrarPlanSubTab(tab) {
+  window.simPlanSubTab = tab;
+  const divEnsamble = document.getElementById('planSubEnsamble');
+  const divRGB = document.getElementById('planSubRGB');
+  const btnEnsamble = document.getElementById('planSubBtnEnsamble');
+  const btnRGB = document.getElementById('planSubBtnRGB');
+  if (divEnsamble) divEnsamble.style.display = (tab === 'ensamble') ? 'block' : 'none';
+  if (divRGB) divRGB.style.display = (tab === 'rgb') ? 'block' : 'none';
+  const activo = 'background:var(--accent);color:#fff;border-color:var(--accent)';
+  if (btnEnsamble) btnEnsamble.style.cssText = (tab === 'ensamble') ? activo : '';
+  if (btnRGB) btnRGB.style.cssText = (tab === 'rgb') ? activo : '';
+}
+window.mostrarPlanSubTab = mostrarPlanSubTab;
 try {
   const savedTipo = localStorage.getItem('simTipoMaquinaPreEnsamble_p4');
   if (savedTipo) window.simTipoMaquinaPreEnsamble = JSON.parse(savedTipo);
@@ -4813,9 +4852,10 @@ async function renderPlanSemanal() {
   const celdaAsignacion = (dia, maquina) => {
     const asigns = dia.asignacionesPorMaquina[maquina] || [];
     if (!asigns.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
-    const partes = asigns.map(a =>
-      `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:10px;color:var(--text2)">${a.codeHijo}</div><div style="font-size:11px">${a.qty.toLocaleString()}</div>`
-    ).join('<div style="height:4px"></div>');
+    const partes = asigns.map(a => {
+      const modelosTxt = a.modelos && a.modelos.length ? a.modelos.join(', ') : '';
+      return `<div style="font-weight:700;color:var(--accent)">${a.codeHijo}</div><div style="font-size:10px;color:var(--text2)">${modelosTxt}</div><div style="font-size:11px">${a.qty.toLocaleString()}</div>`;
+    }).join('<div style="height:4px"></div>');
     return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}</td>`;
   };
 
@@ -4851,7 +4891,7 @@ async function renderPlanSemanal() {
 
     const avisoSinMaterial = !plan.sinMaterial.length ? '' : `
       <div style="margin-top:.8rem;padding:.6rem .8rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.35);border-radius:8px;font-size:11px;color:var(--red)">
-        ⚠ Sin material para completar: ${plan.sinMaterial.map(it => `${it.sm} (${it.codeHijo}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
+        ⚠ Sin material para completar: ${plan.sinMaterial.map(it => `${it.codeHijo} (${it.modelos.join(', ')}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
       </div>`;
 
     return `
@@ -4877,21 +4917,27 @@ async function renderPlanSemanal() {
       </div>`;
   };
 
-  const modelosConTop = modelosRGBOrdenados.filter(sm => {
+  // Agrupado por CÓDIGO de medio proceso (GH69), no por modelo — así un checkbox
+  // cubre a todos los modelos que comparten ese Top físico.
+  const codigosTopMap = {};
+  modelosRGBOrdenados.forEach(sm => {
     const pick = (pickPorModelo[sm] || {})['Top'];
-    if (!pick) return false;
+    if (!pick || !pick.pn) return;
     const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
-    return pendiente > 0;
+    if (pendiente <= 0) return;
+    if (!codigosTopMap[pick.pn]) codigosTopMap[pick.pn] = [];
+    codigosTopMap[pick.pn].push(sm);
   });
-  const panelZhongkeHtml = !modelosConTop.length ? '' : `
+  const codigosTop = Object.keys(codigosTopMap).sort();
+  const panelZhongkeHtml = !codigosTop.length ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">¿Corre en Zhongke?</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Zhongke por definición solo corre el 625A y, en algunos casos, otros modelos puntuales — márcalos aquí a mano; sin marcar, Zhongke no los toma en el reparto de abajo.</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Zhongke por definición solo corre el 625A y, en algunos casos, otros códigos puntuales — márcalos aquí a mano (por código de medio proceso GH69, cubre a todos los modelos que lo comparten); sin marcar, Zhongke no los toma en el reparto de abajo.</div>
       <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.2rem">
-        ${modelosConTop.map(sm => `
-          <label style="display:flex;align-items:center;gap:.4rem;font-size:12px;color:var(--text2)">
-            <input type="checkbox" ${window.simZhongkeElegiblePorModelo[sm] ? 'checked' : ''} onchange="actualizarZhongkeElegible('${sm.replace(/'/g, "\\'")}', this.checked)">
-            ${sm}
+        ${codigosTop.map(codeHijo => `
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:12px;color:var(--text2)" title="${codigosTopMap[codeHijo].join(', ')}">
+            <input type="checkbox" ${window.simZhongkeElegiblePorCodigo[codeHijo] ? 'checked' : ''} onchange="actualizarZhongkeElegibleCodigo('${codeHijo.replace(/'/g, "\\'")}', this.checked)">
+            ${codeHijo}
           </label>`).join('')}
       </div>
     </div>
@@ -4930,8 +4976,12 @@ async function renderPlanSemanal() {
       </table>
       </div>
     </div>
+    <div style="display:flex;gap:.6rem;margin:1rem 0">
+      <button id="planSubBtnEnsamble" class="btn btn-sm" style="${window.simPlanSubTab === 'ensamble' ? 'background:var(--accent);color:#fff;border-color:var(--accent)' : ''}" onclick="mostrarPlanSubTab('ensamble')">🔧 Ensamble</button>
+      <button id="planSubBtnRGB" class="btn btn-sm" style="${window.simPlanSubTab === 'rgb' ? 'background:var(--accent);color:#fff;border-color:var(--accent)' : ''}" onclick="mostrarPlanSubTab('rgb')">📦 Medio Proceso RGB</button>
+    </div>
+    <div id="planSubEnsamble" style="display:${window.simPlanSubTab === 'rgb' ? 'none' : 'block'}">
     ${alertasMateriales}
-    ${tablaRGBHtml}
     ${planPreEnsambleHtml}
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem">
@@ -4966,6 +5016,10 @@ async function renderPlanSemanal() {
       </table>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString()} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 11:00am</div>
+    </div>
+    </div>
+    <div id="planSubRGB" style="display:${window.simPlanSubTab === 'rgb' ? 'block' : 'none'}">
+    ${tablaRGBHtml}
     </div>
   `;
 

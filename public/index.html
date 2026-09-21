@@ -864,12 +864,20 @@ function guardarPlanCompleto() {
 }
 
 // Marca/desmarca si una MÁQUINA puede correr un CÓDIGO de medio proceso (GH69)
-// (checkboxes del Plan de Asignación) y vuelve a calcular el reparto.
+// (checkboxes del Plan de Asignación). Solo repinta la sección RGB (construirTablaRGB,
+// sin volver a leer Firestore ni tocar el resto de la página) — antes llamaba a
+// renderPlanSemanal() completo, y si dabas doble clic rápido en dos checkboxes se
+// pisaban entre sí y el navegador brincaba hasta arriba (parecía un refresh).
 function actualizarMaquinaElegibleCodigo(codeHijo, maquina, checked) {
   window.simMaquinasElegiblesPorCodigo[codeHijo] = window.simMaquinasElegiblesPorCodigo[codeHijo] || {};
   window.simMaquinasElegiblesPorCodigo[codeHijo][maquina] = !!checked;
   guardarPlanCompleto();
-  renderPlanSemanal();
+  const divRGB = document.getElementById('planSubRGB');
+  if (divRGB) {
+    divRGB.innerHTML = construirTablaRGB();
+  } else {
+    renderPlanSemanal();
+  }
 }
 window.actualizarMaquinaElegibleCodigo = actualizarMaquinaElegibleCodigo;
 
@@ -4309,6 +4317,193 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
   const MAX_DIAS = 60;
   let diasSinAvanceSeguidos = 0;
 
+function construirTablaRGB() {
+  const produccionReal = { ...(window.simProducidoManualPorModelo || {}) };
+  const targetsMaquinas = window._planTargetsMaquinasCache || {};
+  const thStyle = 'text-align:left;padding:10px 8px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)';
+  const thRight = thStyle.replace('text-align:left', 'text-align:right');
+  const thCenter = thStyle.replace('text-align:left', 'text-align:center');
+  const thDia = thCenter + ';white-space:nowrap';
+  const thCiclo = 'text-align:center;padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#00bcd4;background:rgba(0,188,212,.08);border-bottom:1px solid var(--border);white-space:nowrap';
+  // ── TABLA RGB: Plan Requerido RGB (Tapa/Base) — mismo Excel/target que la tabla 1 ──
+  const modelosRGBOrdenados = (window._planModelosRGB || []).slice().sort((a, b) => {
+    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
+    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
+    return pa - pb;
+  });
+
+  const badgeRGB = (falta) => falta
+    ? '<span style="background:rgba(255,68,68,.15);color:var(--red);padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">⚠ Falta</span>'
+    : '<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">✓ Completo</span>';
+
+  // Lista dinámica de máquinas por tipo — respeta lo que ya tengas asignado en el
+  // selector de la sección 2️⃣ (misma fuente que usa capacidadesPreEnsamble, para
+  // que esta tabla y esa nunca se desincronicen). Zhongke siempre es Top (fijo).
+  const tipoMaquinaRGB = (m) => window.simTipoMaquinaPreEnsamble[m] || 'TOP';
+  const maquinasTop = ['Zhongke', ...['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'TOP')];
+  const maquinasBot = ['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'BOT');
+
+  // El Code Hijo (GH69) y si un modelo necesita Top/Bot salen del MISMO desglose que
+  // ya usa la tabla 1 (window._planPickList — Strip/Top/Bot/Bundle, identificados por
+  // la estructura real de grupos del BOM, no por buscar palabras en la descripción).
+  // Así esta tabla y la tabla 1 nunca se desincronizan.
+  const pickPorModelo = {};
+  (window._planPickList || []).forEach(p => {
+    if (!pickPorModelo[p.modelo]) pickPorModelo[p.modelo] = {};
+    pickPorModelo[p.modelo][p.etiqueta] = p;
+  });
+
+  // Asigna, día por día y por prioridad, qué modelo le toca a CADA máquina —
+  // llenando el target diario completo de cada una antes de pasar al siguiente
+  // modelo de la fila, con el material crudo en almacén como tope duro total por
+  // modelo (ver calcularPlanMedioProceso, arriba en el archivo).
+  const planTop = calcularPlanMedioProceso('Top', maquinasTop, modelosRGBOrdenados, pickPorModelo, produccionReal, targetsMaquinas);
+  const planBot = calcularPlanMedioProceso('Bot', maquinasBot, modelosRGBOrdenados, pickPorModelo, produccionReal, targetsMaquinas);
+
+  const celdaAsignacion = (dia, maquina) => {
+    const asigns = dia.asignacionesPorMaquina[maquina] || [];
+    if (!asigns.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
+    const partes = asigns.map(a => {
+      const modelosTxt = a.modelos && a.modelos.length ? a.modelos.join(', ') : '';
+      return `<div style="font-weight:700;color:var(--accent)">${a.codeHijo}</div><div style="font-size:10px;color:var(--text2)">${modelosTxt}</div><div style="font-size:11px">${a.qty.toLocaleString()}</div>`;
+    }).join('<div style="height:4px"></div>');
+    return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}</td>`;
+  };
+
+  const construirGrupoCiclosRGB = (dias) => {
+    const grupos = [];
+    dias.forEach(d => {
+      const key = d.corteEnvio.toISOString();
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.key === key) ultimo.count++;
+      else grupos.push({ key, label: formatCorteLabel(d.corteEnvio), count: 1 });
+    });
+    return grupos.map(g => `<th colspan="${g.count}" style="${thCiclo}">${g.label}</th>`).join('');
+  };
+  const construirColHeadersRGB = (dias) => dias.map(d =>
+    `<th style="${thDia}">${(d.fecha.getMonth() + 1)}/${d.fecha.getDate()}(${d.fecha.toLocaleDateString('es-MX', { weekday: 'short' })})</th>`
+  ).join('');
+
+  const construirGridMedioProceso = (titulo, descripcion, maquinasTipo, plan) => {
+    if (!maquinasTipo.length) return '';
+    if (!plan.dias.length) {
+      return `
+        <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+          <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">${titulo}</div>
+          <div style="font-size:11px;color:var(--text3)">${descripcion}</div>
+          <div class="empty" style="padding:1.2rem 0"><div class="empty-title">Nada pendiente por asignar ahorita.</div></div>
+        </div>`;
+    }
+    const filas = maquinasTipo.map(maq => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 6px;font-weight:700;position:sticky;left:0;background:#0d1220">${maq}</td>
+        ${plan.dias.map(d => celdaAsignacion(d, maq)).join('')}
+      </tr>`).join('');
+
+    const avisoSinMaterial = !plan.sinMaterial.length ? '' : `
+      <div style="margin-top:.8rem;padding:.6rem .8rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.35);border-radius:8px;font-size:11px;color:var(--red)">
+        ⚠ Sin material para completar: ${plan.sinMaterial.map(it => `${it.codeHijo} (${it.modelos.join(', ')}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
+      </div>`;
+
+    return `
+      <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">${titulo}</div>
+        <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">${descripcion}</div>
+        <div style="overflow-x:auto">
+        <table style="width:100%;font-size:13px;border-collapse:collapse">
+          <thead>
+          <tr>
+            <th style="${thCiclo};position:sticky;left:0;background:rgba(0,188,212,.08)"></th>
+            ${construirGrupoCiclosRGB(plan.dias)}
+          </tr>
+          <tr>
+            <th style="${thStyle};position:sticky;left:0;background:#0d1220">Línea</th>
+            ${construirColHeadersRGB(plan.dias)}
+          </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+        </div>
+        ${avisoSinMaterial}
+      </div>`;
+  };
+
+  // Agrupado por CÓDIGO de medio proceso (GH69), no por modelo — así un checkbox
+  // cubre a todos los modelos que comparten ese Top/Bottom físico.
+  const codigosTopMap = {};
+  modelosRGBOrdenados.forEach(sm => {
+    const pick = (pickPorModelo[sm] || {})['Top'];
+    if (!pick || !pick.pn) return;
+    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
+    if (pendiente <= 0) return;
+    if (!codigosTopMap[pick.pn]) codigosTopMap[pick.pn] = [];
+    codigosTopMap[pick.pn].push(sm);
+  });
+  const codigosBotMap = {};
+  modelosRGBOrdenados.forEach(sm => {
+    const pick = (pickPorModelo[sm] || {})['Bot'];
+    if (!pick || !pick.pn) return;
+    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
+    if (pendiente <= 0) return;
+    if (!codigosBotMap[pick.pn]) codigosBotMap[pick.pn] = [];
+    codigosBotMap[pick.pn].push(sm);
+  });
+
+  const chkMaquinaCodigo = (codeHijo, maquina) => {
+    const marcado = esElegibleParaMaquina(codeHijo, maquina);
+    return `<td style="padding:6px 8px;text-align:center">
+      <input type="checkbox" ${marcado ? 'checked' : ''} onchange="actualizarMaquinaElegibleCodigo('${codeHijo.replace(/'/g, "\\'")}', '${maquina}', this.checked)">
+    </td>`;
+  };
+  const construirTablaMaquinasPorCodigo = (codigosMap, maquinasTipo) => {
+    const codigos = Object.keys(codigosMap).sort();
+    if (!codigos.length) return '<div style="font-size:11px;color:var(--text3)">Nada pendiente por asignar ahorita.</div>';
+    return `
+      <div style="overflow-x:auto">
+      <table style="font-size:12px;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thStyle}">Código</th>
+          <th style="${thStyle}">Modelos</th>
+          ${maquinasTipo.map(m => `<th style="${thCenter}">${m}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${codigos.map(codeHijo => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px;font-weight:700;color:var(--accent)">${codeHijo}</td>
+              <td style="padding:6px 8px;color:var(--text2);font-size:11px">${codigosMap[codeHijo].join(', ')}</td>
+              ${maquinasTipo.map(m => chkMaquinaCodigo(codeHijo, m)).join('')}
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>`;
+  };
+
+  const panelMaquinasHtml = (!Object.keys(codigosTopMap).length && !Object.keys(codigosBotMap).length) ? '' : `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">Máquinas por código</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Marca qué máquinas pueden correr cada código de medio proceso (GH69) — cubre a todos los modelos que lo comparten. Por default todas están marcadas menos Zhongke (por definición solo corre el 625A y casos puntuales). Desmarcada = esa máquina no lo toma en el reparto de abajo.</div>
+      <div style="margin-bottom:.4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Top</div>
+      ${construirTablaMaquinasPorCodigo(codigosTopMap, maquinasTop)}
+      <div style="margin:1rem 0 .4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Bottom</div>
+      ${construirTablaMaquinasPorCodigo(codigosBotMap, maquinasBot)}
+    </div>
+  `;
+
+  const tablaRGBHtml =
+    panelMaquinasHtml +
+    construirGridMedioProceso(
+      '1️⃣ Plan de Asignación · Top (' + maquinasTop.join('/') + ')',
+      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Top, Chip Board Top Ranurado) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
+      maquinasTop, planTop
+    ) +
+    construirGridMedioProceso(
+      '1️⃣ Plan de Asignación · Bottom (' + maquinasBot.join('/') + ')',
+      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
+      maquinasBot, planBot
+    );
+  return tablaRGBHtml;
+}
+
   for (let i = 0; i < MAX_DIAS; i++) {
     const quedaAlgo = items.some(it => it.restante > 0 && it.materialUsado < it.materialCap);
     if (!quedaAlgo) break;
@@ -4823,182 +5018,8 @@ async function renderPlanSemanal() {
   const thCenter = thStyle.replace('text-align:left', 'text-align:center');
   const thDia = thCenter + ';white-space:nowrap';
 
-  // ── TABLA RGB: Plan Requerido RGB (Tapa/Base) — mismo Excel/target que la tabla 1 ──
-  const modelosRGBOrdenados = (window._planModelosRGB || []).slice().sort((a, b) => {
-    const pa = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[a]) || 999;
-    const pb = (window.simPrioridadPorModelo && window.simPrioridadPorModelo[b]) || 999;
-    return pa - pb;
-  });
-
-  const badgeRGB = (falta) => falta
-    ? '<span style="background:rgba(255,68,68,.15);color:var(--red);padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">⚠ Falta</span>'
-    : '<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">✓ Completo</span>';
-
-  // Lista dinámica de máquinas por tipo — respeta lo que ya tengas asignado en el
-  // selector de la sección 2️⃣ (misma fuente que usa capacidadesPreEnsamble, para
-  // que esta tabla y esa nunca se desincronicen). Zhongke siempre es Top (fijo).
-  const tipoMaquinaRGB = (m) => window.simTipoMaquinaPreEnsamble[m] || 'TOP';
-  const maquinasTop = ['Zhongke', ...['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'TOP')];
-  const maquinasBot = ['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'BOT');
-
-  // El Code Hijo (GH69) y si un modelo necesita Top/Bot salen del MISMO desglose que
-  // ya usa la tabla 1 (window._planPickList — Strip/Top/Bot/Bundle, identificados por
-  // la estructura real de grupos del BOM, no por buscar palabras en la descripción).
-  // Así esta tabla y la tabla 1 nunca se desincronizan.
-  const pickPorModelo = {};
-  (window._planPickList || []).forEach(p => {
-    if (!pickPorModelo[p.modelo]) pickPorModelo[p.modelo] = {};
-    pickPorModelo[p.modelo][p.etiqueta] = p;
-  });
-
-  // Asigna, día por día y por prioridad, qué modelo le toca a CADA máquina —
-  // llenando el target diario completo de cada una antes de pasar al siguiente
-  // modelo de la fila, con el material crudo en almacén como tope duro total por
-  // modelo (ver calcularPlanMedioProceso, arriba en el archivo).
-  const planTop = calcularPlanMedioProceso('Top', maquinasTop, modelosRGBOrdenados, pickPorModelo, produccionReal, targetsMaquinas);
-  const planBot = calcularPlanMedioProceso('Bot', maquinasBot, modelosRGBOrdenados, pickPorModelo, produccionReal, targetsMaquinas);
-
-  const celdaAsignacion = (dia, maquina) => {
-    const asigns = dia.asignacionesPorMaquina[maquina] || [];
-    if (!asigns.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
-    const partes = asigns.map(a => {
-      const modelosTxt = a.modelos && a.modelos.length ? a.modelos.join(', ') : '';
-      return `<div style="font-weight:700;color:var(--accent)">${a.codeHijo}</div><div style="font-size:10px;color:var(--text2)">${modelosTxt}</div><div style="font-size:11px">${a.qty.toLocaleString()}</div>`;
-    }).join('<div style="height:4px"></div>');
-    return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}</td>`;
-  };
-
-  const construirGrupoCiclosRGB = (dias) => {
-    const grupos = [];
-    dias.forEach(d => {
-      const key = d.corteEnvio.toISOString();
-      const ultimo = grupos[grupos.length - 1];
-      if (ultimo && ultimo.key === key) ultimo.count++;
-      else grupos.push({ key, label: formatCorteLabel(d.corteEnvio), count: 1 });
-    });
-    return grupos.map(g => `<th colspan="${g.count}" style="${thCiclo}">${g.label}</th>`).join('');
-  };
-  const construirColHeadersRGB = (dias) => dias.map(d =>
-    `<th style="${thDia}">${(d.fecha.getMonth() + 1)}/${d.fecha.getDate()}(${d.fecha.toLocaleDateString('es-MX', { weekday: 'short' })})</th>`
-  ).join('');
-
-  const construirGridMedioProceso = (titulo, descripcion, maquinasTipo, plan) => {
-    if (!maquinasTipo.length) return '';
-    if (!plan.dias.length) {
-      return `
-        <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-          <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">${titulo}</div>
-          <div style="font-size:11px;color:var(--text3)">${descripcion}</div>
-          <div class="empty" style="padding:1.2rem 0"><div class="empty-title">Nada pendiente por asignar ahorita.</div></div>
-        </div>`;
-    }
-    const filas = maquinasTipo.map(maq => `
-      <tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:8px 6px;font-weight:700;position:sticky;left:0;background:#0d1220">${maq}</td>
-        ${plan.dias.map(d => celdaAsignacion(d, maq)).join('')}
-      </tr>`).join('');
-
-    const avisoSinMaterial = !plan.sinMaterial.length ? '' : `
-      <div style="margin-top:.8rem;padding:.6rem .8rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.35);border-radius:8px;font-size:11px;color:var(--red)">
-        ⚠ Sin material para completar: ${plan.sinMaterial.map(it => `${it.codeHijo} (${it.modelos.join(', ')}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
-      </div>`;
-
-    return `
-      <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">${titulo}</div>
-        <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">${descripcion}</div>
-        <div style="overflow-x:auto">
-        <table style="width:100%;font-size:13px;border-collapse:collapse">
-          <thead>
-          <tr>
-            <th style="${thCiclo};position:sticky;left:0;background:rgba(0,188,212,.08)"></th>
-            ${construirGrupoCiclosRGB(plan.dias)}
-          </tr>
-          <tr>
-            <th style="${thStyle};position:sticky;left:0;background:#0d1220">Línea</th>
-            ${construirColHeadersRGB(plan.dias)}
-          </tr>
-          </thead>
-          <tbody>${filas}</tbody>
-        </table>
-        </div>
-        ${avisoSinMaterial}
-      </div>`;
-  };
-
-  // Agrupado por CÓDIGO de medio proceso (GH69), no por modelo — así un checkbox
-  // cubre a todos los modelos que comparten ese Top/Bottom físico.
-  const codigosTopMap = {};
-  modelosRGBOrdenados.forEach(sm => {
-    const pick = (pickPorModelo[sm] || {})['Top'];
-    if (!pick || !pick.pn) return;
-    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
-    if (pendiente <= 0) return;
-    if (!codigosTopMap[pick.pn]) codigosTopMap[pick.pn] = [];
-    codigosTopMap[pick.pn].push(sm);
-  });
-  const codigosBotMap = {};
-  modelosRGBOrdenados.forEach(sm => {
-    const pick = (pickPorModelo[sm] || {})['Bot'];
-    if (!pick || !pick.pn) return;
-    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
-    if (pendiente <= 0) return;
-    if (!codigosBotMap[pick.pn]) codigosBotMap[pick.pn] = [];
-    codigosBotMap[pick.pn].push(sm);
-  });
-
-  const chkMaquinaCodigo = (codeHijo, maquina) => {
-    const marcado = esElegibleParaMaquina(codeHijo, maquina);
-    return `<td style="padding:6px 8px;text-align:center">
-      <input type="checkbox" ${marcado ? 'checked' : ''} onchange="actualizarMaquinaElegibleCodigo('${codeHijo.replace(/'/g, "\\'")}', '${maquina}', this.checked)">
-    </td>`;
-  };
-  const construirTablaMaquinasPorCodigo = (codigosMap, maquinasTipo) => {
-    const codigos = Object.keys(codigosMap).sort();
-    if (!codigos.length) return '<div style="font-size:11px;color:var(--text3)">Nada pendiente por asignar ahorita.</div>';
-    return `
-      <div style="overflow-x:auto">
-      <table style="font-size:12px;border-collapse:collapse">
-        <thead><tr>
-          <th style="${thStyle}">Código</th>
-          <th style="${thStyle}">Modelos</th>
-          ${maquinasTipo.map(m => `<th style="${thCenter}">${m}</th>`).join('')}
-        </tr></thead>
-        <tbody>
-          ${codigos.map(codeHijo => `
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 8px;font-weight:700;color:var(--accent)">${codeHijo}</td>
-              <td style="padding:6px 8px;color:var(--text2);font-size:11px">${codigosMap[codeHijo].join(', ')}</td>
-              ${maquinasTipo.map(m => chkMaquinaCodigo(codeHijo, m)).join('')}
-            </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>`;
-  };
-
-  const panelMaquinasHtml = (!Object.keys(codigosTopMap).length && !Object.keys(codigosBotMap).length) ? '' : `
-    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">Máquinas por código</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Marca qué máquinas pueden correr cada código de medio proceso (GH69) — cubre a todos los modelos que lo comparten. Por default todas están marcadas menos Zhongke (por definición solo corre el 625A y casos puntuales). Desmarcada = esa máquina no lo toma en el reparto de abajo.</div>
-      <div style="margin-bottom:.4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Top</div>
-      ${construirTablaMaquinasPorCodigo(codigosTopMap, maquinasTop)}
-      <div style="margin:1rem 0 .4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Bottom</div>
-      ${construirTablaMaquinasPorCodigo(codigosBotMap, maquinasBot)}
-    </div>
-  `;
-
-  const tablaRGBHtml =
-    panelMaquinasHtml +
-    construirGridMedioProceso(
-      '1️⃣ Plan de Asignación · Top (' + maquinasTop.join('/') + ')',
-      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Top, Chip Board Top Ranurado) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
-      maquinasTop, planTop
-    ) +
-    construirGridMedioProceso(
-      '1️⃣ Plan de Asignación · Bottom (' + maquinasBot.join('/') + ')',
-      'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
-      maquinasBot, planBot
-    );
+  window._planTargetsMaquinasCache = targetsMaquinas;
+  const tablaRGBHtml = construirTablaRGB();
 
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">

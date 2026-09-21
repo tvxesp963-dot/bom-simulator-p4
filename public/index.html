@@ -4261,7 +4261,8 @@ window.sincIMSFresco = sincIMSFresco;
 
 // Qué máquina hace Top o Bot — editable en pantalla para "ocasiones especiales"
 // (S1/S2 normalmente Top, S3/S4 normalmente Bot, pero se puede invertir).
-window.simTipoMaquinaPreEnsamble = window.simTipoMaquinaPreEnsamble || { S1: 'TOP', S2: 'TOP', S3: 'BOT', S4: 'BOT' };
+// S5 es flexible (puede ser Top o Bot según la necesidad del día), default Top.
+window.simTipoMaquinaPreEnsamble = window.simTipoMaquinaPreEnsamble || { S1: 'TOP', S2: 'TOP', S3: 'BOT', S4: 'BOT', S5: 'TOP' };
 try {
   const savedTipo = localStorage.getItem('simTipoMaquinaPreEnsamble_p4');
   if (savedTipo) window.simTipoMaquinaPreEnsamble = JSON.parse(savedTipo);
@@ -4314,7 +4315,7 @@ function capacidadesPreEnsamble(targets) {
   const t = (n) => targets[n] || 0;
   let capTop = t('Zhongke');
   let capBot = 0;
-  ['S1', 'S2', 'S3', 'S4'].forEach(m => {
+  ['S1', 'S2', 'S3', 'S4', 'S5'].forEach(m => {
     const tipo = window.simTipoMaquinaPreEnsamble[m] || 'TOP';
     if (tipo === 'TOP') capTop += t(m); else capBot += t(m);
   });
@@ -4590,6 +4591,7 @@ async function renderPlanSemanal() {
         <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S2 ${selectorMaquina('S2')}</div>
         <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S3 ${selectorMaquina('S3')}</div>
         <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S4 ${selectorMaquina('S4')}</div>
+        <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">S5 ${selectorMaquina('S5')}</div>
         <div style="display:flex;gap:.4rem;align-items:center;font-size:11px;color:var(--text2)">Colchón Top/Bot
           <input type="number" min="0" value="${window.simColchonTopBot}" style="width:50px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:2px 6px;text-align:center" onchange="actualizarColchon('topbot', this.value)"> días
         </div>
@@ -4678,15 +4680,27 @@ async function renderPlanSemanal() {
     ? '<span style="background:rgba(255,68,68,.15);color:var(--red);padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">⚠ Falta</span>'
     : '<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">✓ Completo</span>';
 
-  const lineaBadgeRGB = (cap, etiquetaLinea) => (isFinite(cap) && cap > 0)
-    ? `<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">⚡ ${etiquetaLinea}: ${Math.floor(cap).toLocaleString()} pzas</span>`
-    : `<span style="background:rgba(255,255,255,.06);color:var(--text3);padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">${etiquetaLinea}</span>`;
+  // Lista dinámica de máquinas por tipo — respeta lo que ya tengas asignado en el
+  // selector de la sección 2️⃣ (misma fuente que usa capacidadesPreEnsamble, para
+  // que esta tabla y esa nunca se desincronicen). Zhongke siempre es Top (fijo).
+  const tipoMaquinaRGB = (m) => window.simTipoMaquinaPreEnsamble[m] || 'TOP';
+  const maquinasTop = ['Zhongke', ...['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'TOP')];
+  const maquinasBot = ['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'BOT');
 
-  // Un renglón por Top y otro por Bottom (se producen en líneas distintas):
-  // Top = Sheet Top + Chip Board Top Ranurado → corre en S1/S2/Zhongke.
-  // Bottom = Sheet Lower Box + Chip Board Bot Ranurado + Pulp Tray + Set Pad + Galleta + Sticker → corre en S3/S4.
+  const ordenCelda = (orden) => orden
+    ? `<span style="color:#00e676;font-weight:700">#${orden}</span>`
+    : `<span style="color:var(--text3)">—</span>`;
+  const diasCelda = (dias) => (dias !== null) ? dias.toLocaleString() : '—';
+
+  // Un renglón por CADA MÁQUINA que puede correr ese modelo (no una sola línea combinada):
+  // Top = Sheet Top + Chip Board Top Ranurado → un renglón por cada máquina en maquinasTop.
+  // Bottom = Sheet Lower Box + Chip Board Bot Ranurado + Pulp Tray + Set Pad + Galleta + Sticker → un renglón por cada máquina en maquinasBot.
   // Código padre = modelo GH90 (mismo de la tabla 1). Código hijo = medio proceso GH69 (Sheet Top / Sheet Lower Box).
   // Pendiente = mismo Target − Producido de la tabla 1 (sin cálculo aparte).
+  // El # de orden es independiente POR MÁQUINA (la cola propia de S1, la propia de S2, etc.) —
+  // los modelos ya vienen en orden de prioridad (modelosRGBOrdenados), solo se numeran los
+  // renglones listos para correr (con material, con pendiente > 0 y con target de esa máquina > 0).
+  const ordenPorMaquina = {};
   const filasRGB = modelosRGBOrdenados.map(sm => {
     const producidoSm = produccionReal[sm] || 0;
     const pendienteRGB = Math.max(0, (simTargetsPorModelo[sm] || 0) - producidoSm);
@@ -4703,46 +4717,52 @@ async function renderPlanSemanal() {
     const faltaTapa = itemsTapa.some(m => (pendienteRGB - (m.row.inv || 0)) > 0);
     const faltaBase = itemsBase.some(m => (pendienteRGB - (m.row.inv || 0)) > 0);
 
-    const filasModelo = [];
+    const listoTop = pendienteRGB > 0 && isFinite(capTapa) && capTapa > 0;
+    const listoBase = pendienteRGB > 0 && isFinite(capBase) && capBase > 0;
 
-    if (sheetTop) {
-      filasModelo.push(`<tr style="border-bottom:1px solid var(--border)">
+    const filaMaquina = (maquina, tipo, codeHijo, listo, falta) => {
+      const targetMaquina = targetsMaquinas[maquina] || 0;
+      const listoConTarget = listo && targetMaquina > 0;
+      let orden = null, dias = null;
+      if (listoConTarget) {
+        ordenPorMaquina[maquina] = (ordenPorMaquina[maquina] || 0) + 1;
+        orden = ordenPorMaquina[maquina];
+        dias = Math.ceil(pendienteRGB / targetMaquina);
+      }
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px 8px;font-weight:700;color:var(--accent2, var(--accent))">${maquina}</td>
         <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
         <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codePadre}</td>
-        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${sheetTop.row.pn || '—'}</td>
-        <td style="padding:10px 8px;text-align:center;color:var(--text2)">Top</td>
-        <td style="padding:10px 8px;text-align:center">${lineaBadgeRGB(capTapa, 'S1/S2/Zhongke')}</td>
-        <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${pendienteRGB.toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaTapa)}</td>
-      </tr>`);
-    }
-    if (sheetBase) {
-      filasModelo.push(`<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
-        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codePadre}</td>
-        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${sheetBase.row.pn || '—'}</td>
-        <td style="padding:10px 8px;text-align:center;color:var(--text2)">Bottom</td>
-        <td style="padding:10px 8px;text-align:center">${lineaBadgeRGB(capBase, 'S3/S4')}</td>
-        <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${pendienteRGB.toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaBase)}</td>
-      </tr>`);
-    }
+        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codeHijo}</td>
+        <td style="padding:10px 8px;text-align:center;color:var(--text2)">${tipo}</td>
+        <td style="padding:10px 8px;text-align:right;color:var(--text2)">${targetMaquina ? targetMaquina.toLocaleString() : '—'}</td>
+        <td style="padding:10px 8px;text-align:center">${ordenCelda(orden)}</td>
+        <td style="padding:10px 8px;text-align:center;color:var(--text2)">${diasCelda(dias)}</td>
+        <td style="padding:10px 8px;text-align:center">${badgeRGB(falta)}</td>
+      </tr>`;
+    };
+
+    const filasModelo = [];
+    if (sheetTop) maquinasTop.forEach(maq => filasModelo.push(filaMaquina(maq, 'Top', sheetTop.row.pn || '—', listoTop, faltaTapa)));
+    if (sheetBase) maquinasBot.forEach(maq => filasModelo.push(filaMaquina(maq, 'Bottom', sheetBase.row.pn || '—', listoBase, faltaBase)));
     return filasModelo.join('');
   }).join('');
 
   const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
       <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Medio Proceso (Top / Bottom)</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido). Un renglón por Top y otro por Bottom porque se producen en líneas distintas: Top en S1/S2/Zhongke, Bottom en S3/S4. Code Padre = modelo GH90, Code Hijo = medio proceso GH69.</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido, no se muestra aparte porque ya define el # y los Días). Un renglón por CADA MÁQUINA que puede correr ese modelo (Top: ${maquinasTop.join('/')}; Bottom: ${maquinasBot.join('/')} — según cómo asignes S5 en la sección 2️⃣). Code Padre = modelo GH90, Code Hijo = medio proceso GH69. El # es la cola de producción independiente de cada máquina; Días es un estimado usando el target diario real de esa máquina.</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>
+          <th style="${thStyle}">Máquina</th>
           <th style="${thStyle}">Modelo</th>
           <th style="${thStyle}">Code Padre</th>
           <th style="${thStyle}">Code Hijo</th>
           <th style="${thCenter}">Tipo</th>
-          <th style="${thCenter}">Línea</th>
-          <th style="${thRight}">Pendiente</th>
+          <th style="${thRight}">Target/día</th>
+          <th style="${thCenter}">Orden</th>
+          <th style="${thCenter}">Días</th>
           <th style="${thCenter}">Materiales</th>
         </tr></thead>
         <tbody>${filasRGB}</tbody>

@@ -4678,40 +4678,72 @@ async function renderPlanSemanal() {
     ? '<span style="background:rgba(255,68,68,.15);color:var(--red);padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">⚠ Falta</span>'
     : '<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">✓ Completo</span>';
 
+  const lineaBadgeRGB = (cap, etiquetaLinea) => (isFinite(cap) && cap > 0)
+    ? `<span style="background:rgba(0,230,118,.15);color:#00e676;padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">⚡ ${etiquetaLinea}: ${Math.floor(cap).toLocaleString()} pzas</span>`
+    : `<span style="background:rgba(255,255,255,.06);color:var(--text3);padding:3px 12px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap">${etiquetaLinea}</span>`;
+
+  // Un renglón por Top y otro por Bottom (se producen en líneas distintas):
+  // Top = Sheet Top + Chip Board Top Ranurado → corre en S1/S2/Zhongke.
+  // Bottom = Sheet Lower Box + Chip Board Bot Ranurado + Pulp Tray + Set Pad + Galleta + Sticker → corre en S3/S4.
+  // Código padre = modelo GH90 (mismo de la tabla 1). Código hijo = medio proceso GH69 (Sheet Top / Sheet Lower Box).
+  // Pendiente = mismo Target − Producido de la tabla 1 (sin cálculo aparte).
   const filasRGB = modelosRGBOrdenados.map(sm => {
     const producidoSm = produccionReal[sm] || 0;
     const pendienteRGB = Math.max(0, (simTargetsPorModelo[sm] || 0) - producidoSm);
-    const items = faltantesRGB[sm] || [];
-    const faltaTapa = items.some(i => i.grupo === 'Tapa');
-    const faltaBase = items.some(i => i.grupo === 'Base');
-    const code = codePorModelo[sm] || '—';
-    const capMaterialRGB = (window._planMaterialCapRGBPorModelo && window._planMaterialCapRGBPorModelo[sm] !== undefined)
-      ? window._planMaterialCapRGBPorModelo[sm] : 0;
-    const listoParaCorrerRGB = pendienteRGB > 0 && isFinite(capMaterialRGB) && capMaterialRGB > 0;
-    return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:10px 8px;font-weight:700;color:var(--accent)">
-        ${sm}
-        ${listoParaCorrerRGB ? `<div class="plan-listo-badge" id="plan-listo-rgb-${sm.replace(/[^a-zA-Z0-9]/g, '_')}" data-cap="${Math.floor(capMaterialRGB)}" title="Tapa/Base (Sheet, Chip Board Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) tienen material suficiente para arrancar"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterialRGB).toLocaleString()} pzas</div>` : ''}
-      </td>
-      <td style="padding:10px 8px;color:var(--text2);font-size:12px">${code}</td>
-      <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${pendienteRGB.toLocaleString()}</td>
-      <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaTapa)}</td>
-      <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaBase)}</td>
-    </tr>`;
+    const codePadre = codePorModelo[sm] || '—';
+    const materialesRGB = obtenerMaterialesRGB(sm);
+
+    const itemsTapa = materialesRGB.filter(m => m.grupo === 'Tapa' && m.row);
+    const itemsBase = materialesRGB.filter(m => m.grupo === 'Base' && m.row);
+    const sheetTop = materialesRGB.find(m => m.etiqueta === 'Sheet Top' && m.row);
+    const sheetBase = materialesRGB.find(m => m.etiqueta === 'Sheet Lower Box' && m.row);
+
+    const capTapa = itemsTapa.length ? Math.min(...itemsTapa.map(m => m.row.inv || 0)) : 0;
+    const capBase = itemsBase.length ? Math.min(...itemsBase.map(m => m.row.inv || 0)) : 0;
+    const faltaTapa = itemsTapa.some(m => (pendienteRGB - (m.row.inv || 0)) > 0);
+    const faltaBase = itemsBase.some(m => (pendienteRGB - (m.row.inv || 0)) > 0);
+
+    const filasModelo = [];
+
+    if (sheetTop) {
+      filasModelo.push(`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
+        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codePadre}</td>
+        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${sheetTop.row.pn || '—'}</td>
+        <td style="padding:10px 8px;text-align:center;color:var(--text2)">Top</td>
+        <td style="padding:10px 8px;text-align:center">${lineaBadgeRGB(capTapa, 'S1/S2/Zhongke')}</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${pendienteRGB.toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaTapa)}</td>
+      </tr>`);
+    }
+    if (sheetBase) {
+      filasModelo.push(`<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px 8px;font-weight:700;color:var(--accent)">${sm}</td>
+        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${codePadre}</td>
+        <td style="padding:10px 8px;color:var(--text2);font-size:12px">${sheetBase.row.pn || '—'}</td>
+        <td style="padding:10px 8px;text-align:center;color:var(--text2)">Bottom</td>
+        <td style="padding:10px 8px;text-align:center">${lineaBadgeRGB(capBase, 'S3/S4')}</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${pendienteRGB.toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:center">${badgeRGB(faltaBase)}</td>
+      </tr>`);
+    }
+    return filasModelo.join('');
   }).join('');
 
   const tablaRGBHtml = !modelosRGBOrdenados.length ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido RGB · Tapa / Base</div>
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba. Compara el Pendiente (Target − Producido) de cada modelo contra el inventario actual de Sheet / Chip Board Ranurado / Pulp Tray / Set Pad / Galleta / Sticker.</div>
+      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Medio Proceso (Top / Bottom)</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Mismo Excel/target del Plan Requerido de arriba (Pendiente = Target − Producido). Un renglón por Top y otro por Bottom porque se producen en líneas distintas: Top en S1/S2/Zhongke, Bottom en S3/S4. Code Padre = modelo GH90, Code Hijo = medio proceso GH69.</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr>
           <th style="${thStyle}">Modelo</th>
-          <th style="${thStyle}">Code</th>
+          <th style="${thStyle}">Code Padre</th>
+          <th style="${thStyle}">Code Hijo</th>
+          <th style="${thCenter}">Tipo</th>
+          <th style="${thCenter}">Línea</th>
           <th style="${thRight}">Pendiente</th>
-          <th style="${thCenter}">Tapa</th>
-          <th style="${thCenter}">Base</th>
+          <th style="${thCenter}">Materiales</th>
         </tr></thead>
         <tbody>${filasRGB}</tbody>
       </table>

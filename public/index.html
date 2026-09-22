@@ -4383,9 +4383,13 @@ function construirTablaRGB() {
   // Lista dinámica de máquinas por tipo — respeta lo que ya tengas asignado en el
   // selector de la sección 2️⃣ (misma fuente que usa capacidadesPreEnsamble, para
   // que esta tabla y esa nunca se desincronicen). Zhongke siempre es Top (fijo).
-  const tipoMaquinaRGB = (m) => window.simTipoMaquinaPreEnsamble[m] || 'TOP';
-  const maquinasTop = ['Zhongke', ...['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'TOP')];
-  const maquinasBot = ['S1', 'S2', 'S3', 'S4', 'S5'].filter(m => tipoMaquinaRGB(m) === 'BOT');
+  // Todas las líneas (S1-S5) son candidatas tanto para Top como para Bottom — más
+  // versátil que amarrarlas al selector fijo TOP/BOT de la sección 2️⃣ (ese selector
+  // sigue existiendo para el Plan Pre-Ensamble, pero ya no limita esta tabla). Qué
+  // máquina corre cada código específico lo decide el checkbox "Máquinas por código"
+  // de abajo (por default todas menos Zhongke, que solo hace el 625A y casos puntuales).
+  const maquinasTop = ['Zhongke', 'S1', 'S2', 'S3', 'S4', 'S5'];
+  const maquinasBot = ['S1', 'S2', 'S3', 'S4', 'S5'];
 
   // El Code Hijo (GH69) y si un modelo necesita Top/Bot salen del MISMO desglose que
   // ya usa la tabla 1 (window._planPickList — Strip/Top/Bot/Bundle, identificados por

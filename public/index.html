@@ -4317,6 +4317,50 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
   const MAX_DIAS = 60;
   let diasSinAvanceSeguidos = 0;
 
+  for (let i = 0; i < MAX_DIAS; i++) {
+    const quedaAlgo = items.some(it => it.restante > 0 && it.materialUsado < it.materialCap);
+    if (!quedaAlgo) break;
+
+    if (cursor.getDay() !== 0) {
+      const asignacionesPorMaquina = {};
+
+      // Cada máquina toma su propia cola filtrada y ordenada por prioridad —
+      // así Zhongke solo ve los códigos marcados como elegibles (625A y las
+      // excepciones que se marquen a mano), mientras S1-S5 ven todos.
+      maquinas.forEach(maquina => {
+        let capacidadRestante = targetsMaquinasObj[maquina] || 0;
+        const asignacionesMaquina = [];
+        while (capacidadRestante > 0) {
+          const activosMaquina = items
+            .filter(it => it.restante > 0 && it.materialUsado < it.materialCap && esElegibleParaMaquina(it.codeHijo, maquina))
+            .sort((a, b) => a.prioridad - b.prioridad);
+          if (!activosMaquina.length) break;
+          const it = activosMaquina[0];
+          const disponibleMaterial = it.materialCap - it.materialUsado;
+          const toma = Math.min(it.restante, capacidadRestante, disponibleMaterial);
+          if (toma <= 0) break;
+          asignacionesMaquina.push({ codeHijo: it.codeHijo, modelos: it.modelos, qty: toma });
+          it.restante -= toma;
+          it.materialUsado += toma;
+          capacidadRestante -= toma;
+        }
+        asignacionesPorMaquina[maquina] = asignacionesMaquina;
+      });
+
+      const usoTotal = Object.values(asignacionesPorMaquina).reduce((s, arr) => s + arr.reduce((s2, a) => s2 + a.qty, 0), 0);
+      diasGenerados.push({ fecha: new Date(cursor), asignacionesPorMaquina, corteEnvio: cicloDeEnvioDelDia(cursor) });
+      diasSinAvanceSeguidos = usoTotal > 0 ? 0 : diasSinAvanceSeguidos + 1;
+      if (diasSinAvanceSeguidos > 14) break;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  // "Sin material" se calcula al final con lo que de verdad quedó sin cubrir —
+  // así avisa tanto al código que nunca tuvo nada de material (restante = inicial)
+  // como al que se le acabó a medias (restante > 0 después de repartir todos los días).
+  return { dias: diasGenerados, sinMaterial: items.filter(it => it.restante > 0) };
+}
+
 function construirTablaRGB() {
   const produccionReal = { ...(window.simProducidoManualPorModelo || {}) };
   const targetsMaquinas = window._planTargetsMaquinasCache || {};
@@ -4502,50 +4546,6 @@ function construirTablaRGB() {
       maquinasBot, planBot
     );
   return tablaRGBHtml;
-}
-
-  for (let i = 0; i < MAX_DIAS; i++) {
-    const quedaAlgo = items.some(it => it.restante > 0 && it.materialUsado < it.materialCap);
-    if (!quedaAlgo) break;
-
-    if (cursor.getDay() !== 0) {
-      const asignacionesPorMaquina = {};
-
-      // Cada máquina toma su propia cola filtrada y ordenada por prioridad —
-      // así Zhongke solo ve los códigos marcados como elegibles (625A y las
-      // excepciones que se marquen a mano), mientras S1-S5 ven todos.
-      maquinas.forEach(maquina => {
-        let capacidadRestante = targetsMaquinasObj[maquina] || 0;
-        const asignacionesMaquina = [];
-        while (capacidadRestante > 0) {
-          const activosMaquina = items
-            .filter(it => it.restante > 0 && it.materialUsado < it.materialCap && esElegibleParaMaquina(it.codeHijo, maquina))
-            .sort((a, b) => a.prioridad - b.prioridad);
-          if (!activosMaquina.length) break;
-          const it = activosMaquina[0];
-          const disponibleMaterial = it.materialCap - it.materialUsado;
-          const toma = Math.min(it.restante, capacidadRestante, disponibleMaterial);
-          if (toma <= 0) break;
-          asignacionesMaquina.push({ codeHijo: it.codeHijo, modelos: it.modelos, qty: toma });
-          it.restante -= toma;
-          it.materialUsado += toma;
-          capacidadRestante -= toma;
-        }
-        asignacionesPorMaquina[maquina] = asignacionesMaquina;
-      });
-
-      const usoTotal = Object.values(asignacionesPorMaquina).reduce((s, arr) => s + arr.reduce((s2, a) => s2 + a.qty, 0), 0);
-      diasGenerados.push({ fecha: new Date(cursor), asignacionesPorMaquina, corteEnvio: cicloDeEnvioDelDia(cursor) });
-      diasSinAvanceSeguidos = usoTotal > 0 ? 0 : diasSinAvanceSeguidos + 1;
-      if (diasSinAvanceSeguidos > 14) break;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  // "Sin material" se calcula al final con lo que de verdad quedó sin cubrir —
-  // así avisa tanto al código que nunca tuvo nada de material (restante = inicial)
-  // como al que se le acabó a medias (restante > 0 después de repartir todos los días).
-  return { dias: diasGenerados, sinMaterial: items.filter(it => it.restante > 0) };
 }
 
 // Sincroniza IMS (P4 + P3) fresco desde Firestore y actualiza BOM.inv — reutilizable

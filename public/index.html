@@ -4447,14 +4447,25 @@ function construirTablaRGB() {
     `<th style="${thDia}">${(d.fecha.getMonth() + 1)}/${d.fecha.getDate()}(${d.fecha.toLocaleDateString('es-MX', { weekday: 'short' })})</th>`
   ).join('');
 
+  const avisoSinMaterialHtml = (sinMaterial) => !sinMaterial.length ? '' : `
+    <div style="margin-top:.8rem;padding:.6rem .8rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.35);border-radius:8px;font-size:11px;color:var(--red)">
+      ⚠ Sin material para completar: ${sinMaterial.map(it => `${it.codeHijo} (${it.modelos.join(', ')}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
+    </div>`;
+
   const construirGridMedioProceso = (titulo, descripcion, maquinasTipo, plan) => {
     if (!maquinasTipo.length) return '';
     if (!plan.dias.length) {
+      // Si no hay ningún día programado PERO sí hay códigos con faltante real,
+      // es porque a TODOS les falta material desde el día 1 — hay que avisar con
+      // el desglose rojo, no con el mensaje genérico de "nada pendiente" (antes
+      // se perdía esta información y parecía que no había nada que producir).
       return `
         <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
           <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">${titulo}</div>
           <div style="font-size:11px;color:var(--text3)">${descripcion}</div>
-          <div class="empty" style="padding:1.2rem 0"><div class="empty-title">Nada pendiente por asignar ahorita.</div></div>
+          ${plan.sinMaterial.length
+            ? avisoSinMaterialHtml(plan.sinMaterial)
+            : '<div class="empty" style="padding:1.2rem 0"><div class="empty-title">Nada pendiente por asignar ahorita.</div></div>'}
         </div>`;
     }
     const filas = maquinasTipo.map(maq => `
@@ -4463,10 +4474,7 @@ function construirTablaRGB() {
         ${plan.dias.map(d => celdaAsignacion(d, maq)).join('')}
       </tr>`).join('');
 
-    const avisoSinMaterial = !plan.sinMaterial.length ? '' : `
-      <div style="margin-top:.8rem;padding:.6rem .8rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.35);border-radius:8px;font-size:11px;color:var(--red)">
-        ⚠ Sin material para completar: ${plan.sinMaterial.map(it => `${it.codeHijo} (${it.modelos.join(', ')}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
-      </div>`;
+    const avisoSinMaterial = avisoSinMaterialHtml(plan.sinMaterial);
 
     return `
       <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">

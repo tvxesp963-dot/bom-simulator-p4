@@ -826,6 +826,9 @@ window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
 // Default si el código no tiene override guardado: todas menos Zhongke (Zhongke por
 // definición solo corre el 625A y casos puntuales, se activa a mano).
 window.simMaquinasElegiblesPorCodigo = window.simMaquinasElegiblesPorCodigo || {};
+// Si el panel "Máquinas por código" está colapsado (una vez que ya lo configuraste,
+// para no hacer scroll largo cada vez que entras al Plan de Asignación).
+window.simPanelMaquinasColapsado = window.simPanelMaquinasColapsado || false;
 
 // Restaura el plan (modelos activos, prioridad, target y fecha de entrega)
 // guardado en este navegador — así "Analizar varios modelos" y "Plan Requerido"
@@ -840,6 +843,7 @@ try {
     if (d.prioridades) window.simPrioridadPorModelo = Object.assign(window.simPrioridadPorModelo, d.prioridades);
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
     if (d.maquinasElegiblesPorCodigo) window.simMaquinasElegiblesPorCodigo = Object.assign(window.simMaquinasElegiblesPorCodigo, d.maquinasElegiblesPorCodigo);
+    if (d.panelMaquinasColapsado !== undefined) window.simPanelMaquinasColapsado = d.panelMaquinasColapsado;
     // Migración del ajuste anterior (solo Zhongke por código) al esquema nuevo (todas las máquinas).
     if (d.zhongkeElegiblePorCodigo) {
       Object.keys(d.zhongkeElegiblePorCodigo).forEach(codigo => {
@@ -858,7 +862,8 @@ function guardarPlanCompleto() {
       targets: simTargetsPorModelo,
       prioridades: window.simPrioridadPorModelo || {},
       fechas: window.simFechaEntregaPorModelo || {},
-      maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {}
+      maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {},
+      panelMaquinasColapsado: !!window.simPanelMaquinasColapsado
     }));
   } catch (e) {}
 }
@@ -880,6 +885,16 @@ function actualizarMaquinaElegibleCodigo(codeHijo, maquina, checked) {
   }
 }
 window.actualizarMaquinaElegibleCodigo = actualizarMaquinaElegibleCodigo;
+
+// Colapsa/expande el panel "Máquinas por código" — se queda recordado en este
+// navegador para no hacer scroll largo cada vez que ya lo dejaste configurado.
+function toggleColapsoPanelMaquinas() {
+  window.simPanelMaquinasColapsado = !window.simPanelMaquinasColapsado;
+  guardarPlanCompleto();
+  const divRGB = document.getElementById('planSubRGB');
+  if (divRGB) divRGB.innerHTML = construirTablaRGB();
+}
+window.toggleColapsoPanelMaquinas = toggleColapsoPanelMaquinas;
 
 // Producido manual por modelo (Plan Semanal) — el usuario lo captura a mano;
 // más adelante se puede traer automático o con un botón desde el MES.
@@ -4528,12 +4543,17 @@ function construirTablaRGB() {
 
   const panelMaquinasHtml = (!Object.keys(codigosTopMap).length && !Object.keys(codigosBotMap).length) ? '' : `
     <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">Máquinas por código</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:${window.simPanelMaquinasColapsado ? '0' : '.2rem'}" onclick="toggleColapsoPanelMaquinas()">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">Máquinas por código</div>
+        <span style="font-size:11px;color:var(--text2)">${window.simPanelMaquinasColapsado ? '▼ Mostrar' : '▲ Ocultar'}</span>
+      </div>
+      ${window.simPanelMaquinasColapsado ? '' : `
       <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Marca qué máquinas pueden correr cada código de medio proceso (GH69) — cubre a todos los modelos que lo comparten. Por default todas están marcadas menos Zhongke (por definición solo corre el 625A y casos puntuales). Desmarcada = esa máquina no lo toma en el reparto de abajo.</div>
       <div style="margin-bottom:.4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Top</div>
       ${construirTablaMaquinasPorCodigo(codigosTopMap, maquinasTop)}
       <div style="margin:1rem 0 .4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Bottom</div>
       ${construirTablaMaquinasPorCodigo(codigosBotMap, maquinasBot)}
+      `}
     </div>
   `;
 

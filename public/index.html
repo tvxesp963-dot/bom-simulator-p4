@@ -549,6 +549,7 @@ function procesarBOM() {
     let familia = 'OTRO';
     if (codeVal.startsWith('GH90')) familia = 'GH90';
     else if (codeVal.startsWith('GH69')) familia = 'GH69';
+    else if (codeVal.startsWith('GH96')) familia = 'GH69'; // GH96 = código padre de ensamble (Bottom terminado por modelo), se trata igual que GH69
     else if (codeVal.startsWith('GH68')) familia = 'GH68';
     else if (codeVal.startsWith('GH64')) familia = 'GH64';
 
@@ -2518,7 +2519,7 @@ function renderProd() {
     const cbBotVirgen = getComp(sm, ['CHIP BOARD BOTTOM','VIRGEN']);
     const cbBotRan    = getComp(sm, ['CHIP BOARD BOTTOM','RANURADO']);
     const sheetBot    = getComp(sm, ['SHEET LOWER']);
-    const setPad      = getComp(sm, ['SET PAD']);
+    const setPad      = getComp(sm, ['SET PAD']) || getComp(sm, ['PHONE PAD']);
     const backSticker = getComp(sm, ['BACK STICKER']);
     const pulpTray    = getComp(sm, ['PULP TRAY']);
     const lowerBox    = getComp(sm, ['LOWER BOX']);
@@ -3453,6 +3454,8 @@ function actualizarInvBOM() {
       if (r.isLevel2 && dentroDeBundle && !r.pn.toUpperCase().startsWith('GH90')) {
         r.isSubBundle = true;
       }
+      // GH90 Nivel 2 fuera de un Bundle (ej. Phone Pad del S928) = material normal de P4, no componente de P3
+      r.gh90FueraDeBundle = !!(r.isLevel2 && !dentroDeBundle && (r.pn||'').toUpperCase().startsWith('GH90'));
     });
   });
   BOM.forEach(function(r) {
@@ -3468,7 +3471,7 @@ function actualizarInvBOM() {
         esGH90Bundle = true;
       }
     }
-    var nivel = r.isLevel2 ? 2 : 1;
+    var nivel = (r.isLevel2 && !r.gh90FueraDeBundle) ? 2 : 1;
     r.inv = getInvIMS(r.pn, r.desc, plantaItem, nivel);
     if (esGH90Bundle) {
       r.planta = plantaItem;
@@ -3651,6 +3654,7 @@ function adminCargarBOM(file) {
         var fam='OTRO';
         if(codeVal.startsWith('GH90'))fam='GH90';
         else if(codeVal.startsWith('GH69'))fam='GH69';
+        else if(codeVal.startsWith('GH96'))fam='GH69'; // GH96 = código padre de ensamble, igual que GH69
         else if(codeVal.startsWith('GH68'))fam='GH68';
         else if(codeVal.startsWith('GH64'))fam='GH64';
         // Buscar por PN+condicion primero, luego solo PN
@@ -3757,7 +3761,7 @@ async function publicarPlan() {
     const cbBotV = getComp(sm,['CHIP BOARD BOTTOM','VIRGEN']);
     const cbBotR = getComp(sm,['CHIP BOARD BOTTOM','RANURADO']);
     const shBot  = getComp(sm,['SHEET LOWER']);
-    const setPad = getComp(sm,['SET PAD']);
+    const setPad = getComp(sm,['SET PAD']) || getComp(sm,['PHONE PAD']);
     const bStick = getComp(sm,['BACK STICKER']);
     const pulp   = getComp(sm,['PULP TRAY']);
     const strip  = BOM.find(r=>r.sm===sm&&r.familia==='GH90'&&(r.desc||'').toUpperCase().includes('STRIP'));
@@ -5364,7 +5368,7 @@ function obtenerMaterialesRGB(sm) {
     { grupo: 'Base', etiqueta: 'Sheet Lower Box',            row: getComp(sm, ['SHEET LOWER']) || null },
     { grupo: 'Base', etiqueta: 'Chip Board Bot (Ranurado)',  row: getComp(sm, ['CHIP BOARD BOTTOM', 'RANURADO']) || null },
     { grupo: 'Base', etiqueta: 'Pulp Tray',                  row: getComp(sm, ['PULP TRAY']) || null },
-    { grupo: 'Base', etiqueta: 'Set Pad',                    row: getComp(sm, ['SET PAD']) || null },
+    { grupo: 'Base', etiqueta: 'Set Pad',                    row: getComp(sm, ['SET PAD']) || getComp(sm, ['PHONE PAD']) || null },
     // Galleta = PN GH69-46113G (por número de parte, no por descripción)
     { grupo: 'Base', etiqueta: 'Galleta',                    row: BOM.find(r => r.sm === sm && (r.pn || '').trim().toUpperCase() === 'GH69-46113G') || null },
     { grupo: 'Base', etiqueta: 'Sticker',                    row: getComp(sm, ['BACK STICKER']) || null },

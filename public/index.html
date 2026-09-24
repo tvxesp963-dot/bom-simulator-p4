@@ -5753,14 +5753,25 @@ async function crearPartesNuevasIMS() {
     //    Solo P3 y P4 tienen IMS propio — el resto (ALIBER, P1, Sin Planta) se queda
     //    en P4 igual que antes, para no cambiar ese comportamiento existente.
     var nuevasP4 = [], nuevasP3 = [];
+    // Set Pad / Phone Pad: P1 lo fabrica, P3 lo recibe y procesa (IMS P3) y lo envía a P4 (IMS P4).
+    // Por eso se da de alta en P4 (flujo normal) y TAMBIÉN en P3 si ese PN no existe allá.
+    var nuevasP3Pad = 0;
+    var pnsP3EnCola = new Set();
     partesBOM.forEach(function(r){
       var destino = (typeof getDestino === 'function') ? getDestino(r) : 'P4';
       if (destino === 'P3') {
         var keyP3 = r.pn.trim().toUpperCase();
-        if (!clavesExistentesP3.has(keyP3)) nuevasP3.push(r);
+        if (!clavesExistentesP3.has(keyP3) && !pnsP3EnCola.has(keyP3)) { nuevasP3.push(r); pnsP3EnCola.add(keyP3); }
       } else {
         var keyP4 = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
         if (!clavesExistentesP4.has(keyP4)) nuevasP4.push(r);
+        var descUp = (r.desc||'').toUpperCase();
+        if (descUp.indexOf('SET PAD') >= 0 || descUp.indexOf('PHONE PAD') >= 0) {
+          var keyPadP3 = r.pn.trim().toUpperCase();
+          if (!clavesExistentesP3.has(keyPadP3) && !pnsP3EnCola.has(keyPadP3)) {
+            nuevasP3.push(r); pnsP3EnCola.add(keyPadP3); nuevasP3Pad++;
+          }
+        }
       }
     });
 
@@ -5815,8 +5826,8 @@ async function crearPartesNuevasIMS() {
 
     st.innerHTML = '✅ Sincronización completa<br>' +
       '<span style="font-size:11px;color:var(--text2)">Nuevas en P4: <b style="color:#00e676">'+nuevasP4.length+'</b> · ' +
-      'Nuevas en P3: <b style="color:#00e676">'+nuevasP3.length+'</b> · ' +
-      'Ya existían: <b>'+(partesBOM.length-totalNuevas)+'</b> · ' +
+      'Nuevas en P3: <b style="color:#00e676">'+nuevasP3.length+'</b>' + (nuevasP3Pad ? ' <span style="color:#ffb300">(Set Pad: '+nuevasP3Pad+')</span>' : '') + ' · ' +
+      'Ya existían: <b>'+(partesBOM.length-nuevasP4.length-(nuevasP3.length-nuevasP3Pad))+'</b> · ' +
       'Total BOM: '+partesBOM.length+'</span>';
     st.style.color = '#00e676';
 

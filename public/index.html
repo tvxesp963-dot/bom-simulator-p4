@@ -5848,7 +5848,8 @@ async function publicarPlanPiso() {
       pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in materiales) materiales[p.etiqueta] = !!p.ok; });
       const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
       const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
-      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', target, producido, pendiente, cap, materiales,
+      const fecha = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
+      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, producido, pendiente, cap, materiales,
                listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
     });
     // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas

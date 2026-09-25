@@ -72,21 +72,21 @@ h1{font-size:26px;margin:0}
 // ===== Idiomas =====
 var T = {
   es:{title:'Orden de producción · ASSY1',loading:'Cargando plan...',corte:'Corte',faltan:'faltan',publicado:'Publicado',viejo:'(plan de hace más de 12 h)',
-      target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',modelo:'Modelo',material:'Material',estado:'Estado',
+      target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay un plan publicado. Publícalo desde el BOM Simulator (Plan Semanal → Publicar al piso).',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material al momento de publicar · Producido en vivo de ShipQR · se actualiza sola',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
       d:'d',h:'h',m:'min',pzas:'pzas',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],loc:'es-MX'},
   en:{title:'Production order · ASSY1',loading:'Loading plan...',corte:'Cutoff',faltan:'left',publicado:'Published',viejo:'(plan older than 12 h)',
-      target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',modelo:'Model',material:'Material',estado:'Status',
+      target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No plan has been published yet. Publish it from the BOM Simulator (Weekly Plan → Publish to floor).',
       foot:'Order = same "⚡ Ready" as Required Plan · Material as of publish time · Produced live from ShipQR · auto-refresh',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
       d:'d',h:'h',m:'min',pzas:'pcs',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],loc:'en-US'},
   ko:{title:'생산 순서 · ASSY1',loading:'계획 불러오는 중...',corte:'출하 마감',faltan:'남음',publicado:'게시',viejo:'(12시간 이상 지난 계획)',
-      target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',modelo:'모델',material:'자재',estado:'상태',
+      target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 게시된 계획이 없습니다. BOM Simulator에서 게시하세요 (주간 계획 → 현장에 게시).',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 게시 시점 기준 · 생산 수량은 ShipQR 실시간 · 자동 새로고침',
@@ -98,6 +98,8 @@ try { lang = localStorage.getItem('pisoLang') || 'es'; } catch (e) {}
 if (!T[lang]) lang = 'es';
 function t(k){ return T[lang][k]; }
 function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function fechaCorta(d){ return d.toLocaleDateString(t('loc'), {day:'2-digit', month:'short'}); }
+function fechaEnvio(f){ if (!f) return '—'; var d = new Date(f + 'T00:00:00'); return isNaN(d) ? '—' : fechaCorta(d); }
 function n(x){ return Math.round(x || 0).toLocaleString(t('loc')); }
 
 document.querySelectorAll('.langs button').forEach(function(b){
@@ -195,7 +197,7 @@ function pintar(){
     var falta = (dd ? dd + ' ' + t('d') + ' ' : '') + hh + ' ' + t('h') + (dd ? '' : ' ' + mm + ' ' + t('m'));
     // Parpadea al acercarse el corte: menos de 4 h = amarillo, menos de 1 h = rojo y más rápido
     var cls = ms <= 36e5 ? ' rojo' : (ms <= 4 * 36e5 ? ' ambar' : '');
-    sub += '<span class="corte' + cls + '">⏰ ' + t('corte') + ': ' + t('dias')[pc.getDay()] + ' ' + h12 + ':' + String(pc.getMinutes()).padStart(2,'0') + ampm + ' · ' + t('faltan') + ' <b>' + falta + '</b></span>';
+    sub += '<span class="corte' + cls + '">⏰ ' + t('corte') + ': ' + t('dias')[pc.getDay()] + ' ' + fechaCorta(pc) + ' ' + h12 + ':' + String(pc.getMinutes()).padStart(2,'0') + ampm + ' · ' + t('faltan') + ' <b>' + falta + '</b></span>';
   }
   if (plan && plan.publicadoEn) {
     var pub = new Date(plan.publicadoEn), viejo = (ahora - pub) > 12 * 36e5;
@@ -248,17 +250,18 @@ function pintar(){
       est = '<span class="est" style="color:var(--red)">' + (faltan.length ? t('falta') + ' ' + faltan.join(', ') : t('sinDatos')) + '</span>';
     }
     return '<tr><td>' + num + '</td><td><div class="mdl">' + esc(m.sm) + '</div><div class="code">' + esc(m.code || '') + '</div></td>' +
+      '<td style="white-space:nowrap">' + fechaEnvio(m.fecha) + '</td>' +
       '<td class="r hide-sm">' + n(m.target) + '</td><td class="r">' + n(f.prod) + '</td><td class="r" style="font-weight:800">' + n(f.pend) + '</td>' +
       '<td class="hide-sm" style="width:14%">' + bar(f, tipo === 'run' ? 'var(--green)' : '#5c6678') + '</td>' +
       '<td>' + chips(m.materiales) + '</td><td>' + est + '</td></tr>';
   };
 
-  html += '<table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
+  html += '<table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th>' + t('envio') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
           '</th><th class="r">' + t('pend') + '</th><th class="hide-sm">' + t('avance') + '</th><th>' + t('material') + '</th><th>' + t('estado') + '</th></tr></thead><tbody>';
-  if (run.length) html += '<tr class="sep"><td colspan="8">⚡ ' + t('run') + '</td></tr>' + run.map(function(f){ return fila(f, 'run'); }).join('');
-  if (wait.length) html += '<tr class="sep"><td colspan="8">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
-  if (done.length) html += '<tr class="sep"><td colspan="8">✓ ' + t('done') + '</td></tr>' + done.map(function(f){
-    return '<tr class="done"><td>✓</td><td>' + esc(f.m.sm) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td><td class="r">' + n(f.prod) +
+  if (run.length) html += '<tr class="sep"><td colspan="9">⚡ ' + t('run') + '</td></tr>' + run.map(function(f){ return fila(f, 'run'); }).join('');
+  if (wait.length) html += '<tr class="sep"><td colspan="9">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
+  if (done.length) html += '<tr class="sep"><td colspan="9">✓ ' + t('done') + '</td></tr>' + done.map(function(f){
+    return '<tr class="done"><td>✓</td><td>' + esc(f.m.sm) + '</td><td>' + fechaEnvio(f.m.fecha) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td><td class="r">' + n(f.prod) +
            '</td><td class="r">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td><td></td><td style="color:var(--green)">' + t('completo') + '</td></tr>';
   }).join('');
   html += '</tbody></table>';

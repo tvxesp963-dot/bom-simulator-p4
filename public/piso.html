@@ -18,6 +18,10 @@ h1{font-size:26px;margin:0}
 .langs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .sub{color:var(--text2);font-size:15px;margin-bottom:14px}
 .sub .old{color:var(--yellow);font-weight:700}
+.corte{display:inline-block;padding:2px 10px;border-radius:8px}
+.corte.ambar{background:rgba(241,196,15,.18);color:var(--yellow);font-weight:800;font-size:20px;animation:corteBlink 1.2s ease-in-out infinite}
+.corte.rojo{background:rgba(255,77,77,.22);color:var(--red);font-weight:900;font-size:24px;animation:corteBlink .6s ease-in-out infinite}
+@keyframes corteBlink{0%,100%{opacity:1}50%{opacity:.25}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
 .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
 .kpi .l{font-size:14px;color:var(--text2)}
@@ -168,7 +172,7 @@ function leerProducido(){
 
 firebase.auth().onAuthStateChanged(function(){ arrancado = false; if (unsubPlan) { unsubPlan(); unsubPlan = null; } arrancar(); });
 setInterval(leerProducido, 5 * 60 * 1000);   // Producido cada 5 min
-setInterval(pintar, 30 * 1000);              // reloj del corte
+setInterval(pintar, 60 * 1000);              // reloj del corte
 setInterval(function(){ location.reload(); }, 6 * 60 * 60 * 1000); // recarga completa cada 6 h (TV encendida todo el día)
 
 // ===== Pintar pantalla =====
@@ -186,7 +190,9 @@ function pintar(){
     var h12 = pc.getHours() % 12 || 12, ampm = pc.getHours() >= 12 ? 'pm' : 'am';
     var ms = pc - ahora, dd = Math.floor(ms / 864e5), hh = Math.floor(ms % 864e5 / 36e5), mm = Math.floor(ms % 36e5 / 6e4);
     var falta = (dd ? dd + ' ' + t('d') + ' ' : '') + hh + ' ' + t('h') + (dd ? '' : ' ' + mm + ' ' + t('m'));
-    sub += '⏰ ' + t('corte') + ': ' + t('dias')[pc.getDay()] + ' ' + h12 + ':' + String(pc.getMinutes()).padStart(2,'0') + ampm + ' · ' + t('faltan') + ' <b>' + falta + '</b>';
+    // Parpadea al acercarse el corte: menos de 4 h = amarillo, menos de 1 h = rojo y más rápido
+    var cls = ms <= 36e5 ? ' rojo' : (ms <= 4 * 36e5 ? ' ambar' : '');
+    sub += '<span class="corte' + cls + '">⏰ ' + t('corte') + ': ' + t('dias')[pc.getDay()] + ' ' + h12 + ':' + String(pc.getMinutes()).padStart(2,'0') + ampm + ' · ' + t('faltan') + ' <b>' + falta + '</b></span>';
   }
   if (plan && plan.publicadoEn) {
     var pub = new Date(plan.publicadoEn), viejo = (ahora - pub) > 12 * 36e5;

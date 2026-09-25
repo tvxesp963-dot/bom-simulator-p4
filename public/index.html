@@ -388,6 +388,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="top-actions">
       <span style="font-size:12px;color:var(--text2)">Plan semanal de ensamble — ASSY1, capacidad 13,000 u/día (L-V)</span>
       <div style="display:flex;gap:.5rem;margin-left:auto">
+        <button class="btn btn-secondary btn-sm" id="btnCompartirPlan" onclick="publicarPlanCompartido(true)" style="display:none" title="Los usuarios de solo lectura verán este plan · Read-only users will see this plan · 읽기 전용 사용자에게 이 계획이 표시됩니다">🔗 Compartir plan · Share · 공유</button>
         <button class="btn btn-primary btn-sm" id="btnPublicarPlanSemanal" onclick="publicarPlanSemanal()" style="display:none">📤 Publicar Plan Semanal al MES</button>
       </div>
     </div>
@@ -426,7 +427,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 let BOM = [], workbook = null, simFiltro = 'todos', simTargetsPorModelo = {}, bomNombreArchivo = '';
 
 function goTab(n) {
-  if (modoSoloSimulador && n !== 'sim') return;
+  if (modoSoloSimulador && n !== 'sim' && n !== 'plan') return;
+  if (modoSoloSimulador) { try { sessionStorage.setItem('bomTabLectura', n); } catch (e) {} }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + n).classList.add('active');
@@ -441,8 +443,9 @@ function goTab(n) {
   if (n === 'plan') {
     window._planAutoRefresh = setInterval(() => {
       const tabPlan = document.getElementById('tab-plan');
-      if (tabPlan && tabPlan.classList.contains('active') && typeof sincronizarProducidoDesdeMES === 'function') {
-        sincronizarProducidoDesdeMES();
+      if (tabPlan && tabPlan.classList.contains('active')) {
+        if (modoSoloSimulador) { if (typeof cargarPlanCompartido === 'function') cargarPlanCompartido(); }
+        else if (typeof sincronizarProducidoDesdeMES === 'function') sincronizarProducidoDesdeMES();
       }
     }, 60000);
   }
@@ -3148,7 +3151,7 @@ function checkLoginAdmin() {
   var pass = document.getElementById('loginAdminPass').value;
   var err = document.getElementById('loginAdminErr');
   if (pass === 'BomP4!2026') {
-    adminAuthed = true;
+    adminAuthed = true; if (typeof alEntrarAdminPlan === "function") setTimeout(alEntrarAdminPlan, 1500);
     document.getElementById('loginOverlay').style.display = 'none';
     if (!db) initIMS();
     goTab('admin');
@@ -3321,7 +3324,7 @@ function iniciarAuthListener() {
       }
       overlay.style.display = 'none';
       if (snap.docs[0].data().rol === 'admin') {
-        adminAuthed = true;
+        adminAuthed = true; if (typeof alEntrarAdminPlan === "function") setTimeout(alEntrarAdminPlan, 1500);
         if (!db) initIMS();
         document.getElementById('adminLock').style.display = 'none';
         document.getElementById('adminPanel').style.display = 'block';
@@ -3345,11 +3348,111 @@ function iniciarAuthListener() {
 var modoSoloSimulador = false;
 function activarModoSoloSimulador() {
   modoSoloSimulador = true;
-  ['tab-cons', 'tab-prod', 'tab-admin'].forEach(function(id) {
+  // Lectura: ve Simulador y Plan Semanal (solo ver). Lo demás queda oculto.
+  ['tab-cons', 'tab-prod', 'tab-empaque', 'tab-admin'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  goTab('sim');
+  var tp = document.getElementById('tab-plan'); if (tp) tp.style.display = '';
+  prepararPlanSoloLectura();
+  cargarPlanCompartido();
+  var ultima = null; try { ultima = sessionStorage.getItem('bomTabLectura'); } catch (e) {}
+  goTab(ultima === 'plan' ? 'plan' : 'sim');
+}
+
+// ===== PLAN COMPARTIDO (admin → usuarios de solo lectura) =====
+// El plan (modelos, targets, prioridades, fechas, Producido, colchones, BOM fijado)
+// se guarda en el navegador del admin. Aquí se copia también a Firebase para que
+// los usuarios de Lectura vean exactamente el mismo Plan Semanal en su computadora.
+var PLAN_KEYS = ['planCompleto_p4', 'simTargets_p4', 'simProducidoManual_p4', 'simTipoMaquinaPreEnsamble_p4', 'simColchonTopBot_p4', 'simColchonVC_p4', 'bomPinned_p4'];
+var _planPubTimer = null;
+var _lsSet = Storage.prototype.setItem, _lsRemove = Storage.prototype.removeItem;
+
+function publicarPlanCompartido(manual) {
+  if (!adminAuthed || !db) { if (manual) alert('Solo el administrador puede compartir el plan.'); return; }
+  clearTimeout(_planPubTimer);
+  _planPubTimer = setTimeout(function () {
+    var datos = {};
+    PLAN_KEYS.forEach(function (k) { try { var v = localStorage.getItem(k); if (v !== null) datos[k] = v; } catch (e) {} });
+    var u = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
+    db.collection('bom_simulator_p4').doc('plan_compartido').set({ datos: datos, ver: Date.now(), actualizadoEn: new Date().toISOString(), actualizadoPor: u })
+      .then(function () {
+        if (!manual) return;
+        var b = document.getElementById('btnCompartirPlan');
+        if (b) { var txt = b.textContent; b.textContent = '✅ Compartido · Shared · 공유됨'; setTimeout(function () { b.textContent = txt; }, 2500); }
+      })
+      .catch(function (e) { console.warn('No se pudo compartir el plan:', e); if (manual) alert('Error: ' + e.message); });
+  }, manual ? 0 : 2000);
+}
+window.publicarPlanCompartido = publicarPlanCompartido;
+
+// Cada vez que el admin guarda algo del plan, se comparte solo (2 s después).
+Storage.prototype.setItem = function (k, v) {
+  _lsSet.call(this, k, v);
+  if (this === window.localStorage && adminAuthed && PLAN_KEYS.indexOf(k) >= 0) publicarPlanCompartido();
+};
+Storage.prototype.removeItem = function (k) {
+  _lsRemove.call(this, k);
+  if (this === window.localStorage && adminAuthed && PLAN_KEYS.indexOf(k) >= 0) publicarPlanCompartido();
+};
+
+function alEntrarAdminPlan() {
+  var b = document.getElementById('btnCompartirPlan'); if (b) b.style.display = '';
+  if (!db) return;
+  // Si todavía no hay plan compartido, se comparte el de este navegador.
+  db.collection('bom_simulator_p4').doc('plan_compartido').get().then(function (d) {
+    var tiene = false; try { tiene = !!localStorage.getItem('planCompleto_p4'); } catch (e) {}
+    if (!d.exists && tiene) publicarPlanCompartido();
+  }).catch(function () {});
+}
+
+// Lectura: trae el plan del admin. Si cambió, lo copia a este navegador y recarga
+// una sola vez para que todos los cálculos usen los mismos datos.
+function cargarPlanCompartido() {
+  if (!db) return;
+  db.collection('bom_simulator_p4').doc('plan_compartido').get().then(function (doc) {
+    if (!doc.exists) return;
+    var d = doc.data(), datos = d.datos || {};
+    mostrarInfoPlanCompartido(d);
+    var ver = String(d.ver || '');
+    var aplicado = null; try { aplicado = sessionStorage.getItem('planCompartidoVer'); } catch (e) {}
+    if (aplicado === ver) return;
+    PLAN_KEYS.forEach(function (k) {
+      try { if (datos[k] !== undefined) _lsSet.call(localStorage, k, datos[k]); else _lsRemove.call(localStorage, k); } catch (e) {}
+    });
+    try { sessionStorage.setItem('planCompartidoVer', ver); } catch (e) {}
+    location.reload();
+  }).catch(function (e) { console.warn('No se pudo leer el plan compartido:', e); });
+}
+
+function mostrarInfoPlanCompartido(d) {
+  var el = document.getElementById('planLecturaInfo'); if (!el) return;
+  var f = ''; try { f = new Date(d.actualizadoEn).toLocaleString('es-MX'); } catch (e) {}
+  el.innerHTML = '👁️ <b>Solo lectura · Read only · 읽기 전용</b> — ' +
+    'Plan actualizado · Updated · 업데이트: ' + f + (d.actualizadoPor ? ' · ' + String(d.actualizadoPor).replace(/[<>&]/g, '') : '');
+}
+
+function prepararPlanSoloLectura() {
+  var pg = document.getElementById('page-plan'); if (!pg) return;
+  // Aviso de solo lectura
+  var cont = document.getElementById('planContent');
+  if (cont && !document.getElementById('planLecturaInfo')) {
+    var info = document.createElement('div');
+    info.id = 'planLecturaInfo';
+    info.style.cssText = 'margin-bottom:.8rem;padding:.6rem .8rem;border-radius:8px;font-size:12px;background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.35);color:#4da6ff';
+    info.innerHTML = '👁️ <b>Solo lectura · Read only · 읽기 전용</b>';
+    cont.insertBefore(info, cont.firstChild);
+  }
+  // Ocultar acciones que modifican el plan
+  var bSync = pg.querySelector('button[onclick^="sincronizarProducidoDesdeMES"]');
+  if (bSync && bSync.parentElement) bSync.parentElement.style.display = 'none';
+  var bCargar = pg.querySelector('#planEmpty button'); if (bCargar) bCargar.style.display = 'none';
+  // Desactivar campos editables cada vez que se pinta la tabla
+  var bloquear = function () {
+    pg.querySelectorAll('input, select, textarea').forEach(function (c) { if (!c.disabled) { c.disabled = true; c.style.opacity = '.75'; c.style.cursor = 'not-allowed'; } });
+  };
+  bloquear();
+  try { new MutationObserver(bloquear).observe(pg, { childList: true, subtree: true }); } catch (e) {}
 }
 
 function initIMS() {
@@ -3578,7 +3681,7 @@ function sincIMS() {
 
 function checkAdminKey() {
   if (document.getElementById('adminKey').value === 'BomP4!2026') {
-    adminAuthed = true;
+    adminAuthed = true; if (typeof alEntrarAdminPlan === "function") setTimeout(alEntrarAdminPlan, 1500);
     document.getElementById('adminLock').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
     cargarBomActivo();

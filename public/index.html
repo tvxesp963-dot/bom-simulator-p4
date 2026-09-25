@@ -5845,11 +5845,13 @@ async function publicarPlanPiso() {
       const capRaw = caps[sm];
       const cap = (capRaw === undefined || !isFinite(capRaw)) ? null : Math.floor(capRaw);
       const materiales = { Strip: null, Top: null, Bot: null, Bundle: null };
-      pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in materiales) materiales[p.etiqueta] = !!p.ok; });
+      const pn = { Strip: '', Top: '', Bot: '', Bundle: '' };
+      const desc = { Strip: '', Top: '', Bot: '', Bundle: '' };
+      pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in materiales) { materiales[p.etiqueta] = !!p.ok; pn[p.etiqueta] = p.pn || ''; desc[p.etiqueta] = p.desc || ''; } });
       const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
       const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
       const fecha = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
-      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, producido, pendiente, cap, materiales,
+      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, producido, pendiente, cap, materiales, pn, desc,
                listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
     });
     // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas
@@ -5857,7 +5859,9 @@ async function publicarPlanPiso() {
 
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
-      publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida
+      publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida,
+      capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
+      capacidadSabado: (typeof CAPACIDAD_SABADO_ASSY1 !== 'undefined') ? CAPACIDAD_SABADO_ASSY1 : 0
     });
     regresar('✅ Publicado');
   } catch (e) {

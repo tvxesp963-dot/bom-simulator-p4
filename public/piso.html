@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Orden de producción · Piso P4</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
@@ -59,6 +60,53 @@ h1{font-size:26px;margin:0}
 .login input{width:100%;padding:10px;margin:6px 0;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px}
 .login button{width:100%;padding:10px;margin-top:8px;background:var(--accent);border:0;border-radius:8px;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
 .err{color:var(--red);font-size:13px;margin-top:6px}
+.acciones{display:flex;gap:6px;align-items:center;margin-right:8px}
+.acciones button{background:#0d1220;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
+.acciones button:hover{border-color:var(--accent)}
+.derecha{display:flex;align-items:center}
+@page{size:letter landscape;margin:8mm}
+#pick{display:none}
+#pick{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;color:#000;background:#fff}
+#pick .ph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:6px}
+#pick h2{font-size:18px;margin:0}
+#pick .pinfo{font-size:10px}
+#pick .firmas{font-size:10px;line-height:2}
+#pick .mh{display:flex;justify-content:space-between;align-items:center;border:1.5px solid #000;padding:4px 8px;margin-top:8px;font-size:12px;font-weight:800;page-break-after:avoid}
+#pick .pn{display:inline-flex;width:20px;height:20px;border:1.5px solid #000;border-radius:50%;align-items:center;justify-content:center;margin-right:6px;font-size:11px}
+#pick table{width:100%;border-collapse:collapse;margin:2px 0 4px;page-break-inside:avoid}
+#pick th{font-size:9px;text-align:left;border-bottom:1.5px solid #000;padding:3px 4px;text-transform:uppercase}
+#pick td{font-size:11px;border-bottom:0.5px solid #aaa;padding:4px}
+#pick .r{text-align:right}
+#pick .box{display:inline-block;width:13px;height:13px;border:1.5px solid #000;border-radius:2px}
+#pick .nota{font-size:10px;font-weight:700;text-decoration:underline}
+#pick .res{margin-top:10px;border-top:2px solid #000;padding-top:4px;page-break-inside:avoid}
+#pick .res h3{font-size:12px;margin:2px 0 4px}
+#pick .pfoot{font-size:9px;color:#444;margin-top:6px}
+@media print{
+  /* Ahorro de tinta: solo negro/gris, sin fondos de color ni barras rellenas */
+  :root{--bg:#fff;--card:#fff;--card2:#fff;--border:#999;--text:#000;--text2:#222;--text3:#555;--green:#000;--red:#000;--yellow:#000;--accent:#000}
+  *{-webkit-print-color-adjust:economy;print-color-adjust:economy;animation:none!important;box-shadow:none!important;background:transparent!important;color:#000!important}
+  body,body.fit{padding:0;overflow:visible;height:auto;filter:grayscale(100%)}
+  body.fit .wrap,.wrap{transform:none!important;position:static;width:auto;max-width:none;padding:0}
+  .acciones,.langs,.bar{display:none!important}
+  h1{font-size:18px}.sub{font-size:11px;margin-bottom:6px}
+  .kpis{gap:6px;margin-bottom:8px}.kpi{padding:6px 10px;border:1px solid #999}.kpi .l{font-size:10px}.kpi .v{font-size:18px}
+  .tbl{border:1px solid #666}.tbl th{font-size:9px;padding:4px 5px;border-bottom:2px solid #000}
+  .tbl td{font-size:11px;padding:3px 5px;border-top:1px solid #ccc}
+  tr{page-break-inside:avoid}
+  .sep td{font-size:10px;padding:4px 6px;border-top:2px solid #000;border-bottom:1px solid #000;text-transform:uppercase}
+  .num{width:22px;height:22px;font-size:12px;border:1.5px solid #000}
+  .mdl{font-size:12px}.code{font-size:8px;color:#444!important}
+  .chip{font-size:9px;padding:0 3px;margin:0 1px;border:1px solid #bbb;font-weight:400}
+  .chip.no{border:1.5px solid #000;font-weight:800;text-decoration:underline}
+  .chip.na{color:#888!important;border-style:dashed}
+  .pm{display:inline!important}
+  .est{font-size:11px}.prodok{font-size:13px}.extra{font-size:9px}
+  .corte.ambar,.corte.rojo{font-size:11px}
+  .foot{font-size:9px}
+  body.modo-pick .wrap{display:none!important}
+  body.modo-pick #pick{display:block!important}
+}
 @media (max-width:800px){.tbl td{font-size:15px;padding:10px 6px}.hide-sm{display:none}.kpi .v{font-size:24px}h1{font-size:20px}}
 </style>
 </head>
@@ -66,14 +114,23 @@ h1{font-size:26px;margin:0}
 <div class="wrap">
   <div class="top">
     <h1 id="tTitle"></h1>
+    <div class="derecha">
+    <div class="acciones">
+      <button id="btnPdf" onclick="imprimirPDF()">🖨️ PDF</button>
+      <button id="btnXls" onclick="exportarExcel()">📊 Excel</button>
+      <button id="btnPick" onclick="imprimirPickList()">📋 Pick List</button>
+    </div>
     <div class="langs">
       <button data-l="es" title="Español"><img src="https://flagcdn.com/w40/mx.png" alt="MX"></button><button data-l="en" title="English"><img src="https://flagcdn.com/w40/us.png" alt="US"></button><button data-l="ko" title="한국어"><img src="https://flagcdn.com/w40/kr.png" alt="KR"></button>
+    </div>
     </div>
   </div>
   <div class="sub" id="sub"></div>
   <div id="app"><div class="msg" id="loading"></div></div>
   <div class="foot" id="foot"></div>
 </div>
+
+<div id="pick"></div>
 
 <script>
 // ===== Idiomas =====
@@ -82,6 +139,8 @@ var T = {
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay un plan publicado. Publícalo desde el BOM Simulator (Plan Semanal → Publicar al piso).',
+      sinDatosExp:'Sin datos para exportar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',
+      hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material al momento de publicar · Producido en vivo de ShipQR · se actualiza sola',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
       d:'d',h:'h',m:'min',pzas:'pzas',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],loc:'es-MX'},
@@ -89,6 +148,8 @@ var T = {
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No plan has been published yet. Publish it from the BOM Simulator (Weekly Plan → Publish to floor).',
+      sinDatosExp:'No data to export',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',
+      hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material as of publish time · Produced live from ShipQR · auto-refresh',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
       d:'d',h:'h',m:'min',pzas:'pcs',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],loc:'en-US'},
@@ -96,6 +157,8 @@ var T = {
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 게시된 계획이 없습니다. BOM Simulator에서 게시하세요 (주간 계획 → 현장에 게시).',
+      sinDatosExp:'내보낼 데이터가 없습니다',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',
+      hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 게시 시점 기준 · 생산 수량은 ShipQR 실시간 · 자동 새로고침',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
       d:'일',h:'시간',m:'분',pzas:'개',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],loc:'ko-KR'}
@@ -230,6 +293,7 @@ function pintar(){
   var run = filas.filter(function(f){ return f.pend > 0 && f.m.orden; }).sort(function(a,b){ return a.m.orden - b.m.orden; });
   var wait = filas.filter(function(f){ return f.pend > 0 && !f.m.orden; }).sort(function(a,b){ return (a.m.prioridad||999) - (b.m.prioridad||999); });
   var done = filas.filter(function(f){ return f.pend === 0; });
+  window._ultimo = { run: run, wait: wait, done: done, tot: tot };
 
   var kp = function(l, v, color){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v"' + (color ? ' style="color:' + color + '"' : '') + '>' + v + '</div></div>'; };
   var avTot = tot.t ? Math.round(tot.p * 100 / tot.t) : 0;
@@ -240,7 +304,7 @@ function pintar(){
     return ['Strip','Top','Bot','Bundle'].map(function(k){
       var v = mat ? mat[k] : null;
       var cls = v === true ? 'ok' : (v === false ? 'no' : 'na');
-      return '<span class="chip ' + cls + '">' + k + '</span>';
+      return '<span class="chip ' + cls + '"><span class="pm" style="display:none">' + (v === true ? '✓' : (v === false ? '✗' : '–')) + ' </span>' + k + '</span>';
     }).join('');
   };
   var bar = function(f, color){ return '<div class="bar"><div style="width:' + f.pct + '%;background:' + color + '"></div></div><div class="code">' + f.pct + '%</div>'; };
@@ -293,6 +357,161 @@ function ajustarPantalla(){
 }
 window.addEventListener('resize', ajustarPantalla);
 document.querySelectorAll('.langs img').forEach(function(img){ img.addEventListener('load', ajustarPantalla); });
+// ===== PDF (impresión) =====
+// Abre la ventana de impresión con formato de hoja (fondo blanco, horizontal).
+// Ahí se elige "Guardar como PDF" o la impresora.
+function imprimirPDF(){ window.print(); }
+window.addEventListener('afterprint', ajustarPantalla);
+
+// ===== PICK LIST (almacén) =====
+// Solo los modelos que se pueden correr (orden 1, 2, 3…), cantidad = lo que está Listo.
+// Cada material (Strip/Top/Bot/Bundle) se pide 1 por pieza, igual que el Pick List del BOM Simulator.
+function datosPickList(){
+  var u = window._ultimo;
+  if (!u) return null;
+  var capDia = (plan && plan.capacidadDia) || 13000, capSab = (plan && plan.capacidadSabado) || 0;
+  var acumulado = 0, faltanPN = false;
+  var modelos = u.run.map(function(f){
+    var m = f.m, cant = Math.min(m.cap || 0, f.pend);
+    var inicio = acumulado; acumulado += cant;
+    var mats = ['Strip','Top','Bot','Bundle'].map(function(k){
+      var pn = m.pn ? m.pn[k] : '';
+      var usa = m.materiales && m.materiales[k] !== null && m.materiales[k] !== undefined;
+      if (usa && !pn) faltanPN = true;
+      return { k: k, pn: pn || '', desc: (m.desc && m.desc[k]) || '', usa: usa, parcial: usa && m.materiales[k] === false };
+    }).filter(function(x){ return x.usa; });
+    return { orden: m.orden, sm: m.sm, code: m.code || '', fecha: m.fecha, cant: cant, pend: f.pend, inicio: inicio, mats: mats };
+  });
+  var resumen = {};
+  modelos.forEach(function(md){ md.mats.forEach(function(x){
+    var key = x.pn || (x.k + ' · ' + md.sm);
+    if (!resumen[key]) resumen[key] = { pn: x.pn || '—', desc: x.desc, cant: 0, modelos: [] };
+    resumen[key].cant += md.cant; resumen[key].modelos.push(md.sm);
+  }); });
+  return { modelos: modelos, resumen: Object.keys(resumen).sort().map(function(k){ return resumen[k]; }), capDia: capDia, capSab: capSab, faltanPN: faltanPN };
+}
+
+// Día estimado en que la línea llega a este modelo, según piezas antes de él y capacidad por día.
+function entregaEstimada(inicio, capDia, capSab){
+  if (inicio <= 0) return t('pkYa');
+  var d = new Date(); d.setHours(0,0,0,0);
+  var hoy = new Date(d), restante = inicio;
+  for (var i = 0; i < 60; i++) {
+    var cap = d.getDay() === 0 ? 0 : (d.getDay() === 6 ? capSab : capDia);
+    if (restante < cap) break;
+    restante -= cap; d.setDate(d.getDate() + 1);
+  }
+  var dias = Math.round((d - hoy) / 864e5);
+  var cuando = dias === 0 ? t('pkHoy') : (dias === 1 ? t('pkManana') : t('dias')[d.getDay()] + ' ' + fechaCorta(d));
+  return '≈ ' + cuando + ' · ' + t('pkDespues') + ' ' + n(inicio) + ' ' + t('pzas');
+}
+
+function imprimirPickList(){
+  var dp = datosPickList();
+  if (!dp) { alert(t('sinDatosExp')); return; }
+  var ahora = new Date();
+  var pub = (plan && plan.publicadoEn) ? new Date(plan.publicadoEn).toLocaleString(t('loc')) : '—';
+  var pc = proximoCorte(ahora);
+  var corteTxt = pc ? t('dias')[pc.getDay()] + ' ' + fechaCorta(pc) + ' ' + pc.toLocaleTimeString(t('loc'), {hour:'numeric', minute:'2-digit'}) : '—';
+  var h = '<div class="ph"><div><h2>' + t('pkTitulo') + '</h2><div class="pinfo">' + t('corte') + ': ' + corteTxt + ' · ' + t('pkPlan') + ': ' + pub +
+          ' · ' + t('impreso') + ': ' + ahora.toLocaleString(t('loc')) + '</div></div>' +
+          '<div class="firmas">' + t('pkPreparo') + ': ________________<br>' + t('pkEntrego') + ': ________________<br>' + t('pkRecibio') + ': ________________</div></div>';
+  if (dp.faltanPN) h += '<div class="nota" style="margin:4px 0">⚠ ' + t('pkRepub') + '</div>';
+  if (!dp.modelos.length) h += '<p>' + t('pkNada') + '</p>';
+  dp.modelos.forEach(function(md){
+    h += '<div class="mh"><span><span class="pn">' + md.orden + '</span>' + esc(md.sm) + ' · ' + esc(md.code) + (md.fecha ? ' · ' + t('envio') + ' ' + fechaEnvio(md.fecha) : '') + '</span>' +
+         '<span>' + t('pkPrep') + ': ' + n(md.cant) + ' ' + t('pzas') + ' · ' + t('pkEntregar') + ': ' + entregaEstimada(md.inicio, dp.capDia, dp.capSab) + '</span></div>';
+    h += '<table><tr><th style="width:9%">' + t('pkMaterial') + '</th><th style="width:15%">' + t('pkPN') + '</th><th>' + t('pkDesc') + '</th><th class="r" style="width:9%">' + t('pkCant') +
+         '</th><th style="width:22%">' + t('pkNota') + '</th><th style="width:5%">' + t('pkPrepChk') + '</th><th style="width:5%">' + t('pkEntrChk') + '</th></tr>';
+    md.mats.forEach(function(x){
+      h += '<tr><td>' + x.k + '</td><td><b>' + esc(x.pn || '—') + '</b></td><td>' + esc(x.desc) + '</td><td class="r"><b>' + n(md.cant) + '</b></td><td class="nota">' +
+           (x.parcial ? t('pkSolo') + ' ' + n(md.cant) + ' ' + t('de') + ' ' + n(md.pend) : '') + '</td><td><span class="box"></span></td><td><span class="box"></span></td></tr>';
+    });
+    h += '</table>';
+  });
+  if (dp.resumen.length) {
+    h += '<div class="res"><h3>' + t('pkResumen') + '</h3><table><tr><th style="width:16%">' + t('pkPN') + '</th><th>' + t('pkDesc') + '</th><th class="r" style="width:10%">' + t('pkCant') + '</th><th>' + t('pkModelos') + '</th></tr>';
+    dp.resumen.forEach(function(r){ h += '<tr><td><b>' + esc(r.pn) + '</b></td><td>' + esc(r.desc) + '</td><td class="r"><b>' + n(r.cant) + '</b></td><td>' + esc(r.modelos.join(', ')) + '</td></tr>'; });
+    h += '</table></div>';
+  }
+  h += '<div class="pfoot">' + t('pkEstim') + ' (' + n(dp.capDia) + '/' + t('d') + ')</div>';
+  document.getElementById('pick').innerHTML = h;
+  document.body.classList.add('modo-pick');
+  window.print();
+}
+window.addEventListener('afterprint', function(){ document.body.classList.remove('modo-pick'); });
+
+// ===== EXCEL =====
+function exportarExcel(){
+  var u = window._ultimo;
+  if (!u || typeof XLSX === 'undefined') { alert(t('sinDatosExp')); return; }
+  var ahora = new Date();
+  var head = [t('orden'), t('modelo'), t('codigo'), t('envio'), t('target'), t('prod'), t('pend'), t('avance') + ' %', 'Strip', 'Top', 'Bot', 'Bundle', t('estado'), t('seccion')];
+  var mat = function(m, k){ var v = m.materiales ? m.materiales[k] : null; return v === true ? '✓' : (v === false ? '✗' : 'N/A'); };
+  var estado = function(f, tipo){
+    if (tipo === 'run') { var cap = f.m.cap || 0; return t('listo') + ' ' + (cap >= f.pend ? f.pend : cap + ' ' + t('de') + ' ' + f.pend); }
+    if (tipo === 'wait') { var fl = ['Strip','Top','Bot','Bundle'].filter(function(k){ return f.m.materiales && f.m.materiales[k] === false; }); return fl.length ? t('falta') + ' ' + fl.join(', ') : t('sinDatos'); }
+    return t('completo') + (f.prod > (f.m.target || 0) ? ' (+' + (f.prod - f.m.target) + ')' : '');
+  };
+  var filas = [], tipos = [];
+  [['run', u.run], ['wait', u.wait], ['done', u.done]].forEach(function(g){
+    g[1].forEach(function(f){
+      filas.push([g[0] === 'run' ? f.m.orden : (g[0] === 'done' ? '✓' : '—'), f.m.sm, f.m.code || '', fechaEnvio(f.m.fecha),
+        f.m.target || 0, f.prod, f.pend, f.pct, mat(f.m,'Strip'), mat(f.m,'Top'), mat(f.m,'Bot'), mat(f.m,'Bundle'), estado(f, g[0]), t(g[0])]);
+      tipos.push(g[0]);
+    });
+  });
+  var titulo = [[t('title')], [document.getElementById('sub').textContent], [t('impreso') + ': ' + ahora.toLocaleString(t('loc'))],
+    [t('target') + ': ' + u.tot.t + '   ' + t('prod') + ': ' + u.tot.p + '   ' + t('pend') + ': ' + (u.tot.t - u.tot.p) + '   ' + t('avance') + ': ' + (u.tot.t ? Math.round(u.tot.p * 100 / u.tot.t) : 0) + '%'], []];
+  var ws = XLSX.utils.aoa_to_sheet(titulo.concat([head]).concat(filas));
+  var r0 = titulo.length;
+  var borde = { top:{style:'thin',color:{rgb:'BBBBBB'}}, bottom:{style:'thin',color:{rgb:'BBBBBB'}}, left:{style:'thin',color:{rgb:'BBBBBB'}}, right:{style:'thin',color:{rgb:'BBBBBB'}} };
+  var set = function(r, c, st){ var ref = XLSX.utils.encode_cell({r:r, c:c}); if (ws[ref]) ws[ref].s = st; };
+  set(0, 0, { font:{ bold:true, sz:16 } });
+  head.forEach(function(_, c){ set(r0, c, { font:{ bold:true, color:{rgb:'000000'} }, fill:{ fgColor:{rgb:'EEEEEE'} }, alignment:{ horizontal:'center', vertical:'center', wrapText:true }, border: borde }); });
+  var fondo = { run:'FFFFFF', wait:'FFFFFF', done:'FFFFFF' };
+  filas.forEach(function(fila, i){
+    var r = r0 + 1 + i, tipo = tipos[i];
+    fila.forEach(function(v, c){
+      var st = { border: borde, fill:{ fgColor:{ rgb: fondo[tipo] } }, alignment:{ vertical:'center', horizontal: (c >= 4 && c <= 7) ? 'right' : (c === 0 || (c >= 8 && c <= 11) ? 'center' : 'left') } };
+      if (c >= 4 && c <= 6) st.numFmt = '#,##0';
+      if (c === 1) st.font = { bold:true, color:{rgb:'0B4FA3'} };
+      if (c === 6) st.font = { bold:true };
+      if (c >= 8 && c <= 11) { st.font = { bold:true, color:{ rgb: v === '✓' ? '0A7A3A' : (v === '✗' ? 'C00000' : '777777') } }; }
+      if (c === 12) st.font = { bold:true, color:{ rgb: tipo === 'wait' ? 'C00000' : (tipo === 'done' ? '0A7A3A' : '0A7A3A') } };
+      if (c === 0) st.font = { bold:true, sz:12 };
+      set(r, c, st);
+    });
+  });
+  ws['!cols'] = [6, 22, 15, 10, 10, 11, 11, 10, 7, 7, 7, 8, 26, 18].map(function(w){ return { wch: w }; });
+  ws['!merges'] = [0,1,2,3].map(function(r){ return { s:{r:r,c:0}, e:{r:r,c:13} }; });
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:r0,c:0}, e:{r:r0 + filas.length, c:13} }) };
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, t('hojaPlan'));
+  var dp = datosPickList();
+  if (dp && dp.modelos.length) {
+    var ph = [t('orden'), t('modelo'), t('pkEntregar'), t('pkMaterial'), t('pkPN'), t('pkDesc'), t('pkCant'), t('pkNota'), t('pkPrepChk'), t('pkEntrChk')];
+    var pf = [];
+    dp.modelos.forEach(function(md){ md.mats.forEach(function(x){
+      pf.push([md.orden, md.sm, entregaEstimada(md.inicio, dp.capDia, dp.capSab), x.k, x.pn || '—', x.desc, md.cant, x.parcial ? t('pkSolo') + ' ' + md.cant + ' ' + t('de') + ' ' + md.pend : '', '', '']);
+    }); });
+    var ws2 = XLSX.utils.aoa_to_sheet([[t('pkTitulo')], [t('impreso') + ': ' + ahora.toLocaleString(t('loc'))], [], ph].concat(pf).concat([[], [t('pkResumen')], [t('pkPN'), t('pkDesc'), t('pkCant'), t('pkModelos')]])
+      .concat(dp.resumen.map(function(r){ return [r.pn, r.desc, r.cant, r.modelos.join(', ')]; })));
+    var hs = { font:{ bold:true }, fill:{ fgColor:{rgb:'EEEEEE'} }, border: borde, alignment:{ horizontal:'center', wrapText:true } };
+    ws2['A1'].s = { font:{ bold:true, sz:14 } };
+    ph.forEach(function(_, c){ var ref = XLSX.utils.encode_cell({r:3, c:c}); ws2[ref].s = hs; });
+    pf.forEach(function(fila, i){ fila.forEach(function(_, c){ var ref = XLSX.utils.encode_cell({r:4 + i, c:c}); if (!ws2[ref]) ws2[ref] = { t:'s', v:'' };
+      ws2[ref].s = { border: borde, font:{ bold: c === 4 || c === 6 }, numFmt: c === 6 ? '#,##0' : undefined }; }); });
+    var rr = 4 + pf.length + 1;
+    var refT = XLSX.utils.encode_cell({r:rr, c:0}); if (ws2[refT]) ws2[refT].s = { font:{ bold:true, sz:12 } };
+    [0,1,2,3].forEach(function(c){ var ref = XLSX.utils.encode_cell({r:rr + 1, c:c}); if (ws2[ref]) ws2[ref].s = hs; });
+    ws2['!cols'] = [7, 20, 30, 9, 15, 30, 10, 26, 7, 7].map(function(w){ return { wch: w }; });
+    XLSX.utils.book_append_sheet(wb, ws2, 'Pick List');
+  }
+  var f = ahora.getFullYear() + '-' + String(ahora.getMonth()+1).padStart(2,'0') + '-' + String(ahora.getDate()).padStart(2,'0') + '_' + String(ahora.getHours()).padStart(2,'0') + String(ahora.getMinutes()).padStart(2,'0');
+  XLSX.writeFile(wb, 'Orden_Produccion_ASSY1_' + f + '.xlsx');
+}
+
 pintar();
 ajustarPantalla();
 </script>

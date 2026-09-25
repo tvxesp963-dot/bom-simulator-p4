@@ -5162,7 +5162,13 @@ async function renderPlanSemanal() {
 
   wrap.innerHTML = avisoHtml + `
     <div class="card" style="margin-bottom:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase;margin-bottom:.2rem">1️⃣ Plan Requerido · Modelo y partes</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.2rem">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">1️⃣ Plan Requerido · Modelo y partes</div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+          ${adminAuthed ? `<button class="btn btn-primary btn-sm" id="btnPublicarPiso" onclick="publicarPlanPiso()" title="Publica el orden ⚡ Listo en la pantalla del piso · Publish to floor screen · 현장 화면에 게시">📺 Publicar al piso · Publish · 게시</button>` : ''}
+          <a class="btn btn-sm" href="piso.html" target="_blank" style="text-decoration:none" title="Abrir pantalla del piso · Open floor screen · 현장 화면 열기">↗ Pantalla piso · Floor · 현장</a>
+        </div>
+      </div>
       <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" es manual — o usa el botón para traer de ShipQR lo que sigue disponible en piso de P4 (pallets aún no marcados como SHIPPED).</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
@@ -5801,6 +5807,64 @@ async function publicarPlanSemanal() {
   }
 }
 window.publicarPlanSemanal = publicarPlanSemanal;
+
+// ── PUBLICAR AL PISO ──
+// Guarda una "foto" del Plan Requerido (mismo orden ⚡ Listo, material de los 4
+// componentes Strip/Top/Bot/Bundle) en bom_simulator_p4/plan_piso, para que la
+// pantalla piso.html la muestre. No cambia ningún cálculo: usa las mismas
+// funciones que pintan la tabla 1 (calcularFaltantesPorModeloPlan + calcularPlanSemanal).
+async function publicarPlanPiso() {
+  if (!adminAuthed) { alert('Solo el administrador puede publicar al piso.'); return; }
+  if (!db) { alert('Firebase no disponible — no se pudo publicar'); return; }
+  const btn = document.getElementById('btnPublicarPiso');
+  const txt0 = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳ Publicando...'; btn.disabled = true; }
+  const regresar = (t) => { if (!btn) return; btn.textContent = t || txt0; if (t) setTimeout(() => { btn.textContent = txt0; btn.disabled = false; }, 3000); else btn.disabled = false; };
+  try {
+    await sincIMSFresco();
+    const produccionReal = { ...(window.simProducidoManualPorModelo || {}) };
+    const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+    const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+    const conTarget = modelos.filter(sm => multiModelosActivos.includes(sm) && (simTargetsPorModelo[sm] || 0) > 0).sort((a, b) => prio(a) - prio(b));
+    if (!conTarget.length) { alert('No hay modelos con target en el Plan Requerido.'); regresar(); return; }
+
+    calcularFaltantesPorModeloPlan(conTarget, produccionReal);
+    const caps = window._planMaterialCapPorModelo || {};
+    const pick = window._planPickList || [];
+    const { semanas } = calcularPlanSemanal(produccionReal, caps);
+
+    // Mismos modelos que muestra la tabla 1 (los del plan + los ya cubiertos)
+    const enPlan = new Set(semanas.flatMap(s => s.items.map(it => it.sm)));
+    const lista = conTarget.filter(sm => enPlan.has(sm) || (produccionReal[sm] || 0) >= (simTargetsPorModelo[sm] || 0));
+    if (!lista.length) { alert('Asigna fecha de entrega a los modelos antes de publicar al piso.'); regresar(); return; }
+
+    const salida = lista.map(sm => {
+      const target = simTargetsPorModelo[sm] || 0;
+      const producido = produccionReal[sm] || 0;
+      const pendiente = Math.max(0, target - producido);
+      const capRaw = caps[sm];
+      const cap = (capRaw === undefined || !isFinite(capRaw)) ? null : Math.floor(capRaw);
+      const materiales = { Strip: null, Top: null, Bot: null, Bundle: null };
+      pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in materiales) materiales[p.etiqueta] = !!p.ok; });
+      const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
+      const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
+      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', target, producido, pendiente, cap, materiales,
+               listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
+    });
+    // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas
+    salida.filter(m => m.listo).sort((a, b) => b.cap - a.cap).forEach((m, i) => { m.orden = i + 1; });
+
+    const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
+    await db.collection('bom_simulator_p4').doc('plan_piso').set({
+      publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida
+    });
+    regresar('✅ Publicado · Published · 게시됨');
+  } catch (e) {
+    alert('Error: ' + e.message);
+    regresar();
+  }
+}
+window.publicarPlanPiso = publicarPlanPiso;
 
 // ── CREAR PARTES NUEVAS EN IMS ──
 // Crea en planta4_inventario las partes del BOM activo que aún no existen.

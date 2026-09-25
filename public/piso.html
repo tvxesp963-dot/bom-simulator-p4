@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orden de producción · Piso P4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
+<style>
+:root{--bg:#0a0e1a;--card:#111827;--card2:#0d1220;--border:#1f2a3d;--text:#e8edf5;--text2:#8b96a8;--text3:#5c6678;--green:#00e676;--red:#ff4d4d;--yellow:#f1c40f;--accent:#4da6ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;padding:16px}
+.wrap{max-width:1400px;margin:0 auto}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:26px;margin:0}
+.langs button{background:transparent;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:8px;font-weight:700;cursor:pointer;margin-left:4px}
+.langs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.sub{color:var(--text2);font-size:15px;margin-bottom:14px}
+.sub .old{color:var(--yellow);font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
+.kpi .l{font-size:14px;color:var(--text2)}
+.kpi .v{font-size:32px;font-weight:800;margin-top:2px}
+.tbl{width:100%;border-collapse:collapse;background:var(--card2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.tbl th{font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--text2);text-align:left;padding:12px 10px;border-bottom:2px solid var(--border)}
+.tbl td{padding:14px 10px;border-top:1px solid var(--border);font-size:20px}
+.r,.tbl th.r{text-align:right}
+.sep td{background:#151d2e;color:var(--text2);font-size:15px;font-weight:700;padding:8px 12px}
+.num{display:inline-flex;width:40px;height:40px;border-radius:50%;align-items:center;justify-content:center;background:var(--green);color:#002b14;font-weight:900;font-size:22px}
+.num.wait{background:#1f2a3d;color:var(--text2);font-size:18px}
+.mdl{font-weight:800;color:var(--accent)}
+.code{font-size:12px;color:var(--text3)}
+.chip{display:inline-block;font-size:13px;font-weight:700;padding:3px 8px;border-radius:6px;margin:2px}
+.ok{background:rgba(0,230,118,.15);color:var(--green)}
+.no{background:rgba(255,77,77,.18);color:var(--red)}
+.na{background:#1f2a3d;color:var(--text3)}
+.bar{background:#1f2a3d;height:12px;border-radius:6px;min-width:90px}
+.bar div{height:12px;border-radius:6px}
+.est{font-weight:800;font-size:18px}
+.done td{font-size:16px;color:var(--text2)}
+.foot{color:var(--text3);font-size:13px;margin-top:10px}
+.msg{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;color:var(--text2);font-size:18px}
+.login{max-width:360px;margin:40px auto;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.login input{width:100%;padding:10px;margin:6px 0;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px}
+.login button{width:100%;padding:10px;margin-top:8px;background:var(--accent);border:0;border-radius:8px;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+.err{color:var(--red);font-size:13px;margin-top:6px}
+@media (max-width:800px){.tbl td{font-size:15px;padding:10px 6px}.hide-sm{display:none}.kpi .v{font-size:24px}h1{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1 id="tTitle"></h1>
+    <div class="langs">
+      <button data-l="es">ES</button><button data-l="en">EN</button><button data-l="ko">KO</button>
+    </div>
+  </div>
+  <div class="sub" id="sub"></div>
+  <div id="app"><div class="msg" id="loading"></div></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+// ===== Idiomas =====
+var T = {
+  es:{title:'Orden de producción · ASSY1',loading:'Cargando plan...',corte:'Corte',faltan:'faltan',publicado:'Publicado',viejo:'(plan de hace más de 12 h)',
+      target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',modelo:'Modelo',material:'Material',estado:'Estado',
+      run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
+      vacio:'Todavía no hay un plan publicado. Publícalo desde el BOM Simulator (Plan Semanal → Publicar al piso).',
+      foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material al momento de publicar · Producido en vivo de ShipQR · se actualiza sola',
+      login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
+      d:'d',h:'h',m:'min',pzas:'pzas',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],loc:'es-MX'},
+  en:{title:'Production order · ASSY1',loading:'Loading plan...',corte:'Cutoff',faltan:'left',publicado:'Published',viejo:'(plan older than 12 h)',
+      target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',modelo:'Model',material:'Material',estado:'Status',
+      run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
+      vacio:'No plan has been published yet. Publish it from the BOM Simulator (Weekly Plan → Publish to floor).',
+      foot:'Order = same "⚡ Ready" as Required Plan · Material as of publish time · Produced live from ShipQR · auto-refresh',
+      login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
+      d:'d',h:'h',m:'min',pzas:'pcs',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],loc:'en-US'},
+  ko:{title:'생산 순서 · ASSY1',loading:'계획 불러오는 중...',corte:'출하 마감',faltan:'남음',publicado:'게시',viejo:'(12시간 이상 지난 계획)',
+      target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',modelo:'모델',material:'자재',estado:'상태',
+      run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
+      vacio:'아직 게시된 계획이 없습니다. BOM Simulator에서 게시하세요 (주간 계획 → 현장에 게시).',
+      foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 게시 시점 기준 · 생산 수량은 ShipQR 실시간 · 자동 새로고침',
+      login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
+      d:'일',h:'시간',m:'분',pzas:'개',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],loc:'ko-KR'}
+};
+var lang = 'es';
+try { lang = localStorage.getItem('pisoLang') || 'es'; } catch (e) {}
+if (!T[lang]) lang = 'es';
+function t(k){ return T[lang][k]; }
+function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function n(x){ return Math.round(x || 0).toLocaleString(t('loc')); }
+
+document.querySelectorAll('.langs button').forEach(function(b){
+  b.onclick = function(){ lang = b.dataset.l; try { localStorage.setItem('pisoLang', lang); } catch (e) {} pintar(); };
+});
+
+// ===== Cortes de envío (misma lógica que el BOM Simulator) =====
+var cortesEspeciales = [];
+function aplicarCorteEspecial(c){ var m = cortesEspeciales.find(function(x){ return x.original === c.getTime(); }); return m ? new Date(m.nuevo) : c; }
+function generarCortesFinales(centro){
+  var out = [];
+  for (var i = -21; i <= 21; i++) {
+    var dia = new Date(centro); dia.setDate(dia.getDate() + i); dia.setHours(0,0,0,0);
+    var dow = dia.getDay(), c;
+    if (dow === 3) { c = new Date(dia); c.setHours(15,30,0,0); out.push(aplicarCorteEspecial(c)); }
+    else if (dow === 6) { c = new Date(dia); c.setHours(11,0,0,0); out.push(aplicarCorteEspecial(c)); }
+  }
+  return out.sort(function(a,b){ return a - b; });
+}
+function proximoCorte(desde){ var cs = generarCortesFinales(desde); for (var i = 0; i < cs.length; i++) if (cs[i] > desde) return cs[i]; return null; }
+
+// ===== Firebase (mismo proyecto que BOM Simulator) =====
+var cfg = {apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"};
+firebase.initializeApp(cfg);
+var db = firebase.firestore();
+var plan = null;            // documento publicado
+var producidoVivo = null;   // { modelo: piezas } desde ShipQR
+var arrancado = false, unsubPlan = null;
+
+function mostrarLogin(){
+  document.getElementById('app').innerHTML =
+    '<div class="login"><div style="font-weight:700;margin-bottom:8px">' + t('login') + '</div>' +
+    '<input id="lgE" type="email" placeholder="' + t('correo') + '"><input id="lgP" type="password" placeholder="' + t('pass') + '">' +
+    '<button id="lgB">' + t('entrar') + '</button><div class="err" id="lgErr"></div></div>';
+  document.getElementById('lgB').onclick = function(){
+    var e = document.getElementById('lgE').value.trim(), p = document.getElementById('lgP').value;
+    firebase.auth().signInWithEmailAndPassword(e, p).catch(function(){ document.getElementById('lgErr').textContent = t('errLogin'); });
+  };
+}
+
+function errorLectura(e){
+  console.warn('Error leyendo Firebase:', e);
+  if (e && e.code === 'permission-denied' && !firebase.auth().currentUser) mostrarLogin();
+}
+
+function arrancar(){
+  if (arrancado) return; arrancado = true;
+  unsubPlan = db.collection('bom_simulator_p4').doc('plan_piso').onSnapshot(function(doc){
+    plan = doc.exists ? doc.data() : { modelos: [] };
+    pintar();
+  }, function(e){ arrancado = false; errorLectura(e); });
+  db.collection('bom_simulator_p4').doc('cortes_especiales').onSnapshot(function(doc){
+    cortesEspeciales = (doc.exists && Array.isArray(doc.data().lista)) ? doc.data().lista : [];
+    pintar();
+  }, function(){});
+  leerProducido();
+}
+
+// Producido = pallets GH90 en ShipQR que aún NO están SHIPPED y no son REMPLAZO
+// (misma regla que "Traer de ShipQR" en el BOM Simulator).
+function leerProducido(){
+  db.collection('shipqr_pallets').get().then(function(snap){
+    var pm = {};
+    snap.forEach(function(doc){
+      var d = doc.data();
+      if (d.status === 'SHIPPED' || d.motivo === 'REMPLAZO') return;
+      var modelo = (d.modelo || '').trim();
+      if (!modelo || !(d.part_number || '').toUpperCase().startsWith('GH90')) return;
+      pm[modelo] = (pm[modelo] || 0) + (Number(d.quantity) || 0);
+    });
+    producidoVivo = pm;
+    pintar();
+  }).catch(function(e){ console.warn('No se pudo leer ShipQR, se usa el Producido publicado:', e); });
+}
+
+firebase.auth().onAuthStateChanged(function(){ arrancado = false; if (unsubPlan) { unsubPlan(); unsubPlan = null; } arrancar(); });
+setInterval(leerProducido, 5 * 60 * 1000);   // Producido cada 5 min
+setInterval(pintar, 30 * 1000);              // reloj del corte
+setInterval(function(){ location.reload(); }, 6 * 60 * 60 * 1000); // recarga completa cada 6 h (TV encendida todo el día)
+
+// ===== Pintar pantalla =====
+function pintar(){
+  document.documentElement.lang = lang;
+  document.title = t('title');
+  document.getElementById('tTitle').textContent = t('title');
+  document.querySelectorAll('.langs button').forEach(function(b){ b.classList.toggle('on', b.dataset.l === lang); });
+  document.getElementById('foot').textContent = t('foot');
+
+  // Encabezado: corte + publicado
+  var ahora = new Date(), sub = '';
+  var pc = proximoCorte(ahora);
+  if (pc) {
+    var h12 = pc.getHours() % 12 || 12, ampm = pc.getHours() >= 12 ? 'pm' : 'am';
+    var ms = pc - ahora, dd = Math.floor(ms / 864e5), hh = Math.floor(ms % 864e5 / 36e5), mm = Math.floor(ms % 36e5 / 6e4);
+    var falta = (dd ? dd + ' ' + t('d') + ' ' : '') + hh + ' ' + t('h') + (dd ? '' : ' ' + mm + ' ' + t('m'));
+    sub += '⏰ ' + t('corte') + ': ' + t('dias')[pc.getDay()] + ' ' + h12 + ':' + String(pc.getMinutes()).padStart(2,'0') + ampm + ' · ' + t('faltan') + ' <b>' + falta + '</b>';
+  }
+  if (plan && plan.publicadoEn) {
+    var pub = new Date(plan.publicadoEn), viejo = (ahora - pub) > 12 * 36e5;
+    sub += ' · ' + t('publicado') + ': ' + pub.toLocaleString(t('loc'), {weekday:'short', hour:'numeric', minute:'2-digit'}) +
+           (viejo ? ' <span class="old">⚠ ' + t('viejo') + '</span>' : '');
+  }
+  document.getElementById('sub').innerHTML = sub;
+
+  var app = document.getElementById('app');
+  if (!plan) { app.innerHTML = '<div class="msg">' + t('loading') + '</div>'; return; }
+  var mods = Array.isArray(plan.modelos) ? plan.modelos : [];
+  if (!mods.length) { app.innerHTML = '<div class="msg">' + t('vacio') + '</div>'; return; }
+
+  // Calcular con Producido en vivo
+  var filas = mods.map(function(m){
+    var prod = (producidoVivo && producidoVivo[m.sm] !== undefined) ? producidoVivo[m.sm] : (m.producido || 0);
+    if (producidoVivo && producidoVivo[m.sm] === undefined) prod = 0;
+    var pend = Math.max(0, (m.target || 0) - prod);
+    return { m: m, prod: prod, pend: pend, pct: m.target ? Math.min(100, Math.round(prod * 100 / m.target)) : 0 };
+  });
+  var tot = filas.reduce(function(a, f){ a.t += f.m.target || 0; a.p += Math.min(f.prod, f.m.target || 0); return a; }, {t:0, p:0});
+
+  var run = filas.filter(function(f){ return f.pend > 0 && f.m.orden; }).sort(function(a,b){ return a.m.orden - b.m.orden; });
+  var wait = filas.filter(function(f){ return f.pend > 0 && !f.m.orden; }).sort(function(a,b){ return (a.m.prioridad||999) - (b.m.prioridad||999); });
+  var done = filas.filter(function(f){ return f.pend === 0; });
+
+  var kp = function(l, v, color){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v"' + (color ? ' style="color:' + color + '"' : '') + '>' + v + '</div></div>'; };
+  var avTot = tot.t ? Math.round(tot.p * 100 / tot.t) : 0;
+  var html = '<div class="kpis">' + kp(t('target'), n(tot.t)) + kp(t('prod'), n(tot.p)) + kp(t('pend'), n(tot.t - tot.p)) +
+             kp(t('avance'), avTot + '%', avTot >= 100 ? 'var(--green)' : '') + '</div>';
+
+  var chips = function(mat){
+    return ['Strip','Top','Bot','Bundle'].map(function(k){
+      var v = mat ? mat[k] : null;
+      var cls = v === true ? 'ok' : (v === false ? 'no' : 'na');
+      return '<span class="chip ' + cls + '">' + k + '</span>';
+    }).join('');
+  };
+  var bar = function(f, color){ return '<div class="bar"><div style="width:' + f.pct + '%;background:' + color + '"></div></div><div class="code">' + f.pct + '%</div>'; };
+  var fila = function(f, tipo){
+    var m = f.m, num, est;
+    if (tipo === 'run') {
+      num = '<span class="num">' + m.orden + '</span>';
+      var cap = m.cap || 0;
+      est = '<span class="est" style="color:' + (cap >= f.pend ? 'var(--green)' : 'var(--yellow)') + '">⚡ ' + t('listo') + ' ' +
+            (cap >= f.pend ? n(f.pend) : n(cap) + ' ' + t('de') + ' ' + n(f.pend)) + '</span>';
+    } else {
+      num = '<span class="num wait">⏳</span>';
+      var faltan = ['Strip','Top','Bot','Bundle'].filter(function(k){ return m.materiales && m.materiales[k] === false; });
+      est = '<span class="est" style="color:var(--red)">' + (faltan.length ? t('falta') + ' ' + faltan.join(', ') : t('sinDatos')) + '</span>';
+    }
+    return '<tr><td>' + num + '</td><td><div class="mdl">' + esc(m.sm) + '</div><div class="code">' + esc(m.code || '') + '</div></td>' +
+      '<td class="r hide-sm">' + n(m.target) + '</td><td class="r">' + n(f.prod) + '</td><td class="r" style="font-weight:800">' + n(f.pend) + '</td>' +
+      '<td class="hide-sm" style="width:14%">' + bar(f, tipo === 'run' ? 'var(--green)' : '#5c6678') + '</td>' +
+      '<td>' + chips(m.materiales) + '</td><td>' + est + '</td></tr>';
+  };
+
+  html += '<table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
+          '</th><th class="r">' + t('pend') + '</th><th class="hide-sm">' + t('avance') + '</th><th>' + t('material') + '</th><th>' + t('estado') + '</th></tr></thead><tbody>';
+  if (run.length) html += '<tr class="sep"><td colspan="8">⚡ ' + t('run') + '</td></tr>' + run.map(function(f){ return fila(f, 'run'); }).join('');
+  if (wait.length) html += '<tr class="sep"><td colspan="8">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
+  if (done.length) html += '<tr class="sep"><td colspan="8">✓ ' + t('done') + '</td></tr>' + done.map(function(f){
+    return '<tr class="done"><td>✓</td><td>' + esc(f.m.sm) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td><td class="r">' + n(f.prod) +
+           '</td><td class="r">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td><td></td><td style="color:var(--green)">' + t('completo') + '</td></tr>';
+  }).join('');
+  html += '</tbody></table>';
+  app.innerHTML = html;
+}
+pintar();
+</script>
+</body>
+</html>

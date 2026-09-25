@@ -5165,8 +5165,8 @@ async function renderPlanSemanal() {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.2rem">
         <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">1️⃣ Plan Requerido · Modelo y partes</div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-          ${adminAuthed ? `<button class="btn btn-primary btn-sm" id="btnPublicarPiso" onclick="publicarPlanPiso()" title="Publica el orden ⚡ Listo en la pantalla del piso · Publish to floor screen · 현장 화면에 게시">📺 Publicar al piso · Publish · 게시</button>` : ''}
-          <a class="btn btn-sm" href="piso.html" target="_blank" style="text-decoration:none" title="Abrir pantalla del piso · Open floor screen · 현장 화면 열기">↗ Pantalla piso · Floor · 현장</a>
+          ${adminAuthed ? `<button class="btn btn-primary btn-sm" id="btnPublicarPiso" onclick="publicarPlanPiso()" title="Publica el orden ⚡ Listo en la pantalla del piso · Publish to floor screen · 현장 화면에 게시" style="white-space:nowrap">📤 Publicar TV</button>` : ''}
+          <a class="btn btn-sm" href="piso.html" target="_blank" style="text-decoration:none;white-space:nowrap" title="Abrir pantalla del piso · Open floor screen · 현장 화면 열기">📺 Modo TV</a>
         </div>
       </div>
       <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" es manual — o usa el botón para traer de ShipQR lo que sigue disponible en piso de P4 (pallets aún no marcados como SHIPPED).</div>
@@ -5859,7 +5859,7 @@ async function publicarPlanPiso() {
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
       publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida
     });
-    regresar('✅ Publicado · Published · 게시됨');
+    regresar('✅ Publicado');
   } catch (e) {
     alert('Error: ' + e.message);
     regresar();

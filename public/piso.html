@@ -12,6 +12,9 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;padding:16px}
 .wrap{max-width:1400px;margin:0 auto}
+/* Modo pantalla (TV/monitor): todo se escala para caber completo, sin scroll */
+body.fit{overflow:hidden;padding:0;height:100vh}
+body.fit .wrap{width:1400px;max-width:none;margin:0;position:absolute;top:0;left:0;transform-origin:0 0;padding:16px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 h1{font-size:26px;margin:0}
 .langs{display:flex;gap:4px;align-items:center}
@@ -45,7 +48,11 @@ h1{font-size:26px;margin:0}
 .bar{background:#1f2a3d;height:12px;border-radius:6px;min-width:90px}
 .bar div{height:12px;border-radius:6px}
 .est{font-weight:800;font-size:18px}
-.done td{font-size:16px;color:var(--text2)}
+.done td{background:rgba(0,230,118,.07)}
+.sep.sepdone td{background:rgba(0,230,118,.14);color:var(--green)}
+.num.ok{background:rgba(0,230,118,.2);color:var(--green);border:2px solid var(--green)}
+.prodok{color:var(--green);font-weight:900;font-size:22px}
+.extra{display:block;font-size:13px;color:var(--green);font-weight:700}
 .foot{color:var(--text3);font-size:13px;margin-top:10px}
 .msg{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;color:var(--text2);font-size:18px}
 .login{max-width:360px;margin:40px auto;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
@@ -260,14 +267,34 @@ function pintar(){
           '</th><th class="r">' + t('pend') + '</th><th class="hide-sm">' + t('avance') + '</th><th>' + t('material') + '</th><th>' + t('estado') + '</th></tr></thead><tbody>';
   if (run.length) html += '<tr class="sep"><td colspan="9">⚡ ' + t('run') + '</td></tr>' + run.map(function(f){ return fila(f, 'run'); }).join('');
   if (wait.length) html += '<tr class="sep"><td colspan="9">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
-  if (done.length) html += '<tr class="sep"><td colspan="9">✓ ' + t('done') + '</td></tr>' + done.map(function(f){
-    return '<tr class="done"><td>✓</td><td>' + esc(f.m.sm) + '</td><td>' + fechaEnvio(f.m.fecha) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td><td class="r">' + n(f.prod) +
-           '</td><td class="r">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td><td></td><td style="color:var(--green)">' + t('completo') + '</td></tr>';
+  if (done.length) html += '<tr class="sep sepdone"><td colspan="9">✓ ' + t('done') + '</td></tr>' + done.map(function(f){
+    var extra = f.prod - (f.m.target || 0);
+    return '<tr class="done"><td><span class="num ok">✓</span></td><td><div class="mdl">' + esc(f.m.sm) + '</div><div class="code">' + esc(f.m.code || '') + '</div></td>' +
+           '<td style="white-space:nowrap">' + fechaEnvio(f.m.fecha) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td>' +
+           '<td class="r"><span class="prodok">' + n(f.prod) + '</span>' + (extra > 0 ? '<span class="extra">+' + n(extra) + '</span>' : '') + '</td>' +
+           '<td class="r" style="color:var(--green);font-weight:800">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td><td></td>' +
+           '<td><span class="est" style="color:var(--green)">✓ ' + t('completo') + '</span></td></tr>';
   }).join('');
   html += '</tbody></table>';
   app.innerHTML = html;
+  ajustarPantalla();
 }
+// Ajusta todo al tamaño de la pantalla donde se despliega (TV, monitor, laptop).
+// En celular (pantalla angosta) no se escala: se deja con scroll normal.
+function ajustarPantalla(){
+  var wrap = document.querySelector('.wrap');
+  if (window.innerWidth < 800) { document.body.classList.remove('fit'); wrap.style.transform = ''; return; }
+  document.body.classList.add('fit');
+  wrap.style.transform = 'none';
+  var w = wrap.scrollWidth, h = wrap.scrollHeight;
+  var s = Math.min(window.innerWidth / w, window.innerHeight / h, 3);
+  var left = Math.max(0, (window.innerWidth - w * s) / 2);
+  wrap.style.transform = 'translate(' + left + 'px,0) scale(' + s + ')';
+}
+window.addEventListener('resize', ajustarPantalla);
+document.querySelectorAll('.langs img').forEach(function(img){ img.addEventListener('load', ajustarPantalla); });
 pintar();
+ajustarPantalla();
 </script>
 </body>
 </html>

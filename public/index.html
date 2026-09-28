@@ -4959,7 +4959,7 @@ async function renderPlanSemanal() {
         <td style="padding:10px 8px;text-align:center;font-weight:700">${prioridad}</td>
         <td style="padding:10px 8px;font-weight:700;color:var(--accent)">
           ${sm}
-          ${listoParaCorrer ? `<div class="plan-listo-badge" id="plan-listo-${sm.replace(/[^a-zA-Z0-9]/g, '_')}" data-cap="${Math.floor(capMaterial)}" title="Strip/Gift Top/Lower Bottom/Bundle tienen material suficiente para arrancar, con el inventario que queda tras los modelos de mayor prioridad"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterial).toLocaleString()} pzas</div>` : ''}
+          ${listoParaCorrer ? `<div class="plan-listo-badge" id="plan-listo-${sm.replace(/[^a-zA-Z0-9]/g, '_')}" data-cap="${Math.floor(capMaterial)}" data-completo="${capMaterial >= pendiente ? 1 : 0}" title="Strip/Gift Top/Lower Bottom/Bundle tienen material suficiente para arrancar, con el inventario que queda tras los modelos de mayor prioridad"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterial).toLocaleString()} pzas</div>` : ''}
         </td>
         <td style="padding:10px 8px;color:var(--text2);font-size:12px">${numParte}</td>
         <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${target.toLocaleString()}</td>
@@ -5285,7 +5285,10 @@ function iniciarParpadeoPlanListo() {
   const badgesAssy = todos.filter(el => !el.id.startsWith('plan-listo-rgb-') && !idsMaq.has(el));
 
   const numerar = (grupo) => {
-    grupo.sort((a, b) => Number(b.dataset.cap) - Number(a.dataset.cap));
+    // Primero los que tienen material COMPLETO para todo su pendiente (4 materiales
+    // completos), después los parciales; dentro de cada grupo, de más a menos pzas listas.
+    grupo.sort((a, b) => (Number(b.dataset.completo) || 0) - (Number(a.dataset.completo) || 0)
+      || Number(b.dataset.cap) - Number(a.dataset.cap));
     grupo.forEach((el, i) => {
       const num = el.querySelector('.plan-listo-num');
       if (num) num.textContent = i + 1;
@@ -5889,7 +5892,10 @@ async function publicarPlanPiso() {
                listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
     });
     // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas
-    salida.filter(m => m.listo).sort((a, b) => b.cap - a.cap).forEach((m, i) => { m.orden = i + 1; });
+    // Primero los modelos con material completo para todo su pendiente, luego los parciales;
+    // dentro de cada grupo, de más a menos pzas listas (mismo criterio que el ⚡ Listo).
+    const completo = (m) => (m.cap >= m.pendiente ? 1 : 0);
+    salida.filter(m => m.listo).sort((a, b) => completo(b) - completo(a) || b.cap - a.cap).forEach((m, i) => { m.orden = i + 1; });
 
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
     await db.collection('bom_simulator_p4').doc('plan_piso').set({

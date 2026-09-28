@@ -6847,7 +6847,7 @@ var CF_PLANTAS = {
   P1: { inv: 'planta1_papel_inventario', mov: 'planta1_papel_movimientos', unidad: 'pallets' }
 };
 var CF_TXT = {
-  es: { titulo: '📋 Conteo físico', nuevo: 'Nuevo conteo', planta: 'Planta', alcance: 'Qué contar', plan: 'Componentes del plan activo', todo: 'Todo el inventario',
+  es: { titulo: '📋 Conteo físico', nuevo: 'Nuevo conteo', planta: 'Planta', alcance: 'Qué contar', plan: 'Plan activo: Strip, Top y Bot con su contenido (sin Bundle)', todo: 'Todo el inventario',
         edificio: 'Edificio', todos: 'Todos', generar: '🖨️ Generar folio e imprimir', folios: 'Folios', abrir: 'Abrir', cerrar: '✕ Cerrar', volver: '← Folios',
         abierto: 'abierto', cerrado: 'cerrado', sinFolios: 'Todavía no hay folios.', cargando: 'Cargando...', soloAdmin: 'Solo el administrador puede generar folios y ajustar el IMS.',
         sinItems: 'No hay componentes para contar con ese filtro.', hojaTit: function (pl) { return 'Conteo físico de inventario · Planta ' + pl.replace('P', ''); },
@@ -6860,8 +6860,11 @@ var CF_TXT = {
         confirmar: function (n, pl) { return 'Se van a ajustar ' + n + ' número(s) de parte en el IMS ' + pl + '.\nQuedará registrado en el historial del IMS como AJUSTE CONTEO FÍSICO.\n\n¿Continuar?'; },
         listo: function (ok, err) { return 'Ajustes aplicados: ' + ok + (err ? '\nCon error: ' + err + ' (revisa la consola / permisos)' : ''); },
         noEncontrado: 'no se encontró en el IMS', negativo: 'quedaría negativo; se ajustó a 0', historial: 'Historial de ajustes', nadaAjustar: 'No hay diferencias aprobadas para ajustar.',
-        errGuardar: 'No se pudo guardar en Firebase: ' },
-  en: { titulo: '📋 Physical count', nuevo: 'New count', planta: 'Plant', alcance: 'What to count', plan: 'Active plan components', todo: 'Whole inventory',
+        errGuardar: 'No se pudo guardar en Firebase: ',
+        cancelar: '🗑 Cancelar folio', cancelado: 'cancelado', verCancelados: 'Mostrar cancelados',
+        confCancelar: function (aj) { return '¿Cancelar este folio?\nYa no se podrá capturar ni ajustar con él. El registro se queda guardado.' + (aj ? '\n\nLos ' + aj + ' ajustes que ya se hicieron con este folio NO se revierten.' : ''); },
+        estaCancelado: 'Este folio está cancelado.' },
+  en: { titulo: '📋 Physical count', nuevo: 'New count', planta: 'Plant', alcance: 'What to count', plan: 'Active plan: Strip, Top and Bot with contents (no Bundle)', todo: 'Whole inventory',
         edificio: 'Building', todos: 'All', generar: '🖨️ Create folio and print', folios: 'Folios', abrir: 'Open', cerrar: '✕ Close', volver: '← Folios',
         abierto: 'open', cerrado: 'closed', sinFolios: 'No folios yet.', cargando: 'Loading...', soloAdmin: 'Only the administrator can create folios and adjust the IMS.',
         sinItems: 'No components to count with that filter.', hojaTit: function (pl) { return 'Physical inventory count · Plant ' + pl.replace('P', ''); },
@@ -6874,8 +6877,11 @@ var CF_TXT = {
         confirmar: function (n, pl) { return n + ' part number(s) will be adjusted in IMS ' + pl + '.\nIt will be logged in the IMS history as PHYSICAL COUNT ADJUSTMENT.\n\nContinue?'; },
         listo: function (ok, err) { return 'Adjustments applied: ' + ok + (err ? '\nFailed: ' + err + ' (check console / permissions)' : ''); },
         noEncontrado: 'not found in IMS', negativo: 'would be negative; set to 0', historial: 'Adjustment history', nadaAjustar: 'No approved differences to adjust.',
-        errGuardar: 'Could not save to Firebase: ' },
-  ko: { titulo: '📋 실사 재고', nuevo: '새 실사', planta: '공장', alcance: '실사 범위', plan: '현재 계획 부품', todo: '전체 재고',
+        errGuardar: 'Could not save to Firebase: ',
+        cancelar: '🗑 Cancel folio', cancelado: 'canceled', verCancelados: 'Show canceled',
+        confCancelar: function (aj) { return 'Cancel this folio?\nIt can no longer be used to capture or adjust. The record is kept.' + (aj ? '\n\nThe ' + aj + ' adjustments already made with this folio are NOT reverted.' : ''); },
+        estaCancelado: 'This folio is canceled.' },
+  ko: { titulo: '📋 실사 재고', nuevo: '새 실사', planta: '공장', alcance: '실사 범위', plan: '현재 계획: Strip, Top, Bot 및 하위 자재 (Bundle 제외)', todo: '전체 재고',
         edificio: '건물', todos: '전체', generar: '🖨️ 전표 생성 및 인쇄', folios: '전표', abrir: '열기', cerrar: '✕ 닫기', volver: '← 전표',
         abierto: '진행중', cerrado: '완료', sinFolios: '아직 전표가 없습니다.', cargando: '불러오는 중...', soloAdmin: '관리자만 전표 생성 및 IMS 조정이 가능합니다.',
         sinItems: '해당 조건으로 실사할 부품이 없습니다.', hojaTit: function (pl) { return '재고 실사표 · ' + pl.replace('P', '') + '공장'; },
@@ -6888,7 +6894,10 @@ var CF_TXT = {
         confirmar: function (n, pl) { return 'IMS ' + pl + '에서 부품 ' + n + '건을 조정합니다.\nIMS 이력에 실사 조정으로 기록됩니다.\n\n계속하시겠습니까?'; },
         listo: function (ok, err) { return '조정 완료: ' + ok + (err ? '\n실패: ' + err + ' (콘솔/권한 확인)' : ''); },
         noEncontrado: 'IMS에 없음', negativo: '음수가 되어 0으로 조정', historial: '조정 이력', nadaAjustar: '조정할 승인된 차이가 없습니다.',
-        errGuardar: 'Firebase 저장 실패: ' }
+        errGuardar: 'Firebase 저장 실패: ',
+        cancelar: '🗑 전표 취소', cancelado: '취소됨', verCancelados: '취소된 전표 보기',
+        confCancelar: function (aj) { return '이 전표를 취소하시겠습니까?\n더 이상 입력/조정에 사용할 수 없습니다. 기록은 보관됩니다.' + (aj ? '\n\n이미 적용된 조정 ' + aj + '건은 되돌리지 않습니다.' : ''); },
+        estaCancelado: '취소된 전표입니다.' }
 };
 function cfLang() { try { var l = localStorage.getItem('autoChkLang'); if (CF_TXT[l]) return l; } catch (e) {} return 'es'; }
 function cfT(k) { return CF_TXT[cfLang()][k]; }
@@ -6941,18 +6950,18 @@ async function cfPintarInicio() {
     '<label id="cfEdifWrap" style="display:none">' + cfT('edificio') + '<br><select id="cfEdif" style="' + sel + '"><option value="">' + cfT('todos') + '</option><option>P1</option><option>P5</option><option>P6</option></select></label>' +
     '<button class="btn btn-primary btn-sm" onclick="cfGenerar()">' + cfT('generar') + '</button></div>' +
     (adminAuthed ? '' : '<div style="margin-top:.5rem;color:#FFBA00;font-size:12px">' + cfT('soloAdmin') + '</div>') + '</div>';
-  h += '<div style="font-weight:700;margin-bottom:.4rem">' + cfT('folios') + '</div><div id="cfLista">' + cfT('cargando') + '</div>';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem"><b>' + cfT('folios') + '</b><label style="font-size:12px;color:var(--text2)"><input type="checkbox" id="cfVerCanc" ' + (_cf.verCancelados ? 'checked' : '') + ' onchange="_cf.verCancelados=this.checked;cfPintarInicio()"> ' + cfT('verCancelados') + '</label></div><div id="cfLista">' + cfT('cargando') + '</div>';
   caja.innerHTML = h;
   try {
     var snap = await db.collection('conteos_fisicos').orderBy('creado', 'desc').limit(20).get();
     var filas = [];
-    snap.forEach(function (d) { var f = d.data(); filas.push(f); });
+    snap.forEach(function (d) { var f = d.data(); if (f.estado === 'cancelado' && !_cf.verCancelados) return; filas.push(f); });
     document.getElementById('cfLista').innerHTML = !filas.length ? '<div style="color:var(--text2)">' + cfT('sinFolios') + '</div>' :
       '<table style="width:100%;border-collapse:collapse">' + filas.map(function (f) {
         var nAj = (f.ajustes || []).length;
         return '<tr style="border-top:1px solid var(--border,#334)"><td style="padding:6px 4px;font-weight:700">' + cfEsc(f.folio) + '</td><td>' + cfEsc(f.planta) + '</td><td>' +
           new Date(f.creado).toLocaleString() + '</td><td>' + (f.items || []).length + ' PN</td><td>' + (nAj ? nAj + ' ✓' : '') + '</td><td>' +
-          (f.estado === 'cerrado' ? cfT('cerrado') : cfT('abierto')) + '</td><td style="text-align:right"><button class="btn btn-secondary btn-sm" onclick="cfAbrirFolio(\'' + cfEsc(f.folio) + '\')">' + cfT('abrir') + '</button></td></tr>';
+          (f.estado === 'cancelado' ? cfT('cancelado') : f.estado === 'cerrado' ? cfT('cerrado') : cfT('abierto')) + '</td><td style="text-align:right"><button class="btn btn-secondary btn-sm" onclick="cfAbrirFolio(\'' + cfEsc(f.folio) + '\')">' + cfT('abrir') + '</button></td></tr>';
       }).join('') + '</table>';
   } catch (e) { document.getElementById('cfLista').textContent = cfT('errGuardar') + e.message; }
 }
@@ -6971,15 +6980,24 @@ async function cfGenerar() {
   var edif = pl === 'P1' ? document.getElementById('cfEdif').value : '';
   var cfg = CF_PLANTAS[pl];
   var snap = await db.collection(cfg.inv).get();
-  // Componentes del plan activo (modelos del Plan Requerido con target)
+  // Plan activo = modelos del Plan Requerido con target
   var clavesPlan = {}, pnsPlan = {};
   if (alcance === 'plan') {
     var activos = (typeof multiModelosActivos !== 'undefined' ? multiModelosActivos : []).filter(function (sm) { return (simTargetsPorModelo[sm] || 0) > 0; });
-    BOM.forEach(function (r) {
-      if (activos.indexOf(r.sm) < 0 || !r.pn) return;
-      var pn = r.pn.trim().toUpperCase();
-      pnsPlan[pn] = true;
-      clavesPlan[pn + '||' + (r.desc || '').trim().toUpperCase()] = true;
+    // Grupos Strip, Top y Bot del plan de ensamble COMPLETOS (el renglón principal y todo
+    // lo que está dentro: Chip Boards, Sheets, Pulp Tray, etc.). El grupo Bundle se omite.
+    // Mismo agrupado por Nivel 1 que usa el Pick List (obtener4MaterialesEnsamble).
+    activos.forEach(function (sm) {
+      var seccion = null;
+      BOM.forEach(function (r) {
+        if (r.sm !== sm) return;
+        var isL1 = r.isLevel1 || (r.level === 1) || (r.groupNo !== null && r.groupNo !== undefined && r.level !== 2);
+        if (isL1) seccion = getSectionByRow(r);
+        if (!seccion || seccion === 'BUNDLE' || !r.pn) return;
+        var pn = r.pn.trim().toUpperCase();
+        pnsPlan[pn] = true;
+        clavesPlan[pn + '||' + (r.desc || '').trim().toUpperCase()] = true;
+      });
     });
   }
   var docsPorPn = {};
@@ -7066,7 +7084,10 @@ async function cfPintarFolio() {
   var th = 'text-align:left;padding:6px 4px;font-size:10px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border,#334)';
   var h = cfEncabezado(cfT('titulo') + ' · ' + cfEsc(f.folio), '<button class="btn btn-secondary btn-sm" onclick="cfPintarInicio()">' + cfT('volver') + '</button>');
   h += '<div style="font-size:12px;color:var(--text2);margin:-.4rem 0 .6rem">' + cfT('planta') + ' ' + cfEsc(f.planta) + ' · ' + cfT('generado') + ' ' + new Date(f.creado).toLocaleString() + ' · ' + f.items.length + ' PN</div>';
-  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.6rem"><button class="btn btn-secondary btn-sm" onclick="cfImprimir()">' + cfT('reimprimir') + '</button><button class="btn btn-secondary btn-sm" onclick="cfExcel()">' + cfT('excel') + '</button></div>';
+  var canc = f.estado === 'cancelado';
+  if (canc) h += '<div style="margin-bottom:.6rem;padding:.5rem .7rem;border-radius:8px;background:rgba(255,68,68,.12);border:1px solid rgba(255,68,68,.4);color:#ff4444;font-weight:700">' + cfT('estaCancelado') + '</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.6rem"><button class="btn btn-secondary btn-sm" onclick="cfImprimir()">' + cfT('reimprimir') + '</button><button class="btn btn-secondary btn-sm" onclick="cfExcel()">' + cfT('excel') + '</button>' +
+    (adminAuthed && !canc ? '<button class="btn btn-secondary btn-sm" style="margin-left:auto;color:#ff4444;border-color:rgba(255,68,68,.5)" onclick="cfCancelarFolio()">' + cfT('cancelar') + '</button>' : '') + '</div>';
   h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:760px"><tr><th style="' + th + '">' + cfT('pn') + '</th><th style="' + th + '">' + cfT('ubic') +
     '</th><th style="' + th + ';text-align:right">' + cfT('sistImp') + '</th><th style="' + th + ';text-align:right">' + cfT('conteo') + '</th><th style="' + th + ';text-align:right">' + cfT('dif') +
     '</th><th style="' + th + ';text-align:center">' + cfT('aprobar') + '</th><th style="' + th + '">' + cfT('estado') + '</th></tr>';
@@ -7075,7 +7096,7 @@ async function cfPintarFolio() {
     h += '<tr id="cfFila' + i + '" style="border-bottom:1px solid var(--border,#334)"><td style="padding:6px 4px"><b>' + cfEsc(it.pn) + '</b><div style="font-size:11px;color:var(--text2)">' + cfEsc(it.desc) + '</div>' +
       (mov && !it.ajuste ? '<div style="font-size:11px;color:#FFBA00">⚠ ' + cfEsc(cfT('seMovio')((mov > 0 ? '+' : '') + cfN(mov))) + '</div>' : '') + '</td>' +
       '<td style="font-size:12px">' + cfEsc(it.loc || it.ubic) + '</td><td style="text-align:right">' + cfN(it.sistema) + '</td>' +
-      '<td style="text-align:right"><input type="number" min="0" id="cfIn' + i + '" value="' + (it.conteo == null ? '' : it.conteo) + '" placeholder="' + cfT('sinContar') + '" ' + (it.ajuste ? 'disabled' : '') +
+      '<td style="text-align:right"><input type="number" min="0" id="cfIn' + i + '" value="' + (it.conteo == null ? '' : it.conteo) + '" placeholder="' + cfT('sinContar') + '" ' + (it.ajuste || f.estado === 'cancelado' ? 'disabled' : '') +
       ' oninput="cfCambioConteo(' + i + ',this.value)" style="width:100px;text-align:right;background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px"></td>' +
       '<td id="cfDif' + i + '" style="text-align:right;font-weight:700"></td><td style="text-align:center" id="cfAp' + i + '"></td><td id="cfEst' + i + '" style="font-size:12px"></td></tr>';
   });
@@ -7109,7 +7130,7 @@ function cfPintarResumen() {
   var its = _cf.folio.items, nD = 0, nA = 0, nS = 0;
   its.forEach(function (it) { if (it.ajuste) return; if (it.conteo == null) { nS++; return; } if (it.conteo !== it.sistema) { nD++; if (it.aprobado) nA++; } });
   document.getElementById('cfResumen').textContent = cfT('resumen')(nD, nA, nS);
-  var b = document.getElementById('cfBtnAjustar'); b.textContent = cfT('ajustar')(nA); b.style.display = adminAuthed ? '' : 'none';
+  var b = document.getElementById('cfBtnAjustar'); b.textContent = cfT('ajustar')(nA); b.style.display = (adminAuthed && _cf.folio.estado !== 'cancelado') ? '' : 'none';
 }
 function cfCambioConteo(i, v) {
   var it = _cf.folio.items[i];
@@ -7126,6 +7147,7 @@ async function cfGuardar(silencioso) {
 async function cfAjustar() {
   if (!adminAuthed) { alert(cfT('soloAdmin')); return; }
   var f = _cf.folio, cfg = CF_PLANTAS[f.planta];
+  if (f.estado === 'cancelado') { alert(cfT('estaCancelado')); return; }
   var pend = f.items.filter(function (it) { return !it.ajuste && it.aprobado && it.conteo != null && it.conteo !== it.sistema; });
   if (!pend.length) { alert(cfT('nadaAjustar')); return; }
   if (!confirm(cfT('confirmar')(pend.length, f.planta))) return;
@@ -7168,6 +7190,17 @@ async function cfAjustar() {
   if (typeof sincIMS === 'function') sincIMS(); // el BOM Simulator toma el inventario ya ajustado
   cfPintarFolio();
 }
+async function cfCancelarFolio() {
+  if (!adminAuthed) { alert(cfT('soloAdmin')); return; }
+  var f = _cf.folio; if (!f || f.estado === 'cancelado') return;
+  if (!confirm(cfT('confCancelar')((f.ajustes || []).length))) return;
+  try {
+    await db.collection('conteos_fisicos').doc(f.folio).set({ estado: 'cancelado', canceladoPor: cfUsuario(), canceladoEn: new Date().toISOString() }, { merge: true });
+    f.estado = 'cancelado';
+    cfPintarInicio();
+  } catch (e) { alert(cfT('errGuardar') + e.message); }
+}
+window.cfCancelarFolio = cfCancelarFolio;
 function cfExcel() {
   var f = _cf.folio; if (!f || typeof XLSX === 'undefined' || !XLSX.utils || !XLSX.utils.aoa_to_sheet) return;
   var filas = [[cfT('folio'), f.folio], [cfT('planta'), f.planta], [], [cfT('pn'), cfT('desc'), cfT('ubic'), cfT('sistImp'), cfT('conteo'), cfT('dif'), cfT('estado')]];

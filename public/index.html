@@ -3682,7 +3682,7 @@ function sincIMS() {
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
     if (BOM && BOM.length) {
-      actualizarInvBOM(); renderPreview(); renderSim(); renderCons(); renderProd();
+      actualizarInvBOM(); refrescarVistasInventario();
     }
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
@@ -4733,11 +4733,32 @@ function sincIMSFresco() {
       }).catch(function(){});
     })).then(function() {
       actualizarInvBOM();
+      // El inventario nuevo se refleja en TODAS las pantallas, no solo en el Plan.
+      refrescarVistasInventario();
       resolve();
     }).catch(() => resolve());
   });
 }
 window.sincIMSFresco = sincIMSFresco;
+
+// Refresco ÚNICO de todas las pantallas que muestran inventario. Cualquier cambio de
+// inventario (Sync IMS manual o automático) pasa por aquí, para que Preview, Simulador,
+// Consolidado, Producir y Analizar varios modelos siempre muestren el MISMO dato.
+// Nunca se ejecuta en medio de una cascada (inventario prestado).
+function refrescarVistasInventario() {
+  if (window._cascadaPoolActiva) return;
+  ['renderPreview', 'renderSim', 'renderCons', 'renderProd', 'renderMultiModelos'].forEach(function (fn) {
+    // No regenerar "Analizar varios modelos" si el usuario está escribiendo ahí
+    // (regla de seguridad del DOM: nunca destruir un input activo).
+    if (fn === 'renderMultiModelos') {
+      var wrapMulti = document.getElementById('multiModelosWrap');
+      if (wrapMulti && wrapMulti.contains(document.activeElement)) return;
+    }
+    try { if (typeof window[fn] === 'function') window[fn](); }
+    catch (e) { console.error('Refresco ' + fn + ':', e); }
+  });
+}
+window.refrescarVistasInventario = refrescarVistasInventario;
 
 // ══════════════════════════════════════════
 // PLAN PRE-ENSAMBLE (S1-S4, Zhongke, VC1/VC2)
@@ -5686,7 +5707,15 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
   window[nombre] = function () {
     window._cascadaPoolActiva = (window._cascadaPoolActiva || 0) + 1;
     try { return original.apply(this, arguments); }
-    finally { window._cascadaPoolActiva--; }
+    finally {
+      window._cascadaPoolActiva--;
+      // Al terminar la última cascada el inventario ya está restaurado: se vuelve a
+      // pintar el Simulador (que durante la cascada quedó con inventario prestado),
+      // Consolidado y Producir, ahora sí con el inventario real.
+      if (!window._cascadaPoolActiva && typeof calcSim === 'function') {
+        try { calcSim(); } catch (e) { console.error('Refresco tras cascada:', e); }
+      }
+    }
   };
 });
 

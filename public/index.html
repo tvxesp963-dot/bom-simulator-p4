@@ -1487,9 +1487,14 @@ function calcSim() {
     document.getElementById('simCuello').style.display = 'none';
   }
   renderSimTable();
-  // Actualizar Consolidado y Producir con el nuevo target
-  renderCons();
-  renderProd();
+  // Actualizar Consolidado y Producir con el nuevo target — EXCEPTO mientras corre
+  // una cascada de prioridad (Plan Requerido / multi-modelo): ahí el inventario del
+  // BOM está descontado temporalmente y el Consolidado se pintaba con esos números
+  // (ej. Lower Box y Chip Board Virgen en 0) y se quedaba así al restaurarse.
+  if (!window._cascadaPoolActiva) {
+    renderCons();
+    renderProd();
+  }
 }
 
 function getGrupo(r) {
@@ -5671,6 +5676,19 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
 
   return faltantes;
 }
+
+// Marca "cascada en curso" mientras corren las 2 funciones que descuentan inventario
+// temporalmente, para que calcSim() no redibuje Consolidado/Producir con inventario
+// prestado. try/finally: la marca se quita aunque algo falle a la mitad.
+[ 'calcularFaltantesPorModeloPlan', 'calcularTodosMultiModeloConPool' ].forEach(function (nombre) {
+  var original = window[nombre];
+  if (typeof original !== 'function') return;
+  window[nombre] = function () {
+    window._cascadaPoolActiva = (window._cascadaPoolActiva || 0) + 1;
+    try { return original.apply(this, arguments); }
+    finally { window._cascadaPoolActiva--; }
+  };
+});
 
 // Arma y descarga el PICK LIST del Plan Semanal: todos los componentes que el
 // almacén debe entregar a producción para cumplir el plan (modelo por modelo,

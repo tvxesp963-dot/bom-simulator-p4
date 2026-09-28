@@ -6861,7 +6861,7 @@ var CF_TXT = {
         listo: function (ok, err) { return 'Ajustes aplicados: ' + ok + (err ? '\nCon error: ' + err + ' (revisa la consola / permisos)' : ''); },
         noEncontrado: 'no se encontró en el IMS', negativo: 'quedaría negativo; se ajustó a 0', historial: 'Historial de ajustes', nadaAjustar: 'No hay diferencias aprobadas para ajustar.',
         errGuardar: 'No se pudo guardar en Firebase: ',
-        cancelar: '🗑 Cancelar folio', cancelado: 'cancelado', verCancelados: 'Mostrar cancelados',
+        vistaPrevia: 'Vista previa · Hoja de conteo', imprimir: '🖨️ Imprimir', cancelar: '🗑 Cancelar folio', cancelado: 'cancelado', verCancelados: 'Mostrar cancelados',
         confCancelar: function (aj) { return '¿Cancelar este folio?\nYa no se podrá capturar ni ajustar con él. El registro se queda guardado.' + (aj ? '\n\nLos ' + aj + ' ajustes que ya se hicieron con este folio NO se revierten.' : ''); },
         estaCancelado: 'Este folio está cancelado.' },
   en: { titulo: '📋 Physical count', nuevo: 'New count', planta: 'Plant', alcance: 'What to count', plan: 'Active plan: Strip, Top and Bot with contents (no Bundle)', todo: 'Whole inventory',
@@ -6878,7 +6878,7 @@ var CF_TXT = {
         listo: function (ok, err) { return 'Adjustments applied: ' + ok + (err ? '\nFailed: ' + err + ' (check console / permissions)' : ''); },
         noEncontrado: 'not found in IMS', negativo: 'would be negative; set to 0', historial: 'Adjustment history', nadaAjustar: 'No approved differences to adjust.',
         errGuardar: 'Could not save to Firebase: ',
-        cancelar: '🗑 Cancel folio', cancelado: 'canceled', verCancelados: 'Show canceled',
+        vistaPrevia: 'Preview · Count sheet', imprimir: '🖨️ Print', cancelar: '🗑 Cancel folio', cancelado: 'canceled', verCancelados: 'Show canceled',
         confCancelar: function (aj) { return 'Cancel this folio?\nIt can no longer be used to capture or adjust. The record is kept.' + (aj ? '\n\nThe ' + aj + ' adjustments already made with this folio are NOT reverted.' : ''); },
         estaCancelado: 'This folio is canceled.' },
   ko: { titulo: '📋 실사 재고', nuevo: '새 실사', planta: '공장', alcance: '실사 범위', plan: '현재 계획: Strip, Top, Bot 및 하위 자재 (Bundle 제외)', todo: '전체 재고',
@@ -6895,7 +6895,7 @@ var CF_TXT = {
         listo: function (ok, err) { return '조정 완료: ' + ok + (err ? '\n실패: ' + err + ' (콘솔/권한 확인)' : ''); },
         noEncontrado: 'IMS에 없음', negativo: '음수가 되어 0으로 조정', historial: '조정 이력', nadaAjustar: '조정할 승인된 차이가 없습니다.',
         errGuardar: 'Firebase 저장 실패: ',
-        cancelar: '🗑 전표 취소', cancelado: '취소됨', verCancelados: '취소된 전표 보기',
+        vistaPrevia: '미리보기 · 실사표', imprimir: '🖨️ 인쇄', cancelar: '🗑 전표 취소', cancelado: '취소됨', verCancelados: '취소된 전표 보기',
         confCancelar: function (aj) { return '이 전표를 취소하시겠습니까?\n더 이상 입력/조정에 사용할 수 없습니다. 기록은 보관됩니다.' + (aj ? '\n\n이미 적용된 조정 ' + aj + '건은 되돌리지 않습니다.' : ''); },
         estaCancelado: '취소된 전표입니다.' }
 };
@@ -7051,19 +7051,34 @@ function cfImprimir() {
         cfEsc(it.desc) + '</td><td style="border-bottom:.5px solid #999;font-size:11px">' + cfEsc(it.loc || it.ubic) + '</td><td style="border-bottom:.5px solid #999;font-size:11px">' + u +
         '</td><td style="border-bottom:.5px solid #999;width:16%">&nbsp;</td><td style="border-bottom:.5px solid #999;width:16%">&nbsp;</td></tr>';
     }).join('') + '</table><div style="font-size:9px;margin-top:6px">' + cfT('pieHoja') + '</div>';
+  // Primero VISTA PREVIA en pantalla (Imprimir / Cerrar); se imprime solo al presionar Imprimir.
   var p = document.getElementById('cfPrint');
   if (!p) {
-    p = document.createElement('div'); p.id = 'cfPrint'; document.body.appendChild(p);
+    p = document.createElement('div'); p.id = 'cfPrint';
+    p.innerHTML = '<div id="cfPrintBar"><b id="cfPrintTit"></b><span style="display:flex;gap:8px"><button id="cfPrintBtn" onclick="cfImprimirAhora()"></button><button id="cfPrintCerrar" onclick="cfCerrarVista()"></button></span></div><div id="cfPrintHoja"></div>';
+    document.body.appendChild(p);
     var st = document.createElement('style');
-    st.textContent = '#cfPrint{display:none;font-family:system-ui,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;color:#000;background:#fff}' +
-      '@media print{body.cf-print>*{display:none!important}body.cf-print #cfPrint{display:block!important}body.cf-print{background:#fff!important}}';
+    st.textContent = '#cfPrint{display:none;font-family:system-ui,"Segoe UI",Roboto,"Malgun Gothic",sans-serif}' +
+      'body.cf-preview #cfPrint{display:block;position:fixed;inset:0;z-index:10000;overflow:auto;background:rgba(0,0,0,.8)}' +
+      '#cfPrintBar{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#0d1220;border-bottom:1px solid #334;color:#fff;font-size:15px}' +
+      '#cfPrintBar button{font-size:14px;font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid #556;background:#1b2436;color:#fff}' +
+      '#cfPrintBar #cfPrintBtn{background:#00bcd4;border-color:#00bcd4;color:#001}' +
+      '#cfPrintHoja{background:#fff;color:#000;max-width:1000px;margin:16px auto;padding:24px;border-radius:6px}' +
+      '@media print{body.cf-print>*{display:none!important}body.cf-print #cfPrint{display:block!important;position:static;overflow:visible;background:#fff}' +
+      'body.cf-print #cfPrintBar{display:none!important}body.cf-print #cfPrintHoja{margin:0;padding:0;max-width:none;border-radius:0}body.cf-print{background:#fff!important}}';
     document.head.appendChild(st);
     window.addEventListener('afterprint', function () { document.body.classList.remove('cf-print'); });
   }
-  p.innerHTML = h;
-  document.body.classList.add('cf-print');
-  window.print();
+  document.getElementById('cfPrintHoja').innerHTML = h;
+  document.getElementById('cfPrintTit').textContent = cfT('vistaPrevia') + ' · ' + f.folio;
+  document.getElementById('cfPrintBtn').textContent = cfT('imprimir');
+  document.getElementById('cfPrintCerrar').textContent = cfT('cerrar');
+  document.body.classList.add('cf-preview');
+  p.scrollTop = 0;
 }
+function cfImprimirAhora() { document.body.classList.add('cf-print'); window.print(); }
+function cfCerrarVista() { document.body.classList.remove('cf-preview', 'cf-print'); }
+window.cfImprimirAhora = cfImprimirAhora; window.cfCerrarVista = cfCerrarVista;
 
 // ── Captura y ajuste ──
 async function cfAbrirFolio(id) {

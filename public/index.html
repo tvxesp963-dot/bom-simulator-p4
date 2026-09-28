@@ -5020,19 +5020,42 @@ async function renderPlanSemanal() {
 
   // 1 unidad ensamblada = 1 Top + 1 Bot (relación 1:1, misma cantidad que ASSY1 necesita ese día)
   // Se arrastra el detalle de modelo+cantidad de ese día, igual que en el Plan de Ensamble.
-  const diasTopBot = todosLosDias.map(d => ({
+  // El plan SIEMPRE arranca en el día en curso: si al restar el colchón la fecha
+  // de producción cae en el pasado, esa necesidad (ya atrasada) se junta en HOY,
+  // sumando cantidades por modelo, en vez de mostrar columnas de días que ya pasaron.
+  const hoyPreEns = new Date(); hoyPreEns.setHours(0, 0, 0, 0);
+  const juntarDesdeHoy = (lista) => {
+    const out = [];
+    lista.forEach(d => {
+      const f = new Date(d.fechaProduccion); f.setHours(0, 0, 0, 0);
+      const fecha = f < hoyPreEns ? new Date(hoyPreEns) : f;
+      let dest = out.find(x => x.fechaProduccion.getTime() === fecha.getTime());
+      if (!dest) {
+        dest = { fechaProduccion: fecha, fechaAssy: d.fechaAssy, necesidad: 0, asignaciones: [] };
+        out.push(dest);
+      }
+      dest.necesidad += d.necesidad;
+      d.asignaciones.forEach(a => {
+        const ya = dest.asignaciones.find(x => x.sm === a.sm);
+        if (ya) ya.qty += a.qty; else dest.asignaciones.push({ sm: a.sm, qty: a.qty });
+      });
+    });
+    return out.sort((a, b) => a.fechaProduccion - b.fechaProduccion);
+  };
+
+  const diasTopBot = juntarDesdeHoy(todosLosDias.map(d => ({
     fechaProduccion: restarDiasCalendario(d.fecha, window.simColchonTopBot),
     fechaAssy: d.fecha,
     necesidad: d.usoCapacidad,
     asignaciones: d.asignaciones
-  }));
+  })));
   // VC alimenta ranurado tanto para Top como para Bot → el doble de la necesidad de ASSY1 ese día
-  const diasVC = todosLosDias.map(d => ({
+  const diasVC = juntarDesdeHoy(todosLosDias.map(d => ({
     fechaProduccion: restarDiasCalendario(d.fecha, window.simColchonVC),
     fechaAssy: d.fecha,
     necesidad: d.usoCapacidad * 2,
     asignaciones: d.asignaciones
-  }));
+  })));
 
   const colHeadTopBot = diasTopBot.map(d =>
     `${(d.fechaProduccion.getMonth() + 1)}/${d.fechaProduccion.getDate()}(${d.fechaProduccion.toLocaleDateString('es-MX', { weekday: 'short' })})`

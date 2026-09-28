@@ -178,6 +178,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <span style="font-size:10px;color:var(--text2)">Planta 4 · Eunsung Samsung</span>
   </div>
   <div style="display:flex;gap:.5rem">
+    <button id="autoChkBadge" onclick="toggleAutoChkPanel()" title="Autochequeo" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid rgba(122,136,184,.35);background:rgba(122,136,184,.1);color:var(--text2);font-weight:700;cursor:pointer">⏳ Autochequeo</button>
     <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
@@ -435,6 +436,8 @@ function goTab(n) {
   document.getElementById('tab-' + n).classList.add('active');
   if (n === 'plan' && typeof renderPlanSemanal === 'function') renderPlanSemanal();
   if (n === 'empaque' && typeof renderEmpaque === 'function') renderEmpaque();
+  // Pantallas que quedaron pendientes de actualizar inventario (ver refrescarVistasInventario)
+  if (window._vistasPendientes && window._vistasPendientes[n] && typeof renderPaginaInventario === 'function') renderPaginaInventario(n);
 
   // Auto-refresh de "Plan Requerido" (Producido + IMS, igual que el botón
   // "Actualizar todo") cada 1 minuto — SOLO mientras esa pestaña está abierta.
@@ -1491,9 +1494,14 @@ function calcSim() {
   // una cascada de prioridad (Plan Requerido / multi-modelo): ahí el inventario del
   // BOM está descontado temporalmente y el Consolidado se pintaba con esos números
   // (ej. Lower Box y Chip Board Virgen en 0) y se quedaba así al restaurarse.
+  // OPTIMIZADO: solo se redibujan si esa pestaña se está viendo; si no, quedan
+  // pendientes y se redibujan al entrar (goTab). El Excel del Consolidado siempre
+  // recalcula antes de exportar, así que nunca sale con datos viejos.
   if (!window._cascadaPoolActiva) {
-    renderCons();
-    renderProd();
+    var pagAct = (typeof paginaActivaBom === 'function') ? paginaActivaBom() : '';
+    window._vistasPendientes = window._vistasPendientes || {};
+    if (pagAct === 'cons') renderCons(); else window._vistasPendientes.cons = true;
+    if (pagAct === 'prod') renderProd(); else window._vistasPendientes.prod = true;
   }
 }
 
@@ -2417,6 +2425,8 @@ function renderCons() {
   document.getElementById('consEmpty').style.display = 'none';
   document.getElementById('consContent').style.display = 'block';
   document.getElementById('consTablas').innerHTML = html;
+  if (window._vistasPendientes) delete window._vistasPendientes.cons; // ya está al día
+  if (typeof programarAutochequeo === 'function') programarAutochequeo();
 }
 
 // PRODUCIR
@@ -2874,6 +2884,7 @@ function exportarExcel() {
   // Garantizar que los datos del Excel sean espejo exacto de lo calculado en pantalla
   renderCons();
   if (!window.consolidadoData) { alert('No hay datos del consolidado para exportar'); return; }
+  if (!confirmarSiHayAlertas()) return;
   const semana = document.getElementById('semanaRef').value;
   const EXTRA  = 1.10;
   const ahoraExport = new Date();
@@ -3681,9 +3692,11 @@ function sincIMS() {
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
     st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
+    window._ultimoSyncIMS = Date.now();
     if (BOM && BOM.length) {
       actualizarInvBOM(); refrescarVistasInventario();
     }
+    if (typeof programarAutochequeo === 'function') programarAutochequeo();
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 
@@ -4732,6 +4745,7 @@ function sincIMSFresco() {
         });
       }).catch(function(){});
     })).then(function() {
+      window._ultimoSyncIMS = Date.now();
       actualizarInvBOM();
       // El inventario nuevo se refleja en TODAS las pantallas, no solo en el Plan.
       refrescarVistasInventario();
@@ -4745,9 +4759,31 @@ window.sincIMSFresco = sincIMSFresco;
 // inventario (Sync IMS manual o automático) pasa por aquí, para que Preview, Simulador,
 // Consolidado, Producir y Analizar varios modelos siempre muestren el MISMO dato.
 // Nunca se ejecuta en medio de una cascada (inventario prestado).
+// OPTIMIZADO: solo se redibuja la pestaña que se está viendo; las demás quedan
+// marcadas como "pendientes" y se redibujan al entrar a ellas (goTab). Antes el
+// auto-refresh del Plan Semanal (cada minuto) redibujaba las 5 pantallas.
+var VISTAS_POR_PAGINA = {
+  upload: ['renderPreview'],
+  sim: ['renderSim'], // renderSim ya incluye 'Analizar varios modelos' (no se duplica la cascada)
+  cons: ['renderCons'],
+  prod: ['renderProd']
+};
+window._vistasPendientes = window._vistasPendientes || {};
+function paginaActivaBom() {
+  var pg = document.querySelector('.page.active');
+  return pg ? pg.id.replace('page-', '') : '';
+}
 function refrescarVistasInventario() {
   if (window._cascadaPoolActiva) return;
-  ['renderPreview', 'renderSim', 'renderCons', 'renderProd', 'renderMultiModelos'].forEach(function (fn) {
+  var activa = paginaActivaBom();
+  Object.keys(VISTAS_POR_PAGINA).forEach(function (pag) {
+    if (pag === activa) renderPaginaInventario(pag);
+    else window._vistasPendientes[pag] = true;
+  });
+}
+function renderPaginaInventario(pag) {
+  delete window._vistasPendientes[pag];
+  (VISTAS_POR_PAGINA[pag] || []).forEach(function (fn) {
     // No regenerar "Analizar varios modelos" si el usuario está escribiendo ahí
     // (regla de seguridad del DOM: nunca destruir un input activo).
     if (fn === 'renderMultiModelos') {
@@ -4759,6 +4795,190 @@ function refrescarVistasInventario() {
   });
 }
 window.refrescarVistasInventario = refrescarVistasInventario;
+
+// ══════════════════════════════════════════
+// AUTOCHEQUEO — revisa los números YA calculados (no recalcula nada, no lee
+// Firebase, sin temporizadores). Corre una sola vez por ráfaga de cambios.
+// Reglas:
+//  1. Consolidado: ningún faltante puede ser mayor que el target del modelo, y
+//     Sheet/Chip Board no pueden pedir más que (target − Gift Box/Lower Box que
+//     le toca a ese modelo por prioridad). Detecta el error de "inventario prestado".
+//  2. Cascada: el inventario debe regresar exacto a su valor original.
+//  3. IMS: aviso si no se ha sincronizado o si ya pasaron más de 2 horas.
+// ══════════════════════════════════════════
+var AUTOCHK_TXT = {
+  es: { ok: '✅ Autochequeo OK', alertas: function (n) { return '⚠ ' + n + (n === 1 ? ' alerta' : ' alertas'); }, avisos: function (n) { return '⚠ ' + n + (n === 1 ? ' aviso' : ' avisos'); },
+        titulo: 'Autochequeo', todoBien: 'Todo cuadra.', revisiones: function (n) { return n + ' revisiones en verde'; }, ultima: 'Última revisión',
+        consTit: function (sm) { return 'Consolidado no cuadra · ' + sm; },
+        consDet: function (x) { return x.desc + ' (' + x.pn + ') pide ' + x.falta + ' pero con el ' + x.header + ' en inventario (' + x.disp + ') deberían ser máximo ' + x.max + '. No mandes este pedido; avisa a Tavox.'; },
+        tgtDet: function (x) { return x.desc + ' (' + x.pn + ') pide ' + x.falta + ', más que todo el target del modelo (' + x.max + '). No mandes este pedido; avisa a Tavox.'; },
+        cascTit: 'Inventario alterado', cascDet: 'Después de un cálculo el inventario no regresó a su valor original. Recarga la página (Ctrl+F5) antes de usar los números.',
+        imsTit: 'Inventario desactualizado', imsNunca: 'Todavía no se sincroniza el IMS en esta sesión. Presiona Sync IMS.', imsViejo: function (h) { return 'La última sincronización con el IMS fue hace ' + h + ' h. Presiona Sync IMS.'; },
+        banner: function (n) { return '⚠ Este consolidado tiene ' + n + (n === 1 ? ' número que no cuadra' : ' números que no cuadran') + '. Revisa antes de mandar el pedido.'; },
+        confirmar: function (n) { return 'Hay ' + n + (n === 1 ? ' alerta' : ' alertas') + ' del autochequeo (números que no cuadran).\n\n¿Seguro que quieres continuar?'; } },
+  en: { ok: '✅ Self-check OK', alertas: function (n) { return '⚠ ' + n + (n === 1 ? ' alert' : ' alerts'); }, avisos: function (n) { return '⚠ ' + n + (n === 1 ? ' warning' : ' warnings'); },
+        titulo: 'Self-check', todoBien: 'Everything adds up.', revisiones: function (n) { return n + ' checks passed'; }, ultima: 'Last check',
+        consTit: function (sm) { return 'Consolidated order does not add up · ' + sm; },
+        consDet: function (x) { return x.desc + ' (' + x.pn + ') asks for ' + x.falta + ' but with the ' + x.header + ' in stock (' + x.disp + ') it should be at most ' + x.max + '. Do not send this order; tell Tavox.'; },
+        tgtDet: function (x) { return x.desc + ' (' + x.pn + ') asks for ' + x.falta + ', more than the whole model target (' + x.max + '). Do not send this order; tell Tavox.'; },
+        cascTit: 'Inventory altered', cascDet: 'After a calculation the inventory did not return to its original value. Reload the page (Ctrl+F5) before using the numbers.',
+        imsTit: 'Inventory out of date', imsNunca: 'IMS has not been synced in this session. Press Sync IMS.', imsViejo: function (h) { return 'Last IMS sync was ' + h + ' h ago. Press Sync IMS.'; },
+        banner: function (n) { return '⚠ This consolidated order has ' + n + (n === 1 ? ' number that does not add up' : ' numbers that do not add up') + '. Check before sending the order.'; },
+        confirmar: function (n) { return 'There ' + (n === 1 ? 'is 1 self-check alert' : 'are ' + n + ' self-check alerts') + ' (numbers that do not add up).\n\nAre you sure you want to continue?'; } },
+  ko: { ok: '✅ 자동 점검 정상', alertas: function (n) { return '⚠ 경고 ' + n + '건'; }, avisos: function (n) { return '⚠ 주의 ' + n + '건'; },
+        titulo: '자동 점검', todoBien: '모든 수치가 맞습니다.', revisiones: function (n) { return '정상 점검 ' + n + '건'; }, ultima: '마지막 점검',
+        consTit: function (sm) { return '통합 발주 수치 불일치 · ' + sm; },
+        consDet: function (x) { return x.desc + ' (' + x.pn + ') 요청 ' + x.falta + ', 그러나 ' + x.header + ' 재고(' + x.disp + ') 기준 최대 ' + x.max + '이어야 합니다. 이 발주를 보내지 말고 Tavox에게 알리세요.'; },
+        tgtDet: function (x) { return x.desc + ' (' + x.pn + ') 요청 ' + x.falta + ', 모델 전체 목표(' + x.max + ')보다 많습니다. 이 발주를 보내지 말고 Tavox에게 알리세요.'; },
+        cascTit: '재고 변경됨', cascDet: '계산 후 재고가 원래 값으로 돌아오지 않았습니다. 수치를 사용하기 전에 페이지를 새로고침(Ctrl+F5)하세요.',
+        imsTit: '재고 정보 오래됨', imsNunca: '이번 세션에서 IMS 동기화가 아직 안 되었습니다. Sync IMS를 누르세요.', imsViejo: function (h) { return '마지막 IMS 동기화가 ' + h + '시간 전입니다. Sync IMS를 누르세요.'; },
+        banner: function (n) { return '⚠ 이 통합 발주에 맞지 않는 수치가 ' + n + '건 있습니다. 발주 전에 확인하세요.'; },
+        confirmar: function (n) { return '자동 점검 경고가 ' + n + '건 있습니다 (맞지 않는 수치).\n\n계속하시겠습니까?'; } }
+};
+function autoChkLang() { try { var l = localStorage.getItem('autoChkLang'); if (AUTOCHK_TXT[l]) return l; } catch (e) {} return 'es'; }
+function tChk(k) { return AUTOCHK_TXT[autoChkLang()][k]; }
+window._autoChk = window._autoChk || { errores: [], avisos: [], ok: 0, filasMal: {}, ultima: null };
+var _autoChkTimer = null;
+function programarAutochequeo() {
+  clearTimeout(_autoChkTimer);
+  _autoChkTimer = setTimeout(ejecutarAutochequeo, 400);
+}
+function ejecutarAutochequeo() {
+  if (window._cascadaPoolActiva) { programarAutochequeo(); return; }
+  var errores = [], avisos = [], ok = 0, filasMal = {};
+  var fmt = function (n) { return Math.round(n).toLocaleString('en-US'); };
+  try {
+    // ── Regla 1: Consolidado ──
+    // Si el Consolidado quedó pendiente (no se ha vuelto a abrir), sus datos son de
+    // antes: no se evalúan para no dar alertas viejas. Se revisan al abrirlo o exportar.
+    var data = (window._vistasPendientes && window._vistasPendientes.cons) ? {} : (window.consolidadoData || {});
+    var prio = function (sm) { return (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999; };
+    var tgtNet = function (sm) { return Math.max(0, (simTargetsPorModelo[sm] || 0) - ((window.simProducidoManualPorModelo && window.simProducidoManualPorModelo[sm]) || 0)); };
+    // Reparto independiente de Gift Box / Lower Box por prioridad (misma regla del negocio).
+    var restante = {}, disp = {};
+    [...new Set(BOM.map(function (r) { return r.sm; }))].filter(Boolean)
+      .sort(function (a, b) { return prio(a) - prio(b); })
+      .forEach(function (sm) {
+        var t = tgtNet(sm); if (!t) return;
+        disp[sm] = {};
+        [['gift', function (d) { return d.indexOf('GIFT BOX') >= 0; }],
+         ['lower', function (d) { return d.indexOf('LOWER BOX') >= 0 && d.indexOf('SHEET') < 0; }]].forEach(function (par) {
+          var row = BOM.find(function (r) { return r.sm === sm && par[1]((r.desc || '').toUpperCase()); });
+          if (!row) { disp[sm][par[0]] = { cant: 0, row: null }; return; }
+          var key = (row.pn || '').trim().toUpperCase() + '||' + (row.desc || '').trim().toUpperCase();
+          if (!(key in restante)) restante[key] = row.inv || 0;
+          var a = Math.min(restante[key], t); restante[key] -= a;
+          disp[sm][par[0]] = { cant: a, row: row };
+        });
+      });
+    Object.keys(data).forEach(function (pl) {
+      Object.keys(data[pl] || {}).forEach(function (sm) {
+        var dm = data[pl][sm]; if (!dm || !dm.rows) return;
+        var t = dm.target || 0;
+        dm.rows.forEach(function (r) {
+          if (r.esBundle || !(r.falta > 0)) { ok++; return; }
+          var d = (r.desc || '').toUpperCase();
+          var marca = function () { filasMal[(r.pn || '').trim().toUpperCase() + '||' + (r.desc || '').trim().toUpperCase()] = true; };
+          if (r.falta > t) { marca(); errores.push({ tit: tChk('consTit')(sm), det: tChk('tgtDet')({ pn: r.pn, desc: r.desc, falta: fmt(r.falta), max: fmt(t) }) }); return; }
+          var grupo = (d.indexOf('SHEET TOP') >= 0 || d.indexOf('CHIP BOARD TOP') >= 0) ? 'gift'
+                    : (d.indexOf('SHEET LOW') >= 0 || d.indexOf('CHIP BOARD BOTTOM') >= 0) ? 'lower' : null;
+          if (grupo && disp[sm] && disp[sm][grupo]) {
+            var h = disp[sm][grupo];
+            var max = Math.max(0, t - h.cant);
+            if (r.falta > max) {
+              marca();
+              errores.push({ tit: tChk('consTit')(sm), det: tChk('consDet')({ pn: r.pn, desc: r.desc, falta: fmt(r.falta), header: h.row ? h.row.desc : '', disp: fmt(h.cant), max: fmt(max) }) });
+              return;
+            }
+          }
+          ok++;
+        });
+      });
+    });
+    // ── Regla 2: inventario restaurado tras la cascada ──
+    if (window._autoChkCascadaMal) errores.push({ tit: tChk('cascTit'), det: tChk('cascDet') }); else ok++;
+    // ── Regla 3: antigüedad del IMS (solo aviso) ──
+    if (BOM.length) {
+      if (!window._ultimoSyncIMS) avisos.push({ tit: tChk('imsTit'), det: tChk('imsNunca') });
+      else {
+        var horas = (Date.now() - window._ultimoSyncIMS) / 3600000;
+        if (horas > 2) avisos.push({ tit: tChk('imsTit'), det: tChk('imsViejo')(Math.floor(horas)) }); else ok++;
+      }
+    }
+  } catch (e) { console.error('Autochequeo:', e); }
+  window._autoChk = { errores: errores, avisos: avisos, ok: ok, filasMal: filasMal, ultima: new Date() };
+  pintarAutochequeo();
+}
+function pintarAutochequeo() {
+  var a = window._autoChk || { errores: [], avisos: [] };
+  var b = document.getElementById('autoChkBadge');
+  if (b) {
+    var nE = a.errores.length, nA = a.avisos.length;
+    var estilo = nE ? ['rgba(255,68,68,.15)', 'rgba(255,68,68,.6)', '#ff4444', tChk('alertas')(nE)]
+               : nA ? ['rgba(255,186,0,.12)', 'rgba(255,186,0,.5)', '#FFBA00', tChk('avisos')(nA)]
+               : ['rgba(0,230,118,.08)', 'rgba(0,230,118,.35)', '#00e676', tChk('ok')];
+    b.style.background = estilo[0]; b.style.borderColor = estilo[1]; b.style.color = estilo[2]; b.textContent = estilo[3];
+  }
+  // Consolidado: franja roja arriba y renglones marcados
+  var cont = document.getElementById('consTablas');
+  if (cont) {
+    var viejo = document.getElementById('autoChkBannerCons'); if (viejo) viejo.remove();
+    var nCons = Object.keys(a.filasMal || {}).length;
+    if (nCons) {
+      var div = document.createElement('div');
+      div.id = 'autoChkBannerCons';
+      div.style.cssText = 'margin-bottom:.75rem;padding:.6rem .8rem;border-radius:8px;border:1px solid rgba(255,68,68,.5);background:rgba(255,68,68,.12);color:#ff4444;font-weight:700;font-size:13px';
+      div.textContent = tChk('banner')(nCons);
+      cont.insertBefore(div, cont.firstChild);
+      cont.querySelectorAll('td.pn-cell').forEach(function (td) {
+        var tdDesc = td.nextElementSibling;
+        var desc = tdDesc && tdDesc.firstChild ? (tdDesc.firstChild.textContent || '') : '';
+        var key = (td.textContent || '').trim().toUpperCase() + '||' + desc.trim().toUpperCase();
+        if (a.filasMal[key]) { td.parentElement.style.background = 'rgba(255,68,68,.18)'; td.parentElement.style.outline = '1px solid rgba(255,68,68,.6)'; }
+      });
+    }
+  }
+  var panel = document.getElementById('autoChkPanel');
+  if (panel && panel.style.display !== 'none') pintarPanelAutochequeo();
+}
+function pintarPanelAutochequeo() {
+  var panel = document.getElementById('autoChkPanel'); if (!panel) return;
+  var a = window._autoChk || { errores: [], avisos: [], ok: 0 };
+  var esc = function (t) { return String(t).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+  var lang = autoChkLang();
+  var flag = function (l, f) { return '<button onclick="cambiarIdiomaAutoChk(\'' + l + '\')" style="border:' + (l === lang ? '2px solid #4da6ff' : '1px solid transparent') + ';background:none;border-radius:4px;padding:1px;cursor:pointer"><img src="https://flagcdn.com/w40/' + f + '.png" alt="' + f.toUpperCase() + '" style="width:22px;display:block"></button>'; };
+  var item = function (x, color) { return '<div style="border-top:1px solid var(--border);padding:.5rem 0"><div style="font-weight:700;color:' + color + '">' + esc(x.tit) + '</div><div style="color:var(--text2);font-size:12px;margin-top:2px">' + esc(x.det) + '</div></div>'; };
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem"><b>' + tChk('titulo') + '</b><span style="display:flex;gap:2px">' + flag('es', 'mx') + flag('en', 'us') + flag('ko', 'kr') + '</span></div>';
+  a.errores.forEach(function (x) { h += item(x, '#ff4444'); });
+  a.avisos.forEach(function (x) { h += item(x, '#FFBA00'); });
+  if (!a.errores.length && !a.avisos.length) h += '<div style="border-top:1px solid var(--border);padding:.5rem 0;color:#00e676;font-weight:700">' + tChk('todoBien') + '</div>';
+  h += '<div style="border-top:1px solid var(--border);padding-top:.4rem;font-size:11px;color:var(--text3)">' + tChk('ultima') + ': ' + (a.ultima ? a.ultima.toLocaleTimeString() : '—') + ' · ' + tChk('revisiones')(a.ok || 0) + '</div>';
+  panel.innerHTML = h;
+}
+function toggleAutoChkPanel() {
+  var panel = document.getElementById('autoChkPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'autoChkPanel';
+    panel.style.cssText = 'position:fixed;top:56px;right:16px;z-index:9999;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:var(--bg2,#0d1220);border:1px solid var(--border,#334);border-radius:10px;padding:.8rem 1rem;font-size:13px;color:var(--text,#fff);box-shadow:0 8px 24px rgba(0,0,0,.5)';
+    panel.style.display = 'none';
+    document.body.appendChild(panel);
+  }
+  if (panel.style.display === 'none') { ejecutarAutochequeo(); panel.style.display = 'block'; pintarPanelAutochequeo(); }
+  else panel.style.display = 'none';
+}
+function cambiarIdiomaAutoChk(l) { try { localStorage.setItem('autoChkLang', l); } catch (e) {} pintarAutochequeo(); pintarPanelAutochequeo(); }
+// Antes de exportar/publicar: revisa en ese momento (sin esperar) y pregunta si hay alertas.
+function confirmarSiHayAlertas() {
+  ejecutarAutochequeo();
+  var n = (window._autoChk && window._autoChk.errores.length) || 0;
+  return !n || confirm(tChk('confirmar')(n));
+}
+window.ejecutarAutochequeo = ejecutarAutochequeo;
+window.programarAutochequeo = programarAutochequeo;
+window.toggleAutoChkPanel = toggleAutoChkPanel;
+window.cambiarIdiomaAutoChk = cambiarIdiomaAutoChk;
+window.confirmarSiHayAlertas = confirmarSiHayAlertas;
 
 // ══════════════════════════════════════════
 // PLAN PRE-ENSAMBLE (S1-S4, Zhongke, VC1/VC2)
@@ -5706,14 +5926,26 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
   if (typeof original !== 'function') return;
   window[nombre] = function () {
     window._cascadaPoolActiva = (window._cascadaPoolActiva || 0) + 1;
+    // Autochequeo: suma de inventario antes/después (barato, una sola pasada).
+    var sumaAntes = BOM.reduce(function (s, r) { return s + (Number(r.inv) || 0); }, 0);
     try { return original.apply(this, arguments); }
     finally {
+      var sumaDespues = BOM.reduce(function (s, r) { return s + (Number(r.inv) || 0); }, 0);
+      window._autoChkCascadaMal = (sumaAntes !== sumaDespues);
       window._cascadaPoolActiva--;
       // Al terminar la última cascada el inventario ya está restaurado: se vuelve a
       // pintar el Simulador (que durante la cascada quedó con inventario prestado),
       // Consolidado y Producir, ahora sí con el inventario real.
+      // OPTIMIZADO: solo se repinta la pestaña visible; las demás quedan pendientes.
+      // Se usa calcSim() (tabla + Consolidado/Producir si están a la vista) y NUNCA
+      // renderMultiModelos(), que a su vez dispara otra cascada (evita un ciclo).
       if (!window._cascadaPoolActiva && typeof calcSim === 'function') {
-        try { calcSim(); } catch (e) { console.error('Refresco tras cascada:', e); }
+        var pagCasc = (typeof paginaActivaBom === 'function') ? paginaActivaBom() : '';
+        window._vistasPendientes = window._vistasPendientes || {};
+        ['sim', 'cons', 'prod'].forEach(function (pg) { if (pg !== pagCasc) window._vistasPendientes[pg] = true; });
+        if (pagCasc === 'sim' || pagCasc === 'cons' || pagCasc === 'prod') {
+          try { calcSim(); } catch (e) { console.error('Refresco tras cascada:', e); }
+        }
       }
     }
   };
@@ -5895,6 +6127,7 @@ window.publicarPlanSemanal = publicarPlanSemanal;
 // funciones que pintan la tabla 1 (calcularFaltantesPorModeloPlan + calcularPlanSemanal).
 async function publicarPlanPiso() {
   if (!adminAuthed) { alert('Solo el administrador puede publicar al piso.'); return; }
+  if (!confirmarSiHayAlertas()) return;
   if (!db) { alert('Firebase no disponible — no se pudo publicar'); return; }
   const btn = document.getElementById('btnPublicarPiso');
   const txt0 = btn ? btn.textContent : '';

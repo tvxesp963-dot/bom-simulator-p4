@@ -181,6 +181,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button id="autoChkBadge" onclick="toggleAutoChkPanel()" title="Autochequeo" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid rgba(122,136,184,.35);background:rgba(122,136,184,.1);color:var(--text2);font-weight:700;cursor:pointer">⏳ Autochequeo</button>
     <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
+    <button class="btn btn-secondary btn-sm" onclick="cfAbrir()">📋 Conteo físico</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
     <button id="btnExportSim" onclick="exportarSimuladorExcel()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:2px solid #00e676;background:#0f2a1c;color:#00e676;font-weight:700;cursor:pointer">⬇ Excel</button>
     <button id="btnExportTodosBOM" onclick="exportarTodosLosBomsExcel()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:2px solid #4da6ff;background:#0f1e2a;color:#4da6ff;font-weight:700;cursor:pointer">⬇ Excel Todos los BOM</button>
@@ -3602,6 +3603,9 @@ function actualizarInvBOM() {
     }
   });
 }
+// Mismo campo que muestran los 3 IMS: "actual" (si no existe, el "Current" viejo).
+function invActualIMS(d) { return (d && d.actual !== undefined && d.actual !== null && d.actual !== '') ? (Number(d.actual) || 0) : (Number(d && d.Current) || 0); }
+window.invActualIMS = invActualIMS;
 function sincIMS() {
   var st = document.getElementById('imsStatus');
   if (!st) return;
@@ -3626,7 +3630,7 @@ function sincIMS() {
         if (!d.pn) return;
         var pn = d.pn.trim().toUpperCase();
         var desc = (d.desc||'').trim().toUpperCase();
-        var actual = d.Current || d.actual || 0;
+        var actual = invActualIMS(d); // mismo campo que muestran los IMS
         rawP4[pn] = (rawP4[pn]||0) + actual;
         if (desc) rawP4[pn+'||'+desc] = actual;
         // Capturar precio P4
@@ -3642,7 +3646,7 @@ function sincIMS() {
         var d = doc.data();
         if (!d.pn) return;
         var pn = d.pn.trim().toUpperCase();
-        var actual = d.Current || d.actual || 0;
+        var actual = invActualIMS(d); // mismo campo que muestran los IMS
         // P3: guardar SOLO por PN — no usar desc porque no coincide con el BOM
         rawP3[pn] = (rawP3[pn]||0) + actual;
         // Capturar precio P3
@@ -4730,7 +4734,7 @@ function sincIMSFresco() {
           if (!d.pn) return;
           var pn = d.pn.trim().toUpperCase();
           var desc = (d.desc||'').trim().toUpperCase();
-          var actual = d.actual || 0;
+          var actual = invActualIMS(d); // mismo campo que muestran los IMS
           var keyPlanta = pn + '||PLANTA:' + c.planta;
           imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + actual;
           if (c.planta === 'P3') {
@@ -6822,6 +6826,361 @@ window.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 </div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// CONTEO FÍSICO (inventario sistema vs físico) — P4, P3 y P1
+// 1) Genera un folio y la hoja impresa A CIEGAS (sin cantidad del sistema),
+//    ordenada por ubicación. El folio se guarda en Firebase (conteos_fisicos).
+// 2) Se captura lo que contó almacén; la diferencia se calcula contra lo que
+//    había en el sistema AL IMPRIMIR.
+// 3) El admin aprueba cada diferencia y "Ajustar IMS" la registra como una
+//    Entrada/Salida normal del IMS de esa planta (misma estructura que usa el
+//    IMS: actual/entradas/salidas/historial + colección de movimientos), con
+//    referencia "AJUSTE CONTEO FÍSICO <folio>". Se aplica como DIFERENCIA, así
+//    que lo que se movió entre la impresión y el ajuste se respeta.
+// Solo lee Firebase al abrir/generar/ajustar (nada en segundo plano).
+// ══════════════════════════════════════════════════════════════════════
+var CF_PLANTAS = {
+  P4: { inv: 'planta4_inventario', mov: 'planta4_movimientos', unidad: 'pzas' },
+  P3: { inv: 'planta3_inventario', mov: 'planta3_movimientos', unidad: 'pzas' },
+  P1: { inv: 'planta1_papel_inventario', mov: 'planta1_papel_movimientos', unidad: 'pallets' }
+};
+var CF_TXT = {
+  es: { titulo: '📋 Conteo físico', nuevo: 'Nuevo conteo', planta: 'Planta', alcance: 'Qué contar', plan: 'Componentes del plan activo', todo: 'Todo el inventario',
+        edificio: 'Edificio', todos: 'Todos', generar: '🖨️ Generar folio e imprimir', folios: 'Folios', abrir: 'Abrir', cerrar: '✕ Cerrar', volver: '← Folios',
+        abierto: 'abierto', cerrado: 'cerrado', sinFolios: 'Todavía no hay folios.', cargando: 'Cargando...', soloAdmin: 'Solo el administrador puede generar folios y ajustar el IMS.',
+        sinItems: 'No hay componentes para contar con ese filtro.', hojaTit: function (pl) { return 'Conteo físico de inventario · Planta ' + pl.replace('P', ''); },
+        folio: 'Folio', generado: 'Generado', contó: 'Contó', revisó: 'Revisó', fechaConteo: 'Fecha/hora del conteo', num: '#', pn: 'No. parte', desc: 'Descripción',
+        ubic: 'Ubicación', unidad: 'Unidad', conteo: 'Conteo físico', notas: 'Notas', pieHoja: 'Ordenado por ubicación · Escribe la cantidad que encuentres físicamente · No dejes renglones en blanco (si no hay, escribe 0)',
+        sistImp: 'Sistema al imprimir', sistAhora: 'Sistema ahora', dif: 'Diferencia', aprobar: 'Aprobar', estado: 'Estado', ajustado: '✓ Ajustado', sinContar: 'sin contar',
+        seMovio: function (n) { return 'Se movió ' + n + ' desde la impresión; el ajuste aplica solo la diferencia del conteo.'; },
+        guardar: '💾 Guardar conteo', guardado: '✓ Conteo guardado', ajustar: function (n) { return '✓ Ajustar IMS (' + n + ')'; }, reimprimir: '🖨️ Reimprimir hoja', excel: '📊 Excel',
+        resumen: function (d, a, s) { return d + ' diferencias · ' + a + ' aprobadas · ' + s + ' sin contar'; },
+        confirmar: function (n, pl) { return 'Se van a ajustar ' + n + ' número(s) de parte en el IMS ' + pl + '.\nQuedará registrado en el historial del IMS como AJUSTE CONTEO FÍSICO.\n\n¿Continuar?'; },
+        listo: function (ok, err) { return 'Ajustes aplicados: ' + ok + (err ? '\nCon error: ' + err + ' (revisa la consola / permisos)' : ''); },
+        noEncontrado: 'no se encontró en el IMS', negativo: 'quedaría negativo; se ajustó a 0', historial: 'Historial de ajustes', nadaAjustar: 'No hay diferencias aprobadas para ajustar.',
+        errGuardar: 'No se pudo guardar en Firebase: ' },
+  en: { titulo: '📋 Physical count', nuevo: 'New count', planta: 'Plant', alcance: 'What to count', plan: 'Active plan components', todo: 'Whole inventory',
+        edificio: 'Building', todos: 'All', generar: '🖨️ Create folio and print', folios: 'Folios', abrir: 'Open', cerrar: '✕ Close', volver: '← Folios',
+        abierto: 'open', cerrado: 'closed', sinFolios: 'No folios yet.', cargando: 'Loading...', soloAdmin: 'Only the administrator can create folios and adjust the IMS.',
+        sinItems: 'No components to count with that filter.', hojaTit: function (pl) { return 'Physical inventory count · Plant ' + pl.replace('P', ''); },
+        folio: 'Folio', generado: 'Created', contó: 'Counted by', revisó: 'Checked by', fechaConteo: 'Count date/time', num: '#', pn: 'Part number', desc: 'Description',
+        ubic: 'Location', unidad: 'Unit', conteo: 'Physical count', notas: 'Notes', pieHoja: 'Sorted by location · Write the quantity you physically find · Do not leave rows blank (if none, write 0)',
+        sistImp: 'System at print', sistAhora: 'System now', dif: 'Difference', aprobar: 'Approve', estado: 'Status', ajustado: '✓ Adjusted', sinContar: 'not counted',
+        seMovio: function (n) { return n + ' moved since printing; the adjustment applies only the count difference.'; },
+        guardar: '💾 Save count', guardado: '✓ Count saved', ajustar: function (n) { return '✓ Adjust IMS (' + n + ')'; }, reimprimir: '🖨️ Reprint sheet', excel: '📊 Excel',
+        resumen: function (d, a, s) { return d + ' differences · ' + a + ' approved · ' + s + ' not counted'; },
+        confirmar: function (n, pl) { return n + ' part number(s) will be adjusted in IMS ' + pl + '.\nIt will be logged in the IMS history as PHYSICAL COUNT ADJUSTMENT.\n\nContinue?'; },
+        listo: function (ok, err) { return 'Adjustments applied: ' + ok + (err ? '\nFailed: ' + err + ' (check console / permissions)' : ''); },
+        noEncontrado: 'not found in IMS', negativo: 'would be negative; set to 0', historial: 'Adjustment history', nadaAjustar: 'No approved differences to adjust.',
+        errGuardar: 'Could not save to Firebase: ' },
+  ko: { titulo: '📋 실사 재고', nuevo: '새 실사', planta: '공장', alcance: '실사 범위', plan: '현재 계획 부품', todo: '전체 재고',
+        edificio: '건물', todos: '전체', generar: '🖨️ 전표 생성 및 인쇄', folios: '전표', abrir: '열기', cerrar: '✕ 닫기', volver: '← 전표',
+        abierto: '진행중', cerrado: '완료', sinFolios: '아직 전표가 없습니다.', cargando: '불러오는 중...', soloAdmin: '관리자만 전표 생성 및 IMS 조정이 가능합니다.',
+        sinItems: '해당 조건으로 실사할 부품이 없습니다.', hojaTit: function (pl) { return '재고 실사표 · ' + pl.replace('P', '') + '공장'; },
+        folio: '전표', generado: '생성', contó: '실사자', revisó: '확인자', fechaConteo: '실사 일시', num: '#', pn: '부품 번호', desc: '설명',
+        ubic: '위치', unidad: '단위', conteo: '실사 수량', notas: '비고', pieHoja: '위치순 정렬 · 실제로 확인한 수량을 기입 · 빈칸 금지 (없으면 0 기입)',
+        sistImp: '인쇄 시 시스템', sistAhora: '현재 시스템', dif: '차이', aprobar: '승인', estado: '상태', ajustado: '✓ 조정됨', sinContar: '미실사',
+        seMovio: function (n) { return '인쇄 후 ' + n + ' 변동; 조정은 실사 차이만 적용됩니다.'; },
+        guardar: '💾 실사 저장', guardado: '✓ 저장됨', ajustar: function (n) { return '✓ IMS 조정 (' + n + ')'; }, reimprimir: '🖨️ 재인쇄', excel: '📊 Excel',
+        resumen: function (d, a, s) { return '차이 ' + d + '건 · 승인 ' + a + '건 · 미실사 ' + s + '건'; },
+        confirmar: function (n, pl) { return 'IMS ' + pl + '에서 부품 ' + n + '건을 조정합니다.\nIMS 이력에 실사 조정으로 기록됩니다.\n\n계속하시겠습니까?'; },
+        listo: function (ok, err) { return '조정 완료: ' + ok + (err ? '\n실패: ' + err + ' (콘솔/권한 확인)' : ''); },
+        noEncontrado: 'IMS에 없음', negativo: '음수가 되어 0으로 조정', historial: '조정 이력', nadaAjustar: '조정할 승인된 차이가 없습니다.',
+        errGuardar: 'Firebase 저장 실패: ' }
+};
+function cfLang() { try { var l = localStorage.getItem('autoChkLang'); if (CF_TXT[l]) return l; } catch (e) {} return 'es'; }
+function cfT(k) { return CF_TXT[cfLang()][k]; }
+function cfEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function cfN(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
+function cfUsuario() { try { var u = firebase.auth().currentUser; if (u && u.email) return u.email; } catch (e) {} return 'admin'; }
+
+var _cf = { folio: null, vista: 'inicio' };
+
+function cfModal() {
+  var m = document.getElementById('cfModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'cfModal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);display:none;overflow:auto;padding:24px 12px';
+    m.innerHTML = '<div id="cfCaja" style="max-width:1100px;margin:0 auto;background:var(--bg2,#0d1220);border:1px solid var(--border,#334);border-radius:12px;padding:1rem 1.2rem;color:var(--text,#fff);font-size:13px"></div>';
+    document.body.appendChild(m);
+  }
+  return m;
+}
+function cfBanderas() {
+  var lang = cfLang();
+  var f = function (l, c) { return '<button onclick="cfCambiarIdioma(\'' + l + '\')" style="border:' + (l === lang ? '2px solid #4da6ff' : '1px solid transparent') + ';background:none;border-radius:4px;padding:1px;cursor:pointer"><img src="https://flagcdn.com/w40/' + c + '.png" alt="' + c.toUpperCase() + '" style="width:22px;display:block"></button>'; };
+  return '<span style="display:flex;gap:3px">' + f('es', 'mx') + f('en', 'us') + f('ko', 'kr') + '</span>';
+}
+function cfCambiarIdioma(l) {
+  try { localStorage.setItem('autoChkLang', l); } catch (e) {}
+  if (typeof pintarAutochequeo === 'function') pintarAutochequeo();
+  if (_cf.vista === 'folio' && _cf.folio) cfPintarFolio(); else cfPintarInicio();
+}
+function cfEncabezado(tit, extra) {
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.8rem">' +
+    '<div style="font-size:16px;font-weight:700">' + tit + '</div><div style="display:flex;gap:8px;align-items:center">' + (extra || '') + cfBanderas() +
+    '<button class="btn btn-secondary btn-sm" onclick="cfCerrar()">' + cfT('cerrar') + '</button></div></div>';
+}
+function cfAbrir() { cfModal().style.display = 'block'; cfPintarInicio(); }
+function cfCerrar() { var m = document.getElementById('cfModal'); if (m) m.style.display = 'none'; }
+
+// ── Pantalla inicial: nuevo conteo + lista de folios ──
+async function cfPintarInicio() {
+  _cf.vista = 'inicio';
+  var caja = document.getElementById('cfCaja');
+  var sel = 'background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:6px 8px';
+  var h = cfEncabezado(cfT('titulo'));
+  h += '<div style="background:var(--bg3,#151c2e);border-radius:8px;padding:.8rem;margin-bottom:1rem">' +
+    '<div style="font-weight:700;margin-bottom:.5rem">' + cfT('nuevo') + '</div>' +
+    '<div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end">' +
+    '<label>' + cfT('planta') + '<br><select id="cfPlanta" onchange="cfCambioPlanta()" style="' + sel + '"><option>P4</option><option>P3</option><option>P1</option></select></label>' +
+    '<label id="cfAlcanceWrap">' + cfT('alcance') + '<br><select id="cfAlcance" style="' + sel + '"><option value="plan">' + cfT('plan') + '</option><option value="todo">' + cfT('todo') + '</option></select></label>' +
+    '<label id="cfEdifWrap" style="display:none">' + cfT('edificio') + '<br><select id="cfEdif" style="' + sel + '"><option value="">' + cfT('todos') + '</option><option>P1</option><option>P5</option><option>P6</option></select></label>' +
+    '<button class="btn btn-primary btn-sm" onclick="cfGenerar()">' + cfT('generar') + '</button></div>' +
+    (adminAuthed ? '' : '<div style="margin-top:.5rem;color:#FFBA00;font-size:12px">' + cfT('soloAdmin') + '</div>') + '</div>';
+  h += '<div style="font-weight:700;margin-bottom:.4rem">' + cfT('folios') + '</div><div id="cfLista">' + cfT('cargando') + '</div>';
+  caja.innerHTML = h;
+  try {
+    var snap = await db.collection('conteos_fisicos').orderBy('creado', 'desc').limit(20).get();
+    var filas = [];
+    snap.forEach(function (d) { var f = d.data(); filas.push(f); });
+    document.getElementById('cfLista').innerHTML = !filas.length ? '<div style="color:var(--text2)">' + cfT('sinFolios') + '</div>' :
+      '<table style="width:100%;border-collapse:collapse">' + filas.map(function (f) {
+        var nAj = (f.ajustes || []).length;
+        return '<tr style="border-top:1px solid var(--border,#334)"><td style="padding:6px 4px;font-weight:700">' + cfEsc(f.folio) + '</td><td>' + cfEsc(f.planta) + '</td><td>' +
+          new Date(f.creado).toLocaleString() + '</td><td>' + (f.items || []).length + ' PN</td><td>' + (nAj ? nAj + ' ✓' : '') + '</td><td>' +
+          (f.estado === 'cerrado' ? cfT('cerrado') : cfT('abierto')) + '</td><td style="text-align:right"><button class="btn btn-secondary btn-sm" onclick="cfAbrirFolio(\'' + cfEsc(f.folio) + '\')">' + cfT('abrir') + '</button></td></tr>';
+      }).join('') + '</table>';
+  } catch (e) { document.getElementById('cfLista').textContent = cfT('errGuardar') + e.message; }
+}
+function cfCambioPlanta() {
+  var pl = document.getElementById('cfPlanta').value;
+  document.getElementById('cfAlcanceWrap').style.display = pl === 'P1' ? 'none' : '';
+  document.getElementById('cfEdifWrap').style.display = pl === 'P1' ? '' : 'none';
+}
+
+// ── Generar folio ──
+async function cfGenerar() {
+  if (!adminAuthed) { alert(cfT('soloAdmin')); return; }
+  if (!db) { alert('Firebase no disponible'); return; }
+  var pl = document.getElementById('cfPlanta').value;
+  var alcance = pl === 'P1' ? 'todo' : document.getElementById('cfAlcance').value;
+  var edif = pl === 'P1' ? document.getElementById('cfEdif').value : '';
+  var cfg = CF_PLANTAS[pl];
+  var snap = await db.collection(cfg.inv).get();
+  // Componentes del plan activo (modelos del Plan Requerido con target)
+  var clavesPlan = {}, pnsPlan = {};
+  if (alcance === 'plan') {
+    var activos = (typeof multiModelosActivos !== 'undefined' ? multiModelosActivos : []).filter(function (sm) { return (simTargetsPorModelo[sm] || 0) > 0; });
+    BOM.forEach(function (r) {
+      if (activos.indexOf(r.sm) < 0 || !r.pn) return;
+      var pn = r.pn.trim().toUpperCase();
+      pnsPlan[pn] = true;
+      clavesPlan[pn + '||' + (r.desc || '').trim().toUpperCase()] = true;
+    });
+  }
+  var docsPorPn = {};
+  snap.forEach(function (doc) { var d = doc.data(); if (!d.pn) return; var pn = d.pn.trim().toUpperCase(); (docsPorPn[pn] = docsPorPn[pn] || []).push({ id: doc.id, d: d }); });
+  var items = [];
+  Object.keys(docsPorPn).forEach(function (pn) {
+    var docs = docsPorPn[pn];
+    if (alcance === 'plan') {
+      if (!pnsPlan[pn]) return;
+      // P4: PN + descripción exacta; si ninguna coincide, todas las variantes de ese PN.
+      // P3: por PN (las descripciones del IMS P3 no coinciden con las del BOM).
+      if (pl === 'P4') {
+        var exactos = docs.filter(function (x) { return clavesPlan[pn + '||' + (x.d.desc || '').trim().toUpperCase()]; });
+        if (exactos.length) docs = exactos;
+      }
+    }
+    docs.forEach(function (x) {
+      var d = x.d;
+      if (edif && (d.ubicacion || '') !== edif) return;
+      items.push({ docId: x.id, pn: d.pn, desc: d.desc || '', ubic: d.ubicacion || '', loc: [d.loc1, d.loc2, d.loc3].filter(Boolean).join(' / '),
+                   familia: d.familia || '', sistema: invActualIMS(d), conteo: null, aprobado: false, ajuste: null });
+    });
+  });
+  if (!items.length) { alert(cfT('sinItems')); return; }
+  items.sort(function (a, b) { return ((a.loc || a.ubic) + '').localeCompare((b.loc || b.ubic) + '') || a.pn.localeCompare(b.pn); });
+  var ahora = new Date();
+  var p2 = function (n) { return String(n).padStart(2, '0'); };
+  var folio = 'CF-' + pl + '-' + ahora.getFullYear() + p2(ahora.getMonth() + 1) + p2(ahora.getDate()) + '-' + p2(ahora.getHours()) + p2(ahora.getMinutes());
+  // Nunca sobreescribir un folio existente (2 folios en el mismo minuto → -2, -3...)
+  try { var base = folio, n = 2; while ((await db.collection('conteos_fisicos').doc(folio).get()).exists) folio = base + '-' + (n++); } catch (e) {}
+  var doc = { folio: folio, planta: pl, alcance: alcance, edificio: edif, creado: ahora.toISOString(), creadoPor: cfUsuario(), estado: 'abierto', items: items, ajustes: [] };
+  try { await db.collection('conteos_fisicos').doc(folio).set(doc); }
+  catch (e) { alert(cfT('errGuardar') + e.message); return; }
+  _cf.folio = doc;
+  cfPintarFolio();
+  cfImprimir();
+}
+
+// ── Hoja impresa (a ciegas, blanco y negro) ──
+function cfImprimir() {
+  var f = _cf.folio; if (!f) return;
+  var u = CF_PLANTAS[f.planta].unidad;
+  var h = '<div style="display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid #000;padding-bottom:6px">' +
+    '<div><div style="font-size:17px;font-weight:800">' + cfEsc(cfT('hojaTit')(f.planta)) + '</div><div style="font-size:10px">' + cfT('folio') + ': <b>' + cfEsc(f.folio) + '</b> · ' + cfT('generado') + ': ' +
+    new Date(f.creado).toLocaleString() + (f.edificio ? ' · ' + cfT('edificio') + ': ' + cfEsc(f.edificio) : '') + '</div></div>' +
+    '<div style="font-size:10px;line-height:2">' + cfT('contó') + ': ________________<br>' + cfT('revisó') + ': ________________<br>' + cfT('fechaConteo') + ': ____________</div></div>' +
+    '<table style="width:100%;border-collapse:collapse;margin-top:6px"><tr>' +
+    ['num', 'pn', 'desc', 'ubic', 'unidad', 'conteo', 'notas'].map(function (k) { return '<th style="font-size:9px;text-align:left;border-bottom:1.5px solid #000;padding:3px 4px;text-transform:uppercase">' + cfT(k) + '</th>'; }).join('') + '</tr>' +
+    f.items.map(function (it, i) {
+      return '<tr style="page-break-inside:avoid"><td style="padding:6px 4px;border-bottom:.5px solid #999;font-size:11px">' + (i + 1) + '</td><td style="border-bottom:.5px solid #999;font-size:11px"><b>' + cfEsc(it.pn) + '</b></td><td style="border-bottom:.5px solid #999;font-size:11px">' +
+        cfEsc(it.desc) + '</td><td style="border-bottom:.5px solid #999;font-size:11px">' + cfEsc(it.loc || it.ubic) + '</td><td style="border-bottom:.5px solid #999;font-size:11px">' + u +
+        '</td><td style="border-bottom:.5px solid #999;width:16%">&nbsp;</td><td style="border-bottom:.5px solid #999;width:16%">&nbsp;</td></tr>';
+    }).join('') + '</table><div style="font-size:9px;margin-top:6px">' + cfT('pieHoja') + '</div>';
+  var p = document.getElementById('cfPrint');
+  if (!p) {
+    p = document.createElement('div'); p.id = 'cfPrint'; document.body.appendChild(p);
+    var st = document.createElement('style');
+    st.textContent = '#cfPrint{display:none;font-family:system-ui,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;color:#000;background:#fff}' +
+      '@media print{body.cf-print>*{display:none!important}body.cf-print #cfPrint{display:block!important}body.cf-print{background:#fff!important}}';
+    document.head.appendChild(st);
+    window.addEventListener('afterprint', function () { document.body.classList.remove('cf-print'); });
+  }
+  p.innerHTML = h;
+  document.body.classList.add('cf-print');
+  window.print();
+}
+
+// ── Captura y ajuste ──
+async function cfAbrirFolio(id) {
+  var d = await db.collection('conteos_fisicos').doc(id).get();
+  if (!d.exists) return;
+  _cf.folio = d.data();
+  cfPintarFolio();
+}
+async function cfPintarFolio() {
+  _cf.vista = 'folio';
+  var f = _cf.folio, cfg = CF_PLANTAS[f.planta];
+  var caja = document.getElementById('cfCaja');
+  caja.innerHTML = cfEncabezado(cfT('titulo') + ' · ' + cfEsc(f.folio), '<button class="btn btn-secondary btn-sm" onclick="cfPintarInicio()">' + cfT('volver') + '</button>') + cfT('cargando');
+  // Existencia ACTUAL del IMS (una sola lectura) para avisar si se movió desde la impresión
+  var ahora = {};
+  try { var snap = await db.collection(cfg.inv).get(); snap.forEach(function (x) { ahora[x.id] = invActualIMS(x.data()); }); } catch (e) {}
+  _cf.ahora = ahora;
+  var th = 'text-align:left;padding:6px 4px;font-size:10px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border,#334)';
+  var h = cfEncabezado(cfT('titulo') + ' · ' + cfEsc(f.folio), '<button class="btn btn-secondary btn-sm" onclick="cfPintarInicio()">' + cfT('volver') + '</button>');
+  h += '<div style="font-size:12px;color:var(--text2);margin:-.4rem 0 .6rem">' + cfT('planta') + ' ' + cfEsc(f.planta) + ' · ' + cfT('generado') + ' ' + new Date(f.creado).toLocaleString() + ' · ' + f.items.length + ' PN</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.6rem"><button class="btn btn-secondary btn-sm" onclick="cfImprimir()">' + cfT('reimprimir') + '</button><button class="btn btn-secondary btn-sm" onclick="cfExcel()">' + cfT('excel') + '</button></div>';
+  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:760px"><tr><th style="' + th + '">' + cfT('pn') + '</th><th style="' + th + '">' + cfT('ubic') +
+    '</th><th style="' + th + ';text-align:right">' + cfT('sistImp') + '</th><th style="' + th + ';text-align:right">' + cfT('conteo') + '</th><th style="' + th + ';text-align:right">' + cfT('dif') +
+    '</th><th style="' + th + ';text-align:center">' + cfT('aprobar') + '</th><th style="' + th + '">' + cfT('estado') + '</th></tr>';
+  f.items.forEach(function (it, i) {
+    var mov = (ahora[it.docId] !== undefined) ? ahora[it.docId] - it.sistema : 0;
+    h += '<tr id="cfFila' + i + '" style="border-bottom:1px solid var(--border,#334)"><td style="padding:6px 4px"><b>' + cfEsc(it.pn) + '</b><div style="font-size:11px;color:var(--text2)">' + cfEsc(it.desc) + '</div>' +
+      (mov && !it.ajuste ? '<div style="font-size:11px;color:#FFBA00">⚠ ' + cfEsc(cfT('seMovio')((mov > 0 ? '+' : '') + cfN(mov))) + '</div>' : '') + '</td>' +
+      '<td style="font-size:12px">' + cfEsc(it.loc || it.ubic) + '</td><td style="text-align:right">' + cfN(it.sistema) + '</td>' +
+      '<td style="text-align:right"><input type="number" min="0" id="cfIn' + i + '" value="' + (it.conteo == null ? '' : it.conteo) + '" placeholder="' + cfT('sinContar') + '" ' + (it.ajuste ? 'disabled' : '') +
+      ' oninput="cfCambioConteo(' + i + ',this.value)" style="width:100px;text-align:right;background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px"></td>' +
+      '<td id="cfDif' + i + '" style="text-align:right;font-weight:700"></td><td style="text-align:center" id="cfAp' + i + '"></td><td id="cfEst' + i + '" style="font-size:12px"></td></tr>';
+  });
+  h += '</table></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:.8rem">' +
+    '<span id="cfResumen" style="color:var(--text2)"></span><span style="display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="cfGuardar()">' + cfT('guardar') + '</button>' +
+    '<button class="btn btn-primary btn-sm" id="cfBtnAjustar" onclick="cfAjustar()"></button></span></div>';
+  if ((f.ajustes || []).length) {
+    h += '<div style="margin-top:1rem;background:var(--bg3,#151c2e);border-radius:8px;padding:.6rem .8rem"><div style="font-weight:700;margin-bottom:.3rem">🕘 ' + cfT('historial') + '</div>' +
+      f.ajustes.map(function (a) { return '<div style="font-size:12px;color:var(--text2);padding:2px 0">' + new Date(a.fecha).toLocaleString() + ' · <b>' + cfEsc(a.pn) + '</b> · ' + cfN(a.antes) + ' → ' + cfN(a.despues) +
+        ' (' + (a.delta > 0 ? '+' : '') + cfN(a.delta) + ') · ' + cfEsc(a.user) + (a.nota ? ' · ' + cfEsc(a.nota) : '') + '</div>'; }).join('') + '</div>';
+  }
+  caja.innerHTML = h;
+  f.items.forEach(function (_, i) { cfPintarFila(i); });
+  cfPintarResumen();
+}
+// Solo se actualiza la fila tocada (nunca se regenera el input donde se escribe)
+function cfPintarFila(i) {
+  var it = _cf.folio.items[i];
+  var dif = document.getElementById('cfDif' + i), ap = document.getElementById('cfAp' + i), est = document.getElementById('cfEst' + i), fila = document.getElementById('cfFila' + i);
+  if (!dif) return;
+  if (it.ajuste) { dif.textContent = (it.ajuste.delta > 0 ? '+' : '') + cfN(it.ajuste.delta); dif.style.color = 'var(--text2)'; ap.innerHTML = ''; est.innerHTML = '<span style="color:#00e676">' + cfT('ajustado') + '</span>'; fila.style.background = ''; return; }
+  if (it.conteo == null) { dif.textContent = '—'; dif.style.color = 'var(--text3)'; ap.innerHTML = ''; est.textContent = cfT('sinContar'); fila.style.background = ''; return; }
+  var d = it.conteo - it.sistema;
+  dif.textContent = (d > 0 ? '+' : '') + cfN(d);
+  dif.style.color = d === 0 ? '#00e676' : (d < 0 ? '#ff4444' : '#FFBA00');
+  fila.style.background = d === 0 ? '' : (d < 0 ? 'rgba(255,68,68,.08)' : 'rgba(255,186,0,.08)');
+  est.textContent = '';
+  ap.innerHTML = d === 0 ? '' : '<input type="checkbox" ' + (it.aprobado ? 'checked' : '') + ' onchange="cfAprobar(' + i + ',this.checked)" style="width:16px;height:16px">';
+}
+function cfPintarResumen() {
+  var its = _cf.folio.items, nD = 0, nA = 0, nS = 0;
+  its.forEach(function (it) { if (it.ajuste) return; if (it.conteo == null) { nS++; return; } if (it.conteo !== it.sistema) { nD++; if (it.aprobado) nA++; } });
+  document.getElementById('cfResumen').textContent = cfT('resumen')(nD, nA, nS);
+  var b = document.getElementById('cfBtnAjustar'); b.textContent = cfT('ajustar')(nA); b.style.display = adminAuthed ? '' : 'none';
+}
+function cfCambioConteo(i, v) {
+  var it = _cf.folio.items[i];
+  it.conteo = (v === '' || v === null) ? null : Math.max(0, Math.round(Number(v) || 0));
+  if (it.conteo == null || it.conteo === it.sistema) it.aprobado = false;
+  cfPintarFila(i); cfPintarResumen();
+}
+function cfAprobar(i, v) { _cf.folio.items[i].aprobado = !!v; cfPintarResumen(); }
+async function cfGuardar(silencioso) {
+  var f = _cf.folio;
+  try { await db.collection('conteos_fisicos').doc(f.folio).set({ items: f.items, ajustes: f.ajustes || [], estado: f.estado }, { merge: true }); if (!silencioso) alert(cfT('guardado')); }
+  catch (e) { alert(cfT('errGuardar') + e.message); }
+}
+async function cfAjustar() {
+  if (!adminAuthed) { alert(cfT('soloAdmin')); return; }
+  var f = _cf.folio, cfg = CF_PLANTAS[f.planta];
+  var pend = f.items.filter(function (it) { return !it.ajuste && it.aprobado && it.conteo != null && it.conteo !== it.sistema; });
+  if (!pend.length) { alert(cfT('nadaAjustar')); return; }
+  if (!confirm(cfT('confirmar')(pend.length, f.planta))) return;
+  var ok = 0, err = 0, user = cfUsuario();
+  var ref = 'AJUSTE CONTEO FÍSICO ' + f.folio;
+  for (var k = 0; k < pend.length; k++) {
+    var it = pend[k];
+    var delta = it.conteo - it.sistema; // diferencia contra lo que había AL IMPRIMIR
+    try {
+      var docRef = db.collection(cfg.inv).doc(it.docId);
+      var res = await db.runTransaction(async function (tx) {
+        var s = await tx.get(docRef);
+        if (!s.exists) throw new Error(cfT('noEncontrado'));
+        var d = s.data();
+        var antes = invActualIMS(d), nota = '';
+        var aplicado = delta;
+        if (antes + delta < 0) { aplicado = -antes; nota = cfT('negativo'); }
+        var despues = antes + aplicado;
+        var tipo = aplicado >= 0 ? 'E' : 'S';
+        var upd = { actual: despues };
+        if (d.Current !== undefined) upd.Current = despues; // si quedó el campo viejo, se mantiene igual al actual
+        if (aplicado >= 0) upd.entradas = (Number(d.entradas) || 0) + aplicado; else upd.salidas = (Number(d.salidas) || 0) + (-aplicado);
+        var hist = Array.isArray(d.historial) ? d.historial.slice() : [];
+        hist.push({ tipo: tipo, fecha: new Date().toISOString(), qty: Math.abs(aplicado), loc: d.ubicacion || '', user: user, ref: ref });
+        upd.historial = hist;
+        tx.update(docRef, upd);
+        return { antes: antes, despues: despues, aplicado: aplicado, tipo: tipo, d: d, nota: nota };
+      });
+      await db.collection(cfg.mov).add({ tipo: res.tipo, pn: it.pn, desc: it.desc, familia: res.d.familia || it.familia || '', qty: Math.abs(res.aplicado),
+        fecha: new Date().toISOString(), user: user, ref: ref, stock: res.despues, loc: res.d.ubicacion || '' });
+      it.ajuste = { fecha: new Date().toISOString(), antes: res.antes, despues: res.despues, delta: res.aplicado, user: user };
+      (f.ajustes = f.ajustes || []).push({ fecha: it.ajuste.fecha, pn: it.pn, antes: res.antes, despues: res.despues, delta: res.aplicado, user: user, nota: res.nota });
+      ok++;
+    } catch (e) { console.error('Ajuste conteo', it.pn, e); err++; }
+  }
+  var quedan = f.items.some(function (it) { return !it.ajuste && it.conteo != null && it.conteo !== it.sistema; });
+  f.estado = quedan ? 'abierto' : 'cerrado';
+  await cfGuardar(true);
+  alert(cfT('listo')(ok, err));
+  if (typeof sincIMS === 'function') sincIMS(); // el BOM Simulator toma el inventario ya ajustado
+  cfPintarFolio();
+}
+function cfExcel() {
+  var f = _cf.folio; if (!f || typeof XLSX === 'undefined' || !XLSX.utils || !XLSX.utils.aoa_to_sheet) return;
+  var filas = [[cfT('folio'), f.folio], [cfT('planta'), f.planta], [], [cfT('pn'), cfT('desc'), cfT('ubic'), cfT('sistImp'), cfT('conteo'), cfT('dif'), cfT('estado')]];
+  f.items.forEach(function (it) {
+    filas.push([it.pn, it.desc, it.loc || it.ubic, it.sistema, it.conteo == null ? '' : it.conteo, it.conteo == null ? '' : it.conteo - it.sistema, it.ajuste ? cfT('ajustado') : (it.conteo == null ? cfT('sinContar') : '')]);
+  });
+  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), 'Conteo');
+  XLSX.writeFile(wb, f.folio + '.xlsx');
+}
+window.cfAbrir = cfAbrir; window.cfCerrar = cfCerrar; window.cfGenerar = cfGenerar; window.cfCambioPlanta = cfCambioPlanta; window.cfAbrirFolio = cfAbrirFolio;
+window.cfPintarInicio = cfPintarInicio; window.cfImprimir = cfImprimir; window.cfCambioConteo = cfCambioConteo; window.cfAprobar = cfAprobar;
+window.cfGuardar = cfGuardar; window.cfAjustar = cfAjustar; window.cfExcel = cfExcel; window.cfCambiarIdioma = cfCambiarIdioma;
+</script>
 
 </body>
 </html>

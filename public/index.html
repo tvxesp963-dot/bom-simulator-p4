@@ -1790,7 +1790,10 @@ function renderSimTable() {
         const sheetInvReal = (s.inv || 0) + headerYaProducido;
         const sheetDiff = sheetInvReal - targetSim2;
         const sheetOK = sheetDiff >= 0;
-        if(skipFiltroNecesario || passFilter(s) || !sheetOK) rows.push(rowHTML(s, true, false, null, targetSim2, sheetInvReal));
+        // Se muestra igual que el Chip Board: Requerido = target − Lower Box/Gift Box ya
+        // producido (targetReal) contra el inventario físico del Sheet. La diferencia es
+        // la misma de antes (físico + producido − target); solo cambia lo que se ve.
+        if(skipFiltroNecesario || passFilter(s) || !sheetOK) rows.push(rowHTML(s, true, false, null, targetReal, s.inv || 0));
         // El "Requerido" mostrado (targetSim2) es solo para el semáforo visual.
         // El consumo REAL del inventario físico compartido entre modelos es targetReal
         // (igual que el Ranurado) — se corrige aquí para el pool multi-modelo.

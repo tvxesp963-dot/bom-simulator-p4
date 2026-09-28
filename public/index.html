@@ -4575,7 +4575,11 @@ function construirTablaRGB() {
             : '<div class="empty" style="padding:1.2rem 0"><div class="empty-title">Nada pendiente por asignar ahorita.</div></div>'}
         </div>`;
     }
-    const filas = maquinasTipo.map(maq => `
+    // Solo se muestran las máquinas que tienen algo asignado en al menos un día
+    // del plan — las que salen vacías (—) en todas las columnas se ocultan.
+    const maquinasUsadas = maquinasTipo.filter(maq =>
+      plan.dias.some(d => (d.asignacionesPorMaquina[maq] || []).length > 0));
+    const filas = maquinasUsadas.map(maq => `
       <tr style="border-bottom:1px solid var(--border)">
         <td style="padding:8px 6px;font-weight:700;position:sticky;left:0;background:#0d1220">${maq}</td>
         ${plan.dias.map(d => celdaAsignacion(d, maq)).join('')}

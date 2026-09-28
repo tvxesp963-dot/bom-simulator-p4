@@ -90,10 +90,11 @@ h1{font-size:26px;margin:0}
   :root{--bg:#fff;--card:#fff;--card2:#fff;--border:#999;--text:#000;--text2:#222;--text3:#555;--green:#000;--red:#000;--yellow:#000;--accent:#000}
   *{-webkit-print-color-adjust:economy;print-color-adjust:economy;animation:none!important;box-shadow:none!important;background:transparent!important;color:#000!important}
   body,body.fit{padding:0;overflow:visible;height:auto;filter:grayscale(100%)}
-  body.fit .wrap,.wrap{transform:none!important;position:static;width:auto;max-width:none;padding:0}
+  body.fit .wrap,.wrap{zoom:1!important;transform:none!important;position:static;width:auto;max-width:none;padding:0}
   .acciones,.langs,.bar{display:none!important}
   h1{font-size:18px}.sub{font-size:11px;margin-bottom:6px}
   .kpis{gap:6px;margin-bottom:8px}.kpi{padding:6px 10px;border:1px solid #999}.kpi .l{font-size:10px}.kpi .v{font-size:18px}
+  .tblwrap{overflow:visible!important}.tbl{min-width:0!important}.tbl th,.tbl td{position:static!important;box-shadow:none!important}
   .tbl{border:1px solid #666}.tbl th{font-size:9px;padding:4px 5px;border-bottom:2px solid #000}
   .tbl td{font-size:11px;padding:3px 5px;border-top:1px solid #ccc}
   tr{page-break-inside:avoid}
@@ -110,7 +111,13 @@ h1{font-size:26px;margin:0}
   body.modo-pick .wrap{display:none!important}
   body.modo-pick #pick{display:block!important}
 }
-@media (max-width:800px){.tbl td{font-size:15px;padding:10px 6px}.hide-sm{display:none}.kpi .v{font-size:24px}h1{font-size:20px}}
+/* Celular: la tabla conserva TODAS las columnas y se recorre de lado (scroll horizontal).
+   Orden y Modelo se quedan fijos a la izquierda para no perder de vista qué modelo es. */
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px}
+@media (max-width:800px){.acciones,.derecha,.top{flex-wrap:wrap}.acciones button{font-size:12px}
+  .tbl{min-width:980px;overflow:visible}.tbl td{font-size:15px;padding:10px 6px}.kpi .v{font-size:24px}h1{font-size:20px}
+  .tbl th:first-child,.tbl tr:not(.sep) td:first-child{position:sticky;left:0;z-index:2;background:var(--card2);min-width:54px;width:54px}
+  .tbl th:nth-child(2),.tbl tr:not(.sep) td:nth-child(2){position:sticky;left:54px;z-index:2;background:var(--card2);box-shadow:6px 0 8px -4px rgba(0,0,0,.6)}}
 /* Vista previa del Pick List (antes de imprimir) */
 #pickBar{display:none}
 body.vista-pick,body.vista-pick.fit{overflow:auto!important;height:auto!important;padding:0!important}
@@ -129,6 +136,7 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
     <h1 id="tTitle"></h1>
     <div class="derecha">
     <div class="acciones">
+      <button id="btnZoomMenos" onclick="cambiarZoom(-0.1)">A−</button><button id="btnZoomPct" onclick="cambiarZoom(0)">100%</button><button id="btnZoomMas" onclick="cambiarZoom(0.1)">A+</button>
       <button id="btnPdf" onclick="imprimirPDF()">🖨️ PDF</button>
       <button id="btnXls" onclick="exportarExcel()">📊 Excel</button>
       <button id="btnPick" onclick="imprimirPickList()">📋 Pick List</button>
@@ -153,7 +161,7 @@ var T = {
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay un plan publicado. Publícalo desde el BOM Simulator (Plan Semanal → Publicar al piso).',
-      sinDatosExp:'Sin datos para exportar',tipInvTot:'Inventario total',tipDisp:'Disponible para este modelo',tipReq:'Requerido',tipFalta:'Falta para completar',tipOk:'✓ Completo',tipPrio:'(los modelos de mayor prioridad toman primero)',tipRepub:'Vuelve a publicar desde el BOM Simulator para ver inventario',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkReqLote:'Requerido lote',pkFaltaLote:'Falta p/ completar',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',
+      sinDatosExp:'Sin datos para exportar',zoomMenos:'Hacer más chico',zoomMas:'Hacer más grande',zoomReset:'Tamaño normal (100%)',tipInvTot:'Inventario total',tipDisp:'Disponible para este modelo',tipReq:'Requerido',tipFalta:'Falta para completar',tipOk:'✓ Completo',tipPrio:'(los modelos de mayor prioridad toman primero)',tipRepub:'Vuelve a publicar desde el BOM Simulator para ver inventario',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkReqLote:'Requerido lote',pkFaltaLote:'Falta p/ completar',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',
       hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material al momento de publicar · Producido en vivo de ShipQR · se actualiza sola',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
@@ -162,7 +170,7 @@ var T = {
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No plan has been published yet. Publish it from the BOM Simulator (Weekly Plan → Publish to floor).',
-      sinDatosExp:'No data to export',tipInvTot:'Total inventory',tipDisp:'Available for this model',tipReq:'Required',tipFalta:'Short to complete',tipOk:'✓ Complete',tipPrio:'(higher-priority models take first)',tipRepub:'Publish again from BOM Simulator to see inventory',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkReqLote:'Lot required',pkFaltaLote:'Short to complete',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',
+      sinDatosExp:'No data to export',zoomMenos:'Smaller',zoomMas:'Larger',zoomReset:'Normal size (100%)',tipInvTot:'Total inventory',tipDisp:'Available for this model',tipReq:'Required',tipFalta:'Short to complete',tipOk:'✓ Complete',tipPrio:'(higher-priority models take first)',tipRepub:'Publish again from BOM Simulator to see inventory',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkReqLote:'Lot required',pkFaltaLote:'Short to complete',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',
       hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material as of publish time · Produced live from ShipQR · auto-refresh',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
@@ -171,7 +179,7 @@ var T = {
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 게시된 계획이 없습니다. BOM Simulator에서 게시하세요 (주간 계획 → 현장에 게시).',
-      sinDatosExp:'내보낼 데이터가 없습니다',tipInvTot:'총 재고',tipDisp:'이 모델 사용 가능',tipReq:'필요 수량',tipFalta:'부족 수량',tipOk:'✓ 충분',tipPrio:'(우선순위 높은 모델이 먼저 사용)',tipRepub:'재고를 보려면 BOM Simulator에서 다시 게시하세요',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkReqLote:'로트 필요량',pkFaltaLote:'완료까지 부족',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',
+      sinDatosExp:'내보낼 데이터가 없습니다',zoomMenos:'작게',zoomMas:'크게',zoomReset:'기본 크기 (100%)',tipInvTot:'총 재고',tipDisp:'이 모델 사용 가능',tipReq:'필요 수량',tipFalta:'부족 수량',tipOk:'✓ 충분',tipPrio:'(우선순위 높은 모델이 먼저 사용)',tipRepub:'재고를 보려면 BOM Simulator에서 다시 게시하세요',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkReqLote:'로트 필요량',pkFaltaLote:'완료까지 부족',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',
       hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 게시 시점 기준 · 생산 수량은 ShipQR 실시간 · 자동 새로고침',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
@@ -343,7 +351,7 @@ function pintar(){
       '<td>' + chips(m) + '</td><td>' + est + '</td></tr>';
   };
 
-  html += '<table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th>' + t('envio') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
+  html += '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th>' + t('envio') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
           '</th><th class="r">' + t('pend') + '</th><th class="hide-sm">' + t('avance') + '</th><th>' + t('material') + '</th><th>' + t('estado') + '</th></tr></thead><tbody>';
   if (run.length) html += '<tr class="sep"><td colspan="9">⚡ ' + t('run') + '</td></tr>' + run.map(function(f){ return fila(f, 'run'); }).join('');
   if (wait.length) html += '<tr class="sep"><td colspan="9">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
@@ -355,22 +363,30 @@ function pintar(){
            '<td class="r" style="color:var(--green);font-weight:800">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td><td></td>' +
            '<td><span class="est" style="color:var(--green)">✓ ' + t('completo') + '</span></td></tr>';
   }).join('');
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   app.innerHTML = html;
   ajustarPantalla();
 }
-// Ajusta todo al tamaño de la pantalla donde se despliega (TV, monitor, laptop).
-// En celular (pantalla angosta) no se escala: se deja con scroll normal.
+// Tamaño AJUSTABLE A MANO (A− / 100% / A+). Antes se encogía todo automáticamente para
+// que cupiera en la pantalla y quedaba muy chico. Cada pantalla (TV, PC, celular) recuerda
+// su propio tamaño en ese navegador.
+var ZOOM_KEY = 'pisoZoom';
+function zoomActual(){ try { var z = parseFloat(localStorage.getItem(ZOOM_KEY)); if (z >= 0.5 && z <= 3) return z; } catch (e) {} return 1; }
 function ajustarPantalla(){
-  var wrap = document.querySelector('.wrap');
-  if (window.innerWidth < 800) { document.body.classList.remove('fit'); wrap.style.transform = ''; return; }
-  document.body.classList.add('fit');
-  wrap.style.transform = 'none';
-  var w = wrap.scrollWidth, h = wrap.scrollHeight;
-  var s = Math.min(window.innerWidth / w, window.innerHeight / h, 3);
-  var left = Math.max(0, (window.innerWidth - w * s) / 2);
-  wrap.style.transform = 'translate(' + left + 'px,0) scale(' + s + ')';
+  var wrap = document.querySelector('.wrap'); if (!wrap) return;
+  document.body.classList.remove('fit'); wrap.style.transform = '';
+  var z = zoomActual();
+  wrap.style.zoom = z;
+  var pct = document.getElementById('btnZoomPct'); if (pct) { pct.textContent = Math.round(z * 100) + '%'; pct.title = t('zoomReset'); }
+  var m = document.getElementById('btnZoomMenos'); if (m) m.title = t('zoomMenos');
+  var M = document.getElementById('btnZoomMas'); if (M) M.title = t('zoomMas');
 }
+function cambiarZoom(d){
+  var z = d === 0 ? 1 : Math.min(3, Math.max(0.5, Math.round((zoomActual() + d) * 10) / 10));
+  try { localStorage.setItem(ZOOM_KEY, z); } catch (e) {}
+  ajustarPantalla();
+}
+window.cambiarZoom = cambiarZoom;
 window.addEventListener('resize', ajustarPantalla);
 document.querySelectorAll('.langs img').forEach(function(img){ img.addEventListener('load', ajustarPantalla); });
 // ===== PDF (impresión) =====

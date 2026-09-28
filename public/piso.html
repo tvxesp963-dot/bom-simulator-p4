@@ -46,6 +46,9 @@ h1{font-size:26px;margin:0}
 .ok{background:rgba(0,230,118,.15);color:var(--green)}
 .no{background:rgba(255,77,77,.18);color:var(--red)}
 .na{background:#1f2a3d;color:var(--text3)}
+.chip[data-tip]{cursor:help}
+#chipTip{position:fixed;z-index:9999;display:none;pointer-events:none;background:#0b1220;color:#fff;border:1px solid #3a4a66;border-radius:8px;padding:8px 12px;font-size:14px;line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.5);max-width:360px}
+#chipTip b{color:#4da6ff}#chipTip .f{color:#ff4d4d;font-weight:800}#chipTip .ok{color:#00e676;font-weight:800;background:none}
 .bar{background:#1f2a3d;height:12px;border-radius:6px;min-width:90px}
 .bar div{height:12px;border-radius:6px}
 .est{font-weight:800;font-size:18px}
@@ -150,7 +153,7 @@ var T = {
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay un plan publicado. Publícalo desde el BOM Simulator (Plan Semanal → Publicar al piso).',
-      sinDatosExp:'Sin datos para exportar',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkReqLote:'Requerido lote',pkFaltaLote:'Falta p/ completar',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',
+      sinDatosExp:'Sin datos para exportar',tipInvTot:'Inventario total',tipDisp:'Disponible para este modelo',tipReq:'Requerido',tipFalta:'Falta para completar',tipOk:'✓ Completo',tipPrio:'(los modelos de mayor prioridad toman primero)',tipRepub:'Vuelve a publicar desde el BOM Simulator para ver inventario',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkReqLote:'Requerido lote',pkFaltaLote:'Falta p/ completar',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',
       hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material al momento de publicar · Producido en vivo de ShipQR · se actualiza sola',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
@@ -159,7 +162,7 @@ var T = {
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No plan has been published yet. Publish it from the BOM Simulator (Weekly Plan → Publish to floor).',
-      sinDatosExp:'No data to export',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkReqLote:'Lot required',pkFaltaLote:'Short to complete',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',
+      sinDatosExp:'No data to export',tipInvTot:'Total inventory',tipDisp:'Available for this model',tipReq:'Required',tipFalta:'Short to complete',tipOk:'✓ Complete',tipPrio:'(higher-priority models take first)',tipRepub:'Publish again from BOM Simulator to see inventory',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkReqLote:'Lot required',pkFaltaLote:'Short to complete',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',
       hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material as of publish time · Produced live from ShipQR · auto-refresh',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
@@ -168,7 +171,7 @@ var T = {
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 게시된 계획이 없습니다. BOM Simulator에서 게시하세요 (주간 계획 → 현장에 게시).',
-      sinDatosExp:'내보낼 데이터가 없습니다',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkReqLote:'로트 필요량',pkFaltaLote:'완료까지 부족',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',
+      sinDatosExp:'내보낼 데이터가 없습니다',tipInvTot:'총 재고',tipDisp:'이 모델 사용 가능',tipReq:'필요 수량',tipFalta:'부족 수량',tipOk:'✓ 충분',tipPrio:'(우선순위 높은 모델이 먼저 사용)',tipRepub:'재고를 보려면 BOM Simulator에서 다시 게시하세요',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkReqLote:'로트 필요량',pkFaltaLote:'완료까지 부족',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',
       hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 게시 시점 기준 · 생산 수량은 ShipQR 실시간 · 자동 새로고침',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
@@ -311,11 +314,13 @@ function pintar(){
   var html = '<div class="kpis">' + kp(t('target'), n(tot.t)) + kp(t('prod'), n(tot.p)) + kp(t('pend'), n(tot.t - tot.p)) +
              kp(t('avance'), avTot + '%', avTot >= 100 ? 'var(--green)' : '') + '</div>';
 
-  var chips = function(mat){
+  var chips = function(m){
+    var mat = m.materiales;
     return ['Strip','Top','Bot','Bundle'].map(function(k){
       var v = mat ? mat[k] : null;
       var cls = v === true ? 'ok' : (v === false ? 'no' : 'na');
-      return '<span class="chip ' + cls + '"><span class="pm" style="display:none">' + (v === true ? '✓' : (v === false ? '✗' : '–')) + ' </span>' + k + '</span>';
+      var tip = (v === true || v === false) ? ' data-tip="' + esc(m.sm) + '|' + k + '"' : '';
+      return '<span class="chip ' + cls + '"' + tip + '><span class="pm" style="display:none">' + (v === true ? '✓' : (v === false ? '✗' : '–')) + ' </span>' + k + '</span>';
     }).join('');
   };
   var bar = function(f, color){ return '<div class="bar"><div style="width:' + f.pct + '%;background:' + color + '"></div></div><div class="code">' + f.pct + '%</div>'; };
@@ -335,7 +340,7 @@ function pintar(){
       '<td style="white-space:nowrap">' + fechaEnvio(m.fecha) + '</td>' +
       '<td class="r hide-sm">' + n(m.target) + '</td><td class="r">' + n(f.prod) + '</td><td class="r" style="font-weight:800">' + n(f.pend) + '</td>' +
       '<td class="hide-sm" style="width:14%">' + bar(f, tipo === 'run' ? 'var(--green)' : '#5c6678') + '</td>' +
-      '<td>' + chips(m.materiales) + '</td><td>' + est + '</td></tr>';
+      '<td>' + chips(m) + '</td><td>' + est + '</td></tr>';
   };
 
   html += '<table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th>' + t('envio') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
@@ -373,6 +378,41 @@ document.querySelectorAll('.langs img').forEach(function(img){ img.addEventListe
 // Ahí se elige "Guardar como PDF" o la impresora.
 function imprimirPDF(){ window.print(); }
 window.addEventListener('afterprint', ajustarPantalla);
+
+// ===== ETIQUETA AL PASAR EL MOUSE (Strip/Top/Bot/Bundle) =====
+// Un solo elemento flotante reutilizado; solo trabaja cuando el mouse está sobre un chip.
+(function(){
+  var tip = null;
+  function datos(sm, k){
+    var mods = (typeof plan !== 'undefined' && plan && Array.isArray(plan.modelos)) ? plan.modelos : [];
+    var m = mods.find(function(x){ return x.sm === sm; }); if (!m) return null;
+    var g = function(o){ return (o && o[k] !== null && o[k] !== undefined) ? Number(o[k]) : null; };
+    return { pn: (m.pn && m.pn[k]) || '', desc: (m.desc && m.desc[k]) || '', ok: m.materiales && m.materiales[k] === true,
+             inv: g(m.invTotal), disp: g(m.disp), req: g(m.req), falta: g(m.falta) };
+  }
+  function html(d, k){
+    var h = '<div><b>' + esc(k) + ' · ' + esc(d.pn || '—') + '</b></div>' + (d.desc ? '<div style="color:#9aa7c0;font-size:12px">' + esc(d.desc) + '</div>' : '');
+    if (d.req === null) return h + '<div style="color:#FFBA00;font-size:12px;margin-top:4px">' + t('tipRepub') + '</div>';
+    if (d.inv !== null) h += '<div>' + t('tipInvTot') + ': <b style="color:#fff">' + n(d.inv) + '</b></div>';
+    if (d.disp !== null && d.disp !== d.inv) h += '<div>' + t('tipDisp') + ': <b style="color:#fff">' + n(d.disp) + '</b> <span style="color:#9aa7c0;font-size:11px">' + t('tipPrio') + '</span></div>';
+    h += '<div>' + t('tipReq') + ': <b style="color:#fff">' + n(d.req) + '</b></div>';
+    h += d.falta > 0 ? '<div class="f">' + t('tipFalta') + ': ' + n(d.falta) + '</div>' : '<div class="ok">' + t('tipOk') + '</div>';
+    return h;
+  }
+  document.addEventListener('mouseover', function(e){
+    var c = e.target.closest ? e.target.closest('.chip[data-tip]') : null;
+    if (!tip) { tip = document.createElement('div'); tip.id = 'chipTip'; document.body.appendChild(tip); }
+    if (!c) { tip.style.display = 'none'; return; }
+    var par = c.getAttribute('data-tip').split('|'), d = datos(par[0], par[1]);
+    if (!d) { tip.style.display = 'none'; return; }
+    tip.innerHTML = html(d, par[1]); tip.style.display = 'block';
+    var r = c.getBoundingClientRect(), w = tip.offsetWidth, hh = tip.offsetHeight;
+    var x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+    var y = r.top - hh - 8; if (y < 8) y = r.bottom + 8;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  });
+  window.addEventListener('scroll', function(){ if (tip) tip.style.display = 'none'; }, true);
+})();
 
 // ===== PICK LIST (almacén) =====
 // Solo los modelos que se pueden correr (orden 1, 2, 3…), cantidad = lo que está Listo.

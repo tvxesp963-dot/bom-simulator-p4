@@ -6168,7 +6168,11 @@ async function publicarPlanPiso() {
       // (requerido − disponible, ya con la cascada de prioridad) — para el resumen del Pick List.
       const req = { Strip: null, Top: null, Bot: null, Bundle: null };
       const falta = { Strip: null, Top: null, Bot: null, Bundle: null };
-      pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in req) { req[p.etiqueta] = p.requerido || 0; falta[p.etiqueta] = Math.max(0, (p.requerido || 0) - (p.disponible || 0)); } });
+      // disp = disponible para ESTE modelo (después de los de mayor prioridad); invTotal = inventario total del código
+      const disp = { Strip: null, Top: null, Bot: null, Bundle: null };
+      const invTotal = { Strip: null, Top: null, Bot: null, Bundle: null };
+      pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in req) { req[p.etiqueta] = p.requerido || 0; disp[p.etiqueta] = p.disponible || 0; falta[p.etiqueta] = Math.max(0, (p.requerido || 0) - (p.disponible || 0)); } });
+      if (typeof obtener4MaterialesEnsamble === 'function') obtener4MaterialesEnsamble(sm).forEach(m => { if (m.row && m.etiqueta in invTotal) invTotal[m.etiqueta] = m.row.inv || 0; });
       pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in materiales) { materiales[p.etiqueta] = !!p.ok; pn[p.etiqueta] = p.pn || ''; desc[p.etiqueta] = p.desc || ''; } });
       // Pick List del piso: el Bot que entrega almacén es el código GH96 (Bottom
       // terminado por modelo). Si el BOM del modelo trae un GH96 en la sección
@@ -6180,7 +6184,7 @@ async function publicarPlanPiso() {
       const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
       const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
       const fecha = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
-      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, producido, pendiente, cap, materiales, pn, desc, req, falta,
+      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, producido, pendiente, cap, materiales, pn, desc, req, falta, disp, invTotal,
                listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
     });
     // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas

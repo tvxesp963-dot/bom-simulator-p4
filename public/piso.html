@@ -108,6 +108,15 @@ h1{font-size:26px;margin:0}
   body.modo-pick #pick{display:block!important}
 }
 @media (max-width:800px){.tbl td{font-size:15px;padding:10px 6px}.hide-sm{display:none}.kpi .v{font-size:24px}h1{font-size:20px}}
+/* Vista previa del Pick List (antes de imprimir) */
+#pickBar{display:none}
+body.vista-pick .wrap{display:none!important}
+body.vista-pick #pickBar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:10;padding:10px 16px;background:#0d1220;border-bottom:1px solid #334}
+body.vista-pick #pickBar .pbt{font-weight:800;color:#fff;font-size:15px}
+body.vista-pick #pickBar button{font-size:14px;font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid #556;background:#1b2436;color:#fff}
+body.vista-pick #pickBar button.imp{background:#00bcd4;border-color:#00bcd4;color:#001}
+body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;padding:24px;border-radius:6px}
+@media print{#pickBar{display:none!important}body.vista-pick #pick{margin:0;padding:0;max-width:none;border-radius:0}}
 </style>
 </head>
 <body>
@@ -130,6 +139,7 @@ h1{font-size:26px;margin:0}
   <div class="foot" id="foot"></div>
 </div>
 
+<div id="pickBar"><span class="pbt" id="pbTitulo"></span><span><button class="imp" id="pbImprimir" onclick="window.print()"></button> <button id="pbCerrar" onclick="cerrarVistaPick()"></button></span></div>
 <div id="pick"></div>
 
 <script>
@@ -139,7 +149,7 @@ var T = {
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay un plan publicado. Publícalo desde el BOM Simulator (Plan Semanal → Publicar al piso).',
-      sinDatosExp:'Sin datos para exportar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',
+      sinDatosExp:'Sin datos para exportar',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',
       hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material al momento de publicar · Producido en vivo de ShipQR · se actualiza sola',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
@@ -148,7 +158,7 @@ var T = {
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No plan has been published yet. Publish it from the BOM Simulator (Weekly Plan → Publish to floor).',
-      sinDatosExp:'No data to export',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',
+      sinDatosExp:'No data to export',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',
       hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material as of publish time · Produced live from ShipQR · auto-refresh',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
@@ -157,7 +167,7 @@ var T = {
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 게시된 계획이 없습니다. BOM Simulator에서 게시하세요 (주간 계획 → 현장에 게시).',
-      sinDatosExp:'내보낼 데이터가 없습니다',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',
+      sinDatosExp:'내보낼 데이터가 없습니다',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',
       hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 게시 시점 기준 · 생산 수량은 ShipQR 실시간 · 자동 새로고침',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
@@ -436,10 +446,15 @@ function imprimirPickList(){
   }
   h += '<div class="pfoot">' + t('pkEstim') + ' (' + n(dp.capDia) + '/' + t('d') + ')</div>';
   document.getElementById('pick').innerHTML = h;
-  document.body.classList.add('modo-pick');
-  window.print();
+  // Ya no imprime directo: primero muestra la vista previa con botones Imprimir / Cerrar.
+  document.getElementById('pbTitulo').textContent = t('pkVista');
+  document.getElementById('pbImprimir').textContent = t('pkImprimir');
+  document.getElementById('pbCerrar').textContent = t('pkCerrar');
+  document.body.classList.add('modo-pick', 'vista-pick');
+  window.scrollTo(0, 0);
 }
-window.addEventListener('afterprint', function(){ document.body.classList.remove('modo-pick'); });
+function cerrarVistaPick(){ document.body.classList.remove('modo-pick', 'vista-pick'); }
+window.addEventListener('afterprint', function(){ if (!document.body.classList.contains('vista-pick')) document.body.classList.remove('modo-pick'); });
 
 // ===== EXCEL =====
 function exportarExcel(){

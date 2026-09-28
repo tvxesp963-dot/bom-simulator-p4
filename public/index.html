@@ -5875,6 +5875,13 @@ async function publicarPlanPiso() {
       const pn = { Strip: '', Top: '', Bot: '', Bundle: '' };
       const desc = { Strip: '', Top: '', Bot: '', Bundle: '' };
       pick.filter(p => p.modelo === sm).forEach(p => { if (p.etiqueta in materiales) { materiales[p.etiqueta] = !!p.ok; pn[p.etiqueta] = p.pn || ''; desc[p.etiqueta] = p.desc || ''; } });
+      // Pick List del piso: el Bot que entrega almacén es el código GH96 (Bottom
+      // terminado por modelo). Si el BOM del modelo trae un GH96 en la sección
+      // Bottom se usa ese; si no trae ninguno, se queda el código de siempre.
+      if (!/^GH96/i.test(pn.Bot || '')) {
+        const filaGH96 = BOM.find(r => r.sm === sm && /^GH96/i.test((r.pn || '').trim()) && getSectionByRow(r) === 'BOT');
+        if (filaGH96) { pn.Bot = filaGH96.pn; desc.Bot = filaGH96.desc || desc.Bot; }
+      }
       const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
       const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
       const fecha = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';

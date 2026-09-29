@@ -29,6 +29,13 @@ h1{font-size:26px;margin:0}
 .corte.ambar{background:rgba(241,196,15,.18);color:var(--yellow);font-weight:800;font-size:20px;animation:corteBlink 1.2s ease-in-out infinite}
 .corte.rojo{background:rgba(255,77,77,.22);color:var(--red);font-weight:900;font-size:24px;animation:corteBlink .6s ease-in-out infinite}
 @keyframes corteBlink{0%,100%{opacity:1}50%{opacity:.25}}
+/* Modelo que está corriendo en ASSY1 (último pallet de ShipQR) */
+.tbl tr.run-now td{animation:runBlink 1.2s ease-in-out infinite}
+.tbl tr.run-now td:first-child{box-shadow:inset 6px 0 0 var(--accent)}
+.runtag{display:inline-block;margin-top:4px;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--accent);color:#04203f;letter-spacing:.5px}
+.enlinea{color:var(--accent);font-weight:800}
+@keyframes runBlink{0%,100%{background:rgba(77,166,255,.30)}50%{background:rgba(77,166,255,.04)}}
+@media print{.tbl tr.run-now td{animation:none!important}.runtag{border:1.5px solid #000;padding:0 4px}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
 .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
 .kpi .l{font-size:14px;color:var(--text2)}
@@ -161,7 +168,7 @@ var T = {
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay un plan publicado. Publícalo desde el BOM Simulator (Plan Semanal → Publicar al piso).',
-      sinDatosExp:'Sin datos para exportar',zoomMenos:'Hacer más chico',zoomMas:'Hacer más grande',zoomReset:'Tamaño normal (100%)',tipInvTot:'Inventario total',tipDisp:'Disponible para este modelo',tipReq:'Requerido',tipFalta:'Falta para completar',tipOk:'✓ Completo',tipPrio:'(los modelos de mayor prioridad toman primero)',tipRepub:'Vuelve a publicar desde el BOM Simulator para ver inventario',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkReqLote:'Requerido lote',pkFaltaLote:'Falta p/ completar',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',matViejo:'Material de hace',
+      sinDatosExp:'Sin datos para exportar',enLinea:'En línea ASSY1',corriendo:'CORRIENDO',ultPallet:'último pallet',zoomMenos:'Hacer más chico',zoomMas:'Hacer más grande',zoomReset:'Tamaño normal (100%)',tipInvTot:'Inventario total',tipDisp:'Disponible para este modelo',tipReq:'Requerido',tipFalta:'Falta para completar',tipOk:'✓ Completo',tipPrio:'(los modelos de mayor prioridad toman primero)',tipRepub:'Vuelve a publicar desde el BOM Simulator para ver inventario',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → ASSY1',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkDespues:'después de',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkReqLote:'Requerido lote',pkFaltaLote:'Falta p/ completar',pkSolo:'✗ alcanza solo para',pkNada:'No hay modelos listos para correr.',pkRepub:'Faltan números de parte: vuelve a publicar desde el BOM Simulator (📤 Publicar TV).',pkEstim:'Hora estimada según orden y capacidad de línea',pkPlan:'Plan publicado',matViejo:'Material de hace',
       hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material se republica solo cada 5 min (BOM Simulator abierto) · Producido en vivo de ShipQR',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
@@ -170,7 +177,7 @@ var T = {
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No plan has been published yet. Publish it from the BOM Simulator (Weekly Plan → Publish to floor).',
-      sinDatosExp:'No data to export',zoomMenos:'Smaller',zoomMas:'Larger',zoomReset:'Normal size (100%)',tipInvTot:'Total inventory',tipDisp:'Available for this model',tipReq:'Required',tipFalta:'Short to complete',tipOk:'✓ Complete',tipPrio:'(higher-priority models take first)',tipRepub:'Publish again from BOM Simulator to see inventory',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkReqLote:'Lot required',pkFaltaLote:'Short to complete',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',matViejo:'Material data from',
+      sinDatosExp:'No data to export',enLinea:'Running on ASSY1',corriendo:'RUNNING',ultPallet:'last pallet',zoomMenos:'Smaller',zoomMas:'Larger',zoomReset:'Normal size (100%)',tipInvTot:'Total inventory',tipDisp:'Available for this model',tipReq:'Required',tipFalta:'Short to complete',tipOk:'✓ Complete',tipPrio:'(higher-priority models take first)',tipRepub:'Publish again from BOM Simulator to see inventory',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → ASSY1',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkDespues:'after',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkReqLote:'Lot required',pkFaltaLote:'Short to complete',pkSolo:'✗ only enough for',pkNada:'No models ready to run.',pkRepub:'Part numbers missing: publish again from BOM Simulator (📤 Publicar TV).',pkEstim:'Estimated time based on order and line capacity',pkPlan:'Plan published',matViejo:'Material data from',
       hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material auto-republished every 5 min (BOM Simulator open) · Produced live from ShipQR',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
@@ -179,7 +186,7 @@ var T = {
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 게시된 계획이 없습니다. BOM Simulator에서 게시하세요 (주간 계획 → 현장에 게시).',
-      sinDatosExp:'내보낼 데이터가 없습니다',zoomMenos:'작게',zoomMas:'크게',zoomReset:'기본 크기 (100%)',tipInvTot:'총 재고',tipDisp:'이 모델 사용 가능',tipReq:'필요 수량',tipFalta:'부족 수량',tipOk:'✓ 충분',tipPrio:'(우선순위 높은 모델이 먼저 사용)',tipRepub:'재고를 보려면 BOM Simulator에서 다시 게시하세요',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkReqLote:'로트 필요량',pkFaltaLote:'완료까지 부족',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',matViejo:'자재 데이터 경과',
+      sinDatosExp:'내보낼 데이터가 없습니다',enLinea:'ASSY1 생산 중',corriendo:'생산 중',ultPallet:'마지막 팔레트',zoomMenos:'작게',zoomMas:'크게',zoomReset:'기본 크기 (100%)',tipInvTot:'총 재고',tipDisp:'이 모델 사용 가능',tipReq:'필요 수량',tipFalta:'부족 수량',tipOk:'✓ 충분',tipPrio:'(우선순위 높은 모델이 먼저 사용)',tipRepub:'재고를 보려면 BOM Simulator에서 다시 게시하세요',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → ASSY1',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkDespues:'이후',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkReqLote:'로트 필요량',pkFaltaLote:'완료까지 부족',pkSolo:'✗ 가능 수량',pkNada:'생산 가능한 모델이 없습니다.',pkRepub:'부품 번호 없음: BOM Simulator에서 다시 게시하세요 (📤 Publicar TV).',pkEstim:'순서와 라인 능력 기준 예상 시간',pkPlan:'계획 게시',matViejo:'자재 데이터 경과',
       hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 5분마다 자동 재게시 (BOM Simulator 열림) · 생산 수량은 ShipQR 실시간',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
@@ -248,6 +255,7 @@ function arrancar(){
     pintar();
   }, function(){});
   leerProducido();
+  leerEnLinea();
 }
 
 // Producido = pallets GH90 en ShipQR que aún NO están SHIPPED y no son REMPLAZO
@@ -267,8 +275,32 @@ function leerProducido(){
   }).catch(function(e){ console.warn('No se pudo leer ShipQR, se usa el Producido publicado:', e); });
 }
 
+// ===== Modelo corriendo en ASSY1 =====
+// Se toma del ÚLTIMO pallet creado en ShipQR (GH90, que no sea REMPLAZO).
+// Si no sale pallet nuevo en MIN_SIN_PALLET minutos, ya no se marca ninguno.
+// (Ajustable: cambiar este número si se necesita más o menos tiempo.)
+var MIN_SIN_PALLET = 120;
+var enLinea = null; // { sm, ts }
+function leerEnLinea(){
+  db.collection('shipqr_pallets').orderBy('created_at', 'desc').limit(15).get().then(function(snap){
+    var ult = null;
+    snap.forEach(function(doc){
+      if (ult) return;
+      var d = doc.data();
+      if (d.motivo === 'REMPLAZO') return;
+      if (!(d.part_number || '').toUpperCase().startsWith('GH90')) return;
+      var modelo = (d.modelo || '').trim();
+      if (!modelo || !d.created_at || !d.created_at.seconds) return;
+      ult = { sm: modelo, ts: new Date(d.created_at.seconds * 1000) };
+    });
+    enLinea = (ult && (Date.now() - ult.ts) <= MIN_SIN_PALLET * 6e4) ? ult : null;
+    pintar();
+  }).catch(function(e){ console.warn('No se pudo leer el último pallet:', e); });
+}
+
 firebase.auth().onAuthStateChanged(function(){ arrancado = false; if (unsubPlan) { unsubPlan(); unsubPlan = null; } arrancar(); });
 setInterval(leerProducido, 5 * 60 * 1000);   // Producido cada 5 min
+setInterval(leerEnLinea, 60 * 1000);          // modelo en línea cada 1 min
 setInterval(pintar, 60 * 1000);              // reloj del corte
 setInterval(function(){ location.reload(); }, 6 * 60 * 60 * 1000); // recarga completa cada 6 h (TV encendida todo el día)
 
@@ -297,6 +329,10 @@ function pintar(){
     sub += ' · ' + t('publicado') + ': ' + pub.toLocaleString(t('loc'), {weekday:'short', hour:'numeric', minute:'2-digit'}) +
            (viejo ? ' <span class="old">⚠ ' + t('viejo') + '</span>' :
             (edadMs > 30 * 6e4 ? ' <span class="corte ambar" style="font-size:16px">⚠ ' + t('matViejo') + ' ' + edadTxt + '</span>' : ''));
+  }
+  if (enLinea) {
+    sub += ' · <span class="enlinea">▶ ' + t('enLinea') + ': ' + esc(enLinea.sm) + '</span> <span style="font-size:13px">(' + t('ultPallet') + ' ' +
+           enLinea.ts.toLocaleTimeString(t('loc'), {hour:'numeric', minute:'2-digit'}) + ')</span>';
   }
   document.getElementById('sub').innerHTML = sub;
 
@@ -346,7 +382,9 @@ function pintar(){
       var faltan = ['Strip','Top','Bot','Bundle'].filter(function(k){ return m.materiales && m.materiales[k] === false; });
       est = '<span class="est" style="color:var(--red)">' + (faltan.length ? t('falta') + ' ' + faltan.join(', ') : t('sinDatos')) + '</span>';
     }
-    return '<tr><td>' + num + '</td><td><div class="mdl">' + esc(m.sm) + '</div><div class="code">' + esc(m.code || '') + '</div></td>' +
+    var corre = enLinea && enLinea.sm === m.sm;
+    return '<tr' + (corre ? ' class="run-now"' : '') + '><td>' + num + '</td><td><div class="mdl">' + esc(m.sm) + '</div><div class="code">' + esc(m.code || '') + '</div>' +
+      (corre ? '<span class="runtag">▶ ' + t('corriendo') + '</span>' : '') + '</td>' +
       '<td style="white-space:nowrap">' + fechaEnvio(m.fecha) + '</td>' +
       '<td class="r hide-sm">' + n(m.target) + '</td><td class="r">' + n(f.prod) + '</td><td class="r" style="font-weight:800">' + n(f.pend) + '</td>' +
       '<td class="hide-sm" style="width:14%">' + bar(f, tipo === 'run' ? 'var(--green)' : '#5c6678') + '</td>' +
@@ -359,7 +397,9 @@ function pintar(){
   if (wait.length) html += '<tr class="sep"><td colspan="9">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
   if (done.length) html += '<tr class="sep sepdone"><td colspan="9">✓ ' + t('done') + '</td></tr>' + done.map(function(f){
     var extra = f.prod - (f.m.target || 0);
-    return '<tr class="done"><td><span class="num ok">✓</span></td><td><div class="mdl">' + esc(f.m.sm) + '</div><div class="code">' + esc(f.m.code || '') + '</div></td>' +
+    var corre = enLinea && enLinea.sm === f.m.sm;
+    return '<tr class="done' + (corre ? ' run-now' : '') + '"><td><span class="num ok">✓</span></td><td><div class="mdl">' + esc(f.m.sm) + '</div><div class="code">' + esc(f.m.code || '') + '</div>' +
+           (corre ? '<span class="runtag">▶ ' + t('corriendo') + '</span>' : '') + '</td>' +
            '<td style="white-space:nowrap">' + fechaEnvio(f.m.fecha) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td>' +
            '<td class="r"><span class="prodok">' + n(f.prod) + '</span>' + (extra > 0 ? '<span class="extra">+' + n(extra) + '</span>' : '') + '</td>' +
            '<td class="r" style="color:var(--green);font-weight:800">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td><td></td>' +

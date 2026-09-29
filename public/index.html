@@ -449,7 +449,16 @@ function goTab(n) {
       const tabPlan = document.getElementById('tab-plan');
       if (tabPlan && tabPlan.classList.contains('active')) {
         if (modoSoloSimulador) { if (typeof cargarPlanCompartido === 'function') cargarPlanCompartido(); }
-        else if (typeof sincronizarProducidoDesdeMES === 'function') sincronizarProducidoDesdeMES();
+        else if (typeof sincronizarProducidoDesdeMES === 'function') {
+          const p = sincronizarProducidoDesdeMES();
+          // AUTO-PUBLICAR AL PISO cada 5 min: solo admin y solo si ya presionó "📤 Publicar TV"
+          // en esta sesión (así nunca se publica un plan a medio armar). Espera a que termine
+          // la sincronización del Producido para publicar con los números frescos.
+          window._pisoAutoTick = (window._pisoAutoTick || 0) + 1;
+          if (window._pisoAutoOn && adminAuthed && window._pisoAutoTick % 5 === 0 && typeof publicarPlanPiso === 'function') {
+            Promise.resolve(p).catch(() => {}).then(() => publicarPlanPiso(true));
+          }
+        }
       }
     }, 60000);
   }
@@ -6129,11 +6138,18 @@ window.publicarPlanSemanal = publicarPlanSemanal;
 // componentes Strip/Top/Bot/Bundle) en bom_simulator_p4/plan_piso, para que la
 // pantalla piso.html la muestre. No cambia ningún cálculo: usa las mismas
 // funciones que pintan la tabla 1 (calcularFaltantesPorModeloPlan + calcularPlanSemanal).
-async function publicarPlanPiso() {
+async function publicarPlanPiso(auto) {
+  auto = auto === true;
+  // Modo automático: sin ventanas ni cambios en el botón. Si el Autochequeo detecta
+  // un número que no cuadra, NO publica (el piso mostrará el aviso de datos viejos).
+  const alert = auto ? (m) => console.warn('[Auto-publicar piso]', m) : (m) => window.alert(m);
+  if (auto && window._publicandoPiso) return;
   if (!adminAuthed) { alert('Solo el administrador puede publicar al piso.'); return; }
-  if (!confirmarSiHayAlertas()) return;
+  if (auto) { ejecutarAutochequeo(); if (window._autoChk && window._autoChk.errores.length) { console.warn('[Auto-publicar piso] omitido: Autochequeo con alertas'); return; } }
+  else if (!confirmarSiHayAlertas()) return;
   if (!db) { alert('Firebase no disponible — no se pudo publicar'); return; }
-  const btn = document.getElementById('btnPublicarPiso');
+  window._publicandoPiso = true;
+  const btn = auto ? null : document.getElementById('btnPublicarPiso');
   const txt0 = btn ? btn.textContent : '';
   if (btn) { btn.textContent = '⏳ Publicando...'; btn.disabled = true; }
   const regresar = (t) => { if (!btn) return; btn.textContent = t || txt0; if (t) setTimeout(() => { btn.textContent = txt0; btn.disabled = false; }, 3000); else btn.disabled = false; };
@@ -6195,14 +6211,17 @@ async function publicarPlanPiso() {
 
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
-      publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida,
+      publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida, auto: auto,
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
       capacidadSabado: (typeof CAPACIDAD_SABADO_ASSY1 !== 'undefined') ? CAPACIDAD_SABADO_ASSY1 : 0
     });
-    regresar('✅ Publicado');
+    if (!auto) { window._pisoAutoOn = true; window._pisoAutoTick = 0; }
+    regresar(auto ? '' : '✅ Publicado · auto 5 min');
   } catch (e) {
     alert('Error: ' + e.message);
     regresar();
+  } finally {
+    window._publicandoPiso = false;
   }
 }
 window.publicarPlanPiso = publicarPlanPiso;

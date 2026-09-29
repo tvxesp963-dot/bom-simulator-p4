@@ -6883,7 +6883,7 @@ var CF_TXT = {
         confirmar: function (n, pl) { return 'Se van a ajustar ' + n + ' número(s) de parte en el IMS ' + pl + '.\nQuedará registrado en el historial del IMS como AJUSTE CONTEO FÍSICO.\n\n¿Continuar?'; },
         listo: function (ok, err) { return 'Ajustes aplicados: ' + ok + (err ? '\nCon error: ' + err + ' (revisa la consola / permisos)' : ''); },
         noEncontrado: 'no se encontró en el IMS', negativo: 'quedaría negativo; se ajustó a 0', historial: 'Historial de ajustes', nadaAjustar: 'No hay diferencias aprobadas para ajustar.',
-        errGuardar: 'No se pudo guardar en Firebase: ', guardando: 'Guardando...', ajustando: 'Ajustando IMS...', si: 'Sí, continuar', no: 'No', fallo: 'Falló', sinConexion: 'Sin conexión con Firebase',
+        errGuardar: 'No se pudo guardar en Firebase: ', guardando: 'Guardando...', ajustando: 'Ajustando IMS...', si: 'Sí, continuar', no: 'No', fallo: 'Falló', sinConexion: 'Sin conexión con Firebase', yaAplicado: 'ya estaba aplicado antes (no se duplicó)', yaN: function (n) { return '\nYa estaban aplicados (sin duplicar): ' + n; }, cuota: '\n⛔ Firebase se quedó sin cuota diaria (Quota exceeded). Se detuvo el proceso. Nada se duplicará: espera a que se restablezca la cuota o sube el plan a Blaze, y vuelve a presionar Ajustar IMS.',
         vistaPrevia: 'Vista previa · Hoja de conteo', imprimir: '🖨️ Imprimir', cancelar: '🗑 Cancelar folio', cancelado: 'cancelado', verCancelados: 'Mostrar cancelados',
         confCancelar: function (aj) { return '¿Cancelar este folio?\nYa no se podrá capturar ni ajustar con él. El registro se queda guardado.' + (aj ? '\n\nLos ' + aj + ' ajustes que ya se hicieron con este folio NO se revierten.' : ''); },
         estaCancelado: 'Este folio está cancelado.' },
@@ -6900,7 +6900,7 @@ var CF_TXT = {
         confirmar: function (n, pl) { return n + ' part number(s) will be adjusted in IMS ' + pl + '.\nIt will be logged in the IMS history as PHYSICAL COUNT ADJUSTMENT.\n\nContinue?'; },
         listo: function (ok, err) { return 'Adjustments applied: ' + ok + (err ? '\nFailed: ' + err + ' (check console / permissions)' : ''); },
         noEncontrado: 'not found in IMS', negativo: 'would be negative; set to 0', historial: 'Adjustment history', nadaAjustar: 'No approved differences to adjust.',
-        errGuardar: 'Could not save to Firebase: ', guardando: 'Saving...', ajustando: 'Adjusting IMS...', si: 'Yes, continue', no: 'No', fallo: 'Failed', sinConexion: 'No connection to Firebase',
+        errGuardar: 'Could not save to Firebase: ', guardando: 'Saving...', ajustando: 'Adjusting IMS...', si: 'Yes, continue', no: 'No', fallo: 'Failed', sinConexion: 'No connection to Firebase', yaAplicado: 'was already applied before (not duplicated)', yaN: function (n) { return '\nAlready applied (not duplicated): ' + n; }, cuota: '\n⛔ Firebase daily quota exceeded. The process was stopped. Nothing will be duplicated: wait for the quota to reset or upgrade to Blaze, then press Adjust IMS again.',
         vistaPrevia: 'Preview · Count sheet', imprimir: '🖨️ Print', cancelar: '🗑 Cancel folio', cancelado: 'canceled', verCancelados: 'Show canceled',
         confCancelar: function (aj) { return 'Cancel this folio?\nIt can no longer be used to capture or adjust. The record is kept.' + (aj ? '\n\nThe ' + aj + ' adjustments already made with this folio are NOT reverted.' : ''); },
         estaCancelado: 'This folio is canceled.' },
@@ -6917,7 +6917,7 @@ var CF_TXT = {
         confirmar: function (n, pl) { return 'IMS ' + pl + '에서 부품 ' + n + '건을 조정합니다.\nIMS 이력에 실사 조정으로 기록됩니다.\n\n계속하시겠습니까?'; },
         listo: function (ok, err) { return '조정 완료: ' + ok + (err ? '\n실패: ' + err + ' (콘솔/권한 확인)' : ''); },
         noEncontrado: 'IMS에 없음', negativo: '음수가 되어 0으로 조정', historial: '조정 이력', nadaAjustar: '조정할 승인된 차이가 없습니다.',
-        errGuardar: 'Firebase 저장 실패: ', guardando: '저장 중...', ajustando: 'IMS 조정 중...', si: '예, 계속', no: '아니오', fallo: '실패', sinConexion: 'Firebase 연결 없음',
+        errGuardar: 'Firebase 저장 실패: ', guardando: '저장 중...', ajustando: 'IMS 조정 중...', si: '예, 계속', no: '아니오', fallo: '실패', sinConexion: 'Firebase 연결 없음', yaAplicado: '이미 적용됨 (중복 없음)', yaN: function (n) { return '\n이미 적용됨 (중복 없음): ' + n; }, cuota: '\n⛔ Firebase 일일 할당량 초과. 작업이 중지되었습니다. 중복되지 않습니다: 할당량이 초기화되거나 Blaze로 업그레이드한 후 IMS 조정을 다시 누르세요.',
         vistaPrevia: '미리보기 · 실사표', imprimir: '🖨️ 인쇄', cancelar: '🗑 전표 취소', cancelado: '취소됨', verCancelados: '취소된 전표 보기',
         confCancelar: function (aj) { return '이 전표를 취소하시겠습니까?\n더 이상 입력/조정에 사용할 수 없습니다. 기록은 보관됩니다.' + (aj ? '\n\n이미 적용된 조정 ' + aj + '건은 되돌리지 않습니다.' : ''); },
         estaCancelado: '취소된 전표입니다.' }
@@ -7232,9 +7232,9 @@ async function cfAjustar() {
   _cfOcupado = true;
   var bAj = document.getElementById('cfBtnAjustar'); if (bAj) bAj.disabled = true;
   cfMsg(cfT('ajustando'), 'warn');
-  var ok = 0, err = 0, fallos = [], user = cfUsuario();
+  var ok = 0, err = 0, ya = 0, cuotaAgotada = false, fallos = [], user = cfUsuario();
   var ref = 'AJUSTE CONTEO FÍSICO ' + f.folio;
-  for (var k = 0; k < pend.length; k++) {
+  for (var k = 0; k < pend.length && !cuotaAgotada; k++) {
     var it = pend[k];
     var delta = it.conteo - it.sistema; // diferencia contra lo que había AL IMPRIMIR
     try {
@@ -7243,6 +7243,9 @@ async function cfAjustar() {
         var s = await tx.get(docRef);
         if (!s.exists) throw new Error(cfT('noEncontrado'));
         var d = s.data();
+        // Si este folio ya ajustó esta parte (corrida interrumpida), NO se vuelve a aplicar
+        var previo = (Array.isArray(d.historial) ? d.historial : []).filter(function (h) { return h && h.ref === ref; })[0];
+        if (previo) return { ya: true, previo: previo, d: d };
         var antes = invActualIMS(d), nota = '';
         var aplicado = delta;
         if (antes + delta < 0) { aplicado = -antes; nota = cfT('negativo'); }
@@ -7257,19 +7260,27 @@ async function cfAjustar() {
         tx.update(docRef, upd);
         return { antes: antes, despues: despues, aplicado: aplicado, tipo: tipo, d: d, nota: nota };
       });
+      if (res.ya) {
+        var pd = (res.previo.tipo === 'S' ? -1 : 1) * (Number(res.previo.qty) || 0);
+        it.ajuste = { fecha: res.previo.fecha, antes: 0, despues: 0, delta: pd, user: res.previo.user || user, yaAplicado: true };
+        (f.ajustes = f.ajustes || []).push({ fecha: res.previo.fecha, pn: it.pn, antes: 0, despues: 0, delta: pd, user: res.previo.user || user, nota: cfT('yaAplicado') });
+        ya++; continue;
+      }
       await db.collection(cfg.mov).add({ tipo: res.tipo, pn: it.pn, desc: it.desc, familia: res.d.familia || it.familia || '', qty: Math.abs(res.aplicado),
         fecha: new Date().toISOString(), user: user, ref: ref, stock: res.despues, loc: res.d.ubicacion || '' });
       it.ajuste = { fecha: new Date().toISOString(), antes: res.antes, despues: res.despues, delta: res.aplicado, user: user };
       (f.ajustes = f.ajustes || []).push({ fecha: it.ajuste.fecha, pn: it.pn, antes: res.antes, despues: res.despues, delta: res.aplicado, user: user, nota: res.nota });
       ok++;
-    } catch (e) { console.error('Ajuste conteo', it.pn, e); err++; if (fallos.length < 5) fallos.push(it.pn + ': ' + (e && e.message ? e.message : e)); }
+    } catch (e) { console.error('Ajuste conteo', it.pn, e); err++; if (fallos.length < 5) fallos.push(it.pn + ': ' + (e && e.message ? e.message : e));
+      if (e && (e.code === 'resource-exhausted' || /quota/i.test(e.message || ''))) cuotaAgotada = true; }
+    if ((ok + ya) > 0 && (ok + ya) % 10 === 0) cfGuardar(true); // guarda el avance cada 10 partes
   }
   var quedan = f.items.some(function (it) { return !it.ajuste && it.conteo != null && it.conteo !== it.sistema; });
   f.estado = quedan ? 'abierto' : 'cerrado';
   var guardo = await cfGuardar(true);
   _cfOcupado = false;
   if (typeof sincIMS === 'function') sincIMS(); // el BOM Simulator toma el inventario ya ajustado
-  var resumenTxt = cfT('listo')(ok, err) + (fallos.length ? '\n' + fallos.join('\n') : '') + (guardo ? '' : '\n' + cfT('errGuardar'));
+  var resumenTxt = cfT('listo')(ok, err) + (ya ? cfT('yaN')(ya) : '') + (cuotaAgotada ? cfT('cuota') : '') + (fallos.length ? '\n' + fallos.join('\n') : '') + (guardo ? '' : '\n' + cfT('errGuardar'));
   await cfPintarFolio();
   cfMsg(resumenTxt, (err || !guardo) ? 'err' : 'ok');
 }

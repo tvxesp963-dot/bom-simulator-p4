@@ -6883,7 +6883,7 @@ var CF_TXT = {
         confirmar: function (n, pl) { return 'Se van a ajustar ' + n + ' número(s) de parte en el IMS ' + pl + '.\nQuedará registrado en el historial del IMS como AJUSTE CONTEO FÍSICO.\n\n¿Continuar?'; },
         listo: function (ok, err) { return 'Ajustes aplicados: ' + ok + (err ? '\nCon error: ' + err + ' (revisa la consola / permisos)' : ''); },
         noEncontrado: 'no se encontró en el IMS', negativo: 'quedaría negativo; se ajustó a 0', historial: 'Historial de ajustes', nadaAjustar: 'No hay diferencias aprobadas para ajustar.',
-        errGuardar: 'No se pudo guardar en Firebase: ',
+        errGuardar: 'No se pudo guardar en Firebase: ', guardando: 'Guardando...', ajustando: 'Ajustando IMS...', si: 'Sí, continuar', no: 'No', fallo: 'Falló', sinConexion: 'Sin conexión con Firebase',
         vistaPrevia: 'Vista previa · Hoja de conteo', imprimir: '🖨️ Imprimir', cancelar: '🗑 Cancelar folio', cancelado: 'cancelado', verCancelados: 'Mostrar cancelados',
         confCancelar: function (aj) { return '¿Cancelar este folio?\nYa no se podrá capturar ni ajustar con él. El registro se queda guardado.' + (aj ? '\n\nLos ' + aj + ' ajustes que ya se hicieron con este folio NO se revierten.' : ''); },
         estaCancelado: 'Este folio está cancelado.' },
@@ -6900,7 +6900,7 @@ var CF_TXT = {
         confirmar: function (n, pl) { return n + ' part number(s) will be adjusted in IMS ' + pl + '.\nIt will be logged in the IMS history as PHYSICAL COUNT ADJUSTMENT.\n\nContinue?'; },
         listo: function (ok, err) { return 'Adjustments applied: ' + ok + (err ? '\nFailed: ' + err + ' (check console / permissions)' : ''); },
         noEncontrado: 'not found in IMS', negativo: 'would be negative; set to 0', historial: 'Adjustment history', nadaAjustar: 'No approved differences to adjust.',
-        errGuardar: 'Could not save to Firebase: ',
+        errGuardar: 'Could not save to Firebase: ', guardando: 'Saving...', ajustando: 'Adjusting IMS...', si: 'Yes, continue', no: 'No', fallo: 'Failed', sinConexion: 'No connection to Firebase',
         vistaPrevia: 'Preview · Count sheet', imprimir: '🖨️ Print', cancelar: '🗑 Cancel folio', cancelado: 'canceled', verCancelados: 'Show canceled',
         confCancelar: function (aj) { return 'Cancel this folio?\nIt can no longer be used to capture or adjust. The record is kept.' + (aj ? '\n\nThe ' + aj + ' adjustments already made with this folio are NOT reverted.' : ''); },
         estaCancelado: 'This folio is canceled.' },
@@ -6917,7 +6917,7 @@ var CF_TXT = {
         confirmar: function (n, pl) { return 'IMS ' + pl + '에서 부품 ' + n + '건을 조정합니다.\nIMS 이력에 실사 조정으로 기록됩니다.\n\n계속하시겠습니까?'; },
         listo: function (ok, err) { return '조정 완료: ' + ok + (err ? '\n실패: ' + err + ' (콘솔/권한 확인)' : ''); },
         noEncontrado: 'IMS에 없음', negativo: '음수가 되어 0으로 조정', historial: '조정 이력', nadaAjustar: '조정할 승인된 차이가 없습니다.',
-        errGuardar: 'Firebase 저장 실패: ',
+        errGuardar: 'Firebase 저장 실패: ', guardando: '저장 중...', ajustando: 'IMS 조정 중...', si: '예, 계속', no: '아니오', fallo: '실패', sinConexion: 'Firebase 연결 없음',
         vistaPrevia: '미리보기 · 실사표', imprimir: '🖨️ 인쇄', cancelar: '🗑 전표 취소', cancelado: '취소됨', verCancelados: '취소된 전표 보기',
         confCancelar: function (aj) { return '이 전표를 취소하시겠습니까?\n더 이상 입력/조정에 사용할 수 없습니다. 기록은 보관됩니다.' + (aj ? '\n\n이미 적용된 조정 ' + aj + '건은 되돌리지 않습니다.' : ''); },
         estaCancelado: '취소된 전표입니다.' }
@@ -7124,6 +7124,7 @@ async function cfPintarFolio() {
   h += '<div style="font-size:12px;color:var(--text2);margin:-.4rem 0 .6rem">' + cfT('planta') + ' ' + cfEsc(f.planta) + ' · ' + cfT('generado') + ' ' + new Date(f.creado).toLocaleString() + ' · ' + f.items.length + ' PN</div>';
   var canc = f.estado === 'cancelado';
   if (canc) h += '<div style="margin-bottom:.6rem;padding:.5rem .7rem;border-radius:8px;background:rgba(255,68,68,.12);border:1px solid rgba(255,68,68,.4);color:#ff4444;font-weight:700">' + cfT('estaCancelado') + '</div>';
+  h += '<div id="cfMsg" style="display:none"></div>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.6rem"><button class="btn btn-secondary btn-sm" onclick="cfImprimir()">' + cfT('reimprimir') + '</button><button class="btn btn-secondary btn-sm" onclick="cfExcel()">' + cfT('excel') + '</button>' +
     (adminAuthed && !canc ? '<button class="btn btn-secondary btn-sm" style="margin-left:auto;color:#ff4444;border-color:rgba(255,68,68,.5)" onclick="cfCancelarFolio()">' + cfT('cancelar') + '</button>' : '') + '</div>';
   h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:760px"><tr><th style="' + th + '">' + cfT('pn') + '</th><th style="' + th + '">' + cfT('ubic') +
@@ -7139,7 +7140,7 @@ async function cfPintarFolio() {
       '<td id="cfDif' + i + '" style="text-align:right;font-weight:700"></td><td style="text-align:center" id="cfAp' + i + '"></td><td id="cfEst' + i + '" style="font-size:12px"></td></tr>';
   });
   h += '</table></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:.8rem">' +
-    '<span id="cfResumen" style="color:var(--text2)"></span><span style="display:flex;gap:6px"><button class="btn btn-secondary btn-sm" onclick="cfGuardar()">' + cfT('guardar') + '</button>' +
+    '<span id="cfResumen" style="color:var(--text2)"></span><span style="display:flex;gap:6px"><button class="btn btn-secondary btn-sm" id="cfBtnGuardar" onclick="cfGuardar()">' + cfT('guardar') + '</button>' +
     '<button class="btn btn-primary btn-sm" id="cfBtnAjustar" onclick="cfAjustar()"></button></span></div>';
   if ((f.ajustes || []).length) {
     h += '<div style="margin-top:1rem;background:var(--bg3,#151c2e);border-radius:8px;padding:.6rem .8rem"><div style="font-weight:700;margin-bottom:.3rem">🕘 ' + cfT('historial') + '</div>' +
@@ -7177,19 +7178,61 @@ function cfCambioConteo(i, v) {
   cfPintarFila(i); cfPintarResumen();
 }
 function cfAprobar(i, v) { _cf.folio.items[i].aprobado = !!v; cfPintarResumen(); }
+// Avisos EN PANTALLA (Chrome puede bloquear alert/confirm y entonces los botones parecen muertos)
+function cfMsg(txt, tipo) {
+  var el = document.getElementById('cfMsg');
+  if (!el) { try { alert(txt); } catch (e) {} return; }
+  var c = tipo === 'ok' ? ['#00e676', 'rgba(0,230,118,.12)'] : (tipo === 'err' ? ['#ff4444', 'rgba(255,68,68,.12)'] : ['#FFBA00', 'rgba(255,186,0,.12)']);
+  el.style.cssText = 'display:block;margin-bottom:.6rem;padding:.5rem .7rem;border-radius:8px;font-weight:600;white-space:pre-wrap;color:' + c[0] + ';background:' + c[1] + ';border:1px solid ' + c[0];
+  el.textContent = txt;
+  try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+}
+function cfPregunta(txt) {
+  return new Promise(function (resolve) {
+    var el = document.getElementById('cfMsg');
+    if (!el) { resolve(confirm(txt)); return; }
+    el.style.cssText = 'display:block;margin-bottom:.6rem;padding:.6rem .8rem;border-radius:8px;color:var(--text,#fff);background:rgba(255,186,0,.12);border:1px solid #FFBA00';
+    el.innerHTML = '<div style="white-space:pre-wrap;font-weight:600;margin-bottom:.5rem"></div><div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" id="cfPregSi"></button><button class="btn btn-secondary btn-sm" id="cfPregNo"></button></div>';
+    el.firstChild.textContent = txt;
+    document.getElementById('cfPregSi').textContent = cfT('si');
+    document.getElementById('cfPregNo').textContent = cfT('no');
+    var fin = function (v) { el.style.display = 'none'; el.innerHTML = ''; resolve(v); };
+    document.getElementById('cfPregSi').onclick = function () { fin(true); };
+    document.getElementById('cfPregNo').onclick = function () { fin(false); };
+    try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  });
+}
+var _cfOcupado = false;
 async function cfGuardar(silencioso) {
-  var f = _cf.folio;
-  try { await db.collection('conteos_fisicos').doc(f.folio).set({ items: f.items, ajustes: f.ajustes || [], estado: f.estado }, { merge: true }); if (!silencioso) alert(cfT('guardado')); }
-  catch (e) { alert(cfT('errGuardar') + e.message); }
+  var f = _cf.folio; if (!f) return false;
+  if (!db) { cfMsg(cfT('sinConexion'), 'err'); return false; }
+  var btn = document.getElementById('cfBtnGuardar');
+  if (!silencioso) { if (btn) btn.disabled = true; cfMsg(cfT('guardando'), 'warn'); }
+  try {
+    // JSON limpia cualquier valor "undefined" (Firestore lo rechaza) antes de guardar
+    var limpio = JSON.parse(JSON.stringify({ items: f.items, ajustes: f.ajustes || [], estado: f.estado || 'abierto' }));
+    await db.collection('conteos_fisicos').doc(f.folio).set(limpio, { merge: true });
+    if (!silencioso) cfMsg(cfT('guardado'), 'ok');
+    return true;
+  } catch (e) {
+    console.error('Guardar conteo', e);
+    cfMsg(cfT('errGuardar') + (e && e.message ? e.message : e), 'err');
+    return false;
+  } finally { if (btn) btn.disabled = false; }
 }
 async function cfAjustar() {
-  if (!adminAuthed) { alert(cfT('soloAdmin')); return; }
+  if (_cfOcupado) return;
+  if (!adminAuthed) { cfMsg(cfT('soloAdmin'), 'err'); return; }
+  if (!db) { cfMsg(cfT('sinConexion'), 'err'); return; }
   var f = _cf.folio, cfg = CF_PLANTAS[f.planta];
-  if (f.estado === 'cancelado') { alert(cfT('estaCancelado')); return; }
+  if (f.estado === 'cancelado') { cfMsg(cfT('estaCancelado'), 'err'); return; }
   var pend = f.items.filter(function (it) { return !it.ajuste && it.aprobado && it.conteo != null && it.conteo !== it.sistema; });
-  if (!pend.length) { alert(cfT('nadaAjustar')); return; }
-  if (!confirm(cfT('confirmar')(pend.length, f.planta))) return;
-  var ok = 0, err = 0, user = cfUsuario();
+  if (!pend.length) { cfMsg(cfT('nadaAjustar'), 'warn'); return; }
+  if (!(await cfPregunta(cfT('confirmar')(pend.length, f.planta)))) return;
+  _cfOcupado = true;
+  var bAj = document.getElementById('cfBtnAjustar'); if (bAj) bAj.disabled = true;
+  cfMsg(cfT('ajustando'), 'warn');
+  var ok = 0, err = 0, fallos = [], user = cfUsuario();
   var ref = 'AJUSTE CONTEO FÍSICO ' + f.folio;
   for (var k = 0; k < pend.length; k++) {
     var it = pend[k];
@@ -7219,24 +7262,26 @@ async function cfAjustar() {
       it.ajuste = { fecha: new Date().toISOString(), antes: res.antes, despues: res.despues, delta: res.aplicado, user: user };
       (f.ajustes = f.ajustes || []).push({ fecha: it.ajuste.fecha, pn: it.pn, antes: res.antes, despues: res.despues, delta: res.aplicado, user: user, nota: res.nota });
       ok++;
-    } catch (e) { console.error('Ajuste conteo', it.pn, e); err++; }
+    } catch (e) { console.error('Ajuste conteo', it.pn, e); err++; if (fallos.length < 5) fallos.push(it.pn + ': ' + (e && e.message ? e.message : e)); }
   }
   var quedan = f.items.some(function (it) { return !it.ajuste && it.conteo != null && it.conteo !== it.sistema; });
   f.estado = quedan ? 'abierto' : 'cerrado';
-  await cfGuardar(true);
-  alert(cfT('listo')(ok, err));
+  var guardo = await cfGuardar(true);
+  _cfOcupado = false;
   if (typeof sincIMS === 'function') sincIMS(); // el BOM Simulator toma el inventario ya ajustado
-  cfPintarFolio();
+  var resumenTxt = cfT('listo')(ok, err) + (fallos.length ? '\n' + fallos.join('\n') : '') + (guardo ? '' : '\n' + cfT('errGuardar'));
+  await cfPintarFolio();
+  cfMsg(resumenTxt, (err || !guardo) ? 'err' : 'ok');
 }
 async function cfCancelarFolio() {
-  if (!adminAuthed) { alert(cfT('soloAdmin')); return; }
+  if (!adminAuthed) { cfMsg(cfT('soloAdmin'), 'err'); return; }
   var f = _cf.folio; if (!f || f.estado === 'cancelado') return;
-  if (!confirm(cfT('confCancelar')((f.ajustes || []).length))) return;
+  if (!(await cfPregunta(cfT('confCancelar')((f.ajustes || []).length)))) return;
   try {
     await db.collection('conteos_fisicos').doc(f.folio).set({ estado: 'cancelado', canceladoPor: cfUsuario(), canceladoEn: new Date().toISOString() }, { merge: true });
     f.estado = 'cancelado';
     cfPintarInicio();
-  } catch (e) { alert(cfT('errGuardar') + e.message); }
+  } catch (e) { cfMsg(cfT('errGuardar') + e.message, 'err'); }
 }
 window.cfCancelarFolio = cfCancelarFolio;
 function cfExcel() {

@@ -837,6 +837,7 @@ function toggleTree(idx) {
 // ── COMPARACIÓN MULTI-MODELO (no modifica lógica existente del Simulador) ──
 let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
+window.simPOBalancePorModelo = window.simPOBalancePorModelo || {};   // PO Balance abierto por modelo (columna PO Balance del Excel)
 window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
 // Qué máquinas pueden correr cada CÓDIGO de medio proceso (GH69) — editable a mano
 // por código (no por modelo GH90, porque varios modelos comparten el mismo GH69).
@@ -859,6 +860,7 @@ try {
     if (d.targets) simTargetsPorModelo = Object.assign(simTargetsPorModelo, d.targets);
     if (d.prioridades) window.simPrioridadPorModelo = Object.assign(window.simPrioridadPorModelo, d.prioridades);
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
+    if (d.poBalance) window.simPOBalancePorModelo = Object.assign(window.simPOBalancePorModelo, d.poBalance);
     if (d.maquinasElegiblesPorCodigo) window.simMaquinasElegiblesPorCodigo = Object.assign(window.simMaquinasElegiblesPorCodigo, d.maquinasElegiblesPorCodigo);
     if (d.panelMaquinasColapsado !== undefined) window.simPanelMaquinasColapsado = d.panelMaquinasColapsado;
     // Migración del ajuste anterior (solo Zhongke por código) al esquema nuevo (todas las máquinas).
@@ -879,6 +881,7 @@ function guardarPlanCompleto() {
       targets: simTargetsPorModelo,
       prioridades: window.simPrioridadPorModelo || {},
       fechas: window.simFechaEntregaPorModelo || {},
+      poBalance: window.simPOBalancePorModelo || {},
       maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {},
       panelMaquinasColapsado: !!window.simPanelMaquinasColapsado
     }));
@@ -974,9 +977,24 @@ function cargarPlanMultiExcel(file) {
         return;
       }
       const encabezados = filasCrudas[headerRowIdx].map(c => String(c).trim());
+      // [PO-BALANCE] Si el Excel trae DOS columnas de cantidad (ej. "PO Balance" y "Ship Friday",
+      // ambas con encabezado QTY), se identifican por el rótulo de la fila de arriba.
+      // Sin esto la segunda columna pisaba a la primera. Con una sola columna QTY todo funciona igual que antes.
+      const _nomQty = ['target', 'cantidad', 'qty'];
+      const _idxQty = encabezados.map((h, i) => _nomQty.includes(h.toLowerCase()) ? i : -1).filter(i => i >= 0);
+      const _filaTit = headerRowIdx > 0 ? filasCrudas[headerRowIdx - 1].map(c => String(c).trim().toLowerCase()) : [];
+      let _idxPO = -1, _idxEnvio = -1;
+      if (_idxQty.length >= 2) {
+        const _buscaTit = (re) => _idxQty.find(i => re.test(_filaTit[i] || ''));
+        _idxPO = _buscaTit(/po|balance/);
+        _idxEnvio = _buscaTit(/ship|env/);
+        if (_idxPO === undefined) _idxPO = _idxQty[0];
+        if (_idxEnvio === undefined || _idxEnvio === _idxPO) _idxEnvio = _idxQty.find(i => i !== _idxPO);
+      }
       const filas = filasCrudas.slice(headerRowIdx + 1).map(fila => {
         const obj = {};
         encabezados.forEach((h, i) => { obj[h] = fila[i] !== undefined ? fila[i] : ''; });
+        if (_idxPO >= 0) { obj.__po = fila[_idxPO]; obj.__envio = fila[_idxEnvio]; }
         return obj;
       });
 
@@ -986,6 +1004,7 @@ function cargarPlanMultiExcel(file) {
       multiModelosActivos = [];
       window.simPrioridadPorModelo = {};
       window.simFechaEntregaPorModelo = {};
+      window.simPOBalancePorModelo = {};
 
       const modelosBOM = [...new Set(BOM.map(r => r.sm))];
       let agregados = 0, noEncontrados = [];
@@ -998,7 +1017,15 @@ function cargarPlanMultiExcel(file) {
           return k ? fila[k] : undefined;
         };
         let sm = String(buscar(['modelo', 'sm', 'model']) || '').trim();
-        const target = parseInt(buscar(['target', 'cantidad', 'qty'])) || 0;
+        let target = parseInt(buscar(['target', 'cantidad', 'qty'])) || 0;
+        // [PO-BALANCE] target = lo que se debe enviar en su fecha (Ship); si el envío viene vacío o en 0
+        // (ej. modelos que se envían en una fecha posterior) se usa el PO Balance completo.
+        let poBalance = null;
+        if (fila.__po !== undefined) {
+          const _p = parseInt(fila.__po), _e = parseInt(fila.__envio);
+          poBalance = isNaN(_p) ? null : _p;
+          target = (_e > 0) ? _e : (poBalance || 0);
+        }
         const prioridad = parseInt(buscar(['prioridad', 'priority']));
         const fechaRaw = buscar(['fecha entrega', 'fecha_entrega', 'entrega', 'delivery date', 'fecha']);
 
@@ -1015,6 +1042,7 @@ function cargarPlanMultiExcel(file) {
 
         if (!multiModelosActivos.includes(sm)) multiModelosActivos.push(sm);
         simTargetsPorModelo[sm] = target;
+        if (poBalance !== null) window.simPOBalancePorModelo[sm] = poBalance; else delete window.simPOBalancePorModelo[sm];
         window.simPrioridadPorModelo[sm] = isNaN(prioridad) ? (idx + 1) : prioridad;
 
         if (fechaRaw) {
@@ -6200,7 +6228,7 @@ async function publicarPlanPiso(auto) {
       const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
       const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
       const fecha = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
-      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, producido, pendiente, cap, materiales, pn, desc, req, falta, disp, invTotal,
+      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, poBalance: (window.simPOBalancePorModelo && window.simPOBalancePorModelo[sm] != null) ? window.simPOBalancePorModelo[sm] : null, producido, pendiente, cap, materiales, pn, desc, req, falta, disp, invTotal,
                listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
     });
     // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas

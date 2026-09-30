@@ -193,7 +193,7 @@ var T = {
       hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material se republica solo cada 5 min (BOM Simulator abierto) · Producido en vivo de ShipQR',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
-      sigTag:'SIGUIENTE',sinPO:'PO Balance no disponible: en el BOM Simulator sube el Excel del plan (con columnas PO Balance y Ship) y presiona 📤 Publicar TV.',sigLinea:'Siguiente en ASSY1',completoTxt:'completo',poBal:'PO Balance',poFinal:'PO final',cNext:'Próximo envío',cPO:'PO Balance por producir',cPOh:'PO abierto − producido',cFalta:'Falta para el envío',cFaltah:'Se descuenta al producir',cFinal:'PO Balance final',cFinalh:'Lo que queda después del envío',shipsT:'Próximos envíos (se descuentan en orden)',shipQty:'Cantidad a enviar',shipFalta:'Falta',poAfter:'PO después del envío',nxt:'SIGUIENTE',prog:'PROGRAMADO',
+      kPO:'PO Balance total',sigTag:'SIGUIENTE',sinPO:'PO Balance no disponible: en el BOM Simulator sube el Excel del plan (con columnas PO Balance y Ship) y presiona 📤 Publicar TV.',sigLinea:'Siguiente en ASSY1',completoTxt:'completo',poBal:'PO Balance',poFinal:'PO final',cNext:'Próximo envío',cPO:'PO Balance por producir',cPOh:'PO abierto − producido',cFalta:'Falta para el envío',cFaltah:'Se descuenta al producir',cFinal:'PO Balance final',cFinalh:'Lo que queda después del envío',shipsT:'Próximos envíos (se descuentan en orden)',shipQty:'Cantidad a enviar',shipFalta:'Falta',poAfter:'PO después del envío',nxt:'SIGUIENTE',prog:'PROGRAMADO',
       d:'d',h:'h',m:'min',pzas:'pzas',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],loc:'es-MX'},
   en:{title:'Production order · ASSY1',loading:'Loading plan...',corte:'Cutoff',faltan:'left',publicado:'Published',viejo:'(plan older than 12 h)',
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
@@ -203,7 +203,7 @@ var T = {
       hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material auto-republished every 5 min (BOM Simulator open) · Produced live from ShipQR',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
-      sigTag:'NEXT',sinPO:'PO Balance not available: in BOM Simulator upload the plan Excel (with PO Balance and Ship columns) and press 📤 Publicar TV.',sigLinea:'Next on ASSY1',completoTxt:'complete',poBal:'PO Balance',poFinal:'Final PO',cNext:'Next shipment',cPO:'PO balance to produce',cPOh:'Open PO − produced',cFalta:'Left for shipment',cFaltah:'Deducted as we produce',cFinal:'Final PO balance',cFinalh:'What remains after the shipment',shipsT:'Upcoming shipments (deducted in order)',shipQty:'Shipment qty',shipFalta:'Left',poAfter:'PO after shipment',nxt:'NEXT',prog:'SCHEDULED',
+      kPO:'Total PO balance',sigTag:'NEXT',sinPO:'PO Balance not available: in BOM Simulator upload the plan Excel (with PO Balance and Ship columns) and press 📤 Publicar TV.',sigLinea:'Next on ASSY1',completoTxt:'complete',poBal:'PO Balance',poFinal:'Final PO',cNext:'Next shipment',cPO:'PO balance to produce',cPOh:'Open PO − produced',cFalta:'Left for shipment',cFaltah:'Deducted as we produce',cFinal:'Final PO balance',cFinalh:'What remains after the shipment',shipsT:'Upcoming shipments (deducted in order)',shipQty:'Shipment qty',shipFalta:'Left',poAfter:'PO after shipment',nxt:'NEXT',prog:'SCHEDULED',
       d:'d',h:'h',m:'min',pzas:'pcs',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],loc:'en-US'},
   ko:{title:'생산 순서 · ASSY1',loading:'계획 불러오는 중...',corte:'출하 마감',faltan:'남음',publicado:'게시',viejo:'(12시간 이상 지난 계획)',
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
@@ -213,7 +213,7 @@ var T = {
       hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 5분마다 자동 재게시 (BOM Simulator 열림) · 생산 수량은 ShipQR 실시간',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
-      sigTag:'다음',sinPO:'PO 잔량 없음: BOM Simulator에서 계획 Excel(PO Balance, Ship 열 포함)을 올리고 📤 Publicar TV를 누르세요.',sigLinea:'ASSY1 다음',completoTxt:'완료',poBal:'PO 잔량',poFinal:'최종 PO',cNext:'다음 출하',cPO:'생산 대기 PO 잔량',cPOh:'미결 PO − 생산',cFalta:'출하까지 부족',cFaltah:'생산 시 차감',cFinal:'최종 PO 잔량',cFinalh:'출하 후 남는 수량',shipsT:'예정 출하 (순서대로 차감)',shipQty:'출하 수량',shipFalta:'부족',poAfter:'출하 후 PO',nxt:'다음',prog:'예정',
+      kPO:'총 PO 잔량',sigTag:'다음',sinPO:'PO 잔량 없음: BOM Simulator에서 계획 Excel(PO Balance, Ship 열 포함)을 올리고 📤 Publicar TV를 누르세요.',sigLinea:'ASSY1 다음',completoTxt:'완료',poBal:'PO 잔량',poFinal:'최종 PO',cNext:'다음 출하',cPO:'생산 대기 PO 잔량',cPOh:'미결 PO − 생산',cFalta:'출하까지 부족',cFaltah:'생산 시 차감',cFinal:'최종 PO 잔량',cFinalh:'출하 후 남는 수량',shipsT:'예정 출하 (순서대로 차감)',shipQty:'출하 수량',shipFalta:'부족',poAfter:'출하 후 PO',nxt:'다음',prog:'예정',
       d:'일',h:'시간',m:'분',pzas:'개',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],loc:'ko-KR'}
 };
 var lang = 'es';
@@ -399,8 +399,19 @@ function pintar(){
 
   var kp = function(l, v, color){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v"' + (color ? ' style="color:' + color + '"' : '') + '>' + v + '</div></div>'; };
   var avTot = tot.t ? Math.round(tot.p * 100 / tot.t) : 0;
-  var html = '<div class="kpis">' + kp(t('target'), n(tot.t)) + kp(t('prod'), n(tot.p)) + kp(t('pend'), n(tot.t - tot.p)) +
-             kp(t('avance'), avTot + '%', avTot >= 100 ? 'var(--green)' : '') + '</div>';
+  // KPIs principales: si el plan trae PO Balance, se muestran contra el PO (PO total − producido = PO por producir).
+  // Sin PO Balance (plan viejo) se muestran los de siempre: Target / Producido / Pendiente / Avance.
+  var kpPO = filas.filter(function(f){ return f.po !== null; });
+  var kpiHtml;
+  if (kpPO.length) {
+    var poSum = 0, prodPO = 0;
+    kpPO.forEach(function(f){ var p = Number(f.m.poBalance); poSum += p; prodPO += Math.min(f.prod, p); });
+    var avPO = poSum ? Math.round(prodPO * 100 / poSum) : 0;
+    kpiHtml = kp(t('kPO'), n(poSum)) + kp(t('prod'), n(prodPO)) + kp(t('cPO'), n(poSum - prodPO)) + kp(t('avance'), avPO + '%', avPO >= 100 ? 'var(--green)' : '');
+  } else {
+    kpiHtml = kp(t('target'), n(tot.t)) + kp(t('prod'), n(tot.p)) + kp(t('pend'), n(tot.t - tot.p)) + kp(t('avance'), avTot + '%', avTot >= 100 ? 'var(--green)' : '');
+  }
+  var html = '<div class="kpis">' + kpiHtml + '</div>';
 
   // Cadena PO: Próximo envío → PO Balance por producir − Falta para el envío = PO Balance final,
   // y lista de próximos envíos por fecha (cada uno descuenta del PO en orden).

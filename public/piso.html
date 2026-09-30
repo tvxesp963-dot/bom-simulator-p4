@@ -81,6 +81,9 @@ h1{font-size:26px;margin:0}
 .ships .s .q{display:flex;justify-content:space-between;font-size:14px;color:var(--text2)}
 .ships .s .q b{color:var(--text)}.ships .s .q b.z{color:var(--green)}.ships .s .q b.f{color:var(--yellow)}
 .aviso{background:rgba(241,196,15,.12);border:1px solid var(--yellow);color:var(--yellow);border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:14px;font-weight:700}
+.pobar{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;font-size:14px;font-weight:700;color:var(--text2)}
+.pobar button{background:#0d1220;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 12px;font-weight:700;font-size:13px;cursor:pointer}
+.pobar button:hover{border-color:var(--accent)}
 .colpo{color:#7dd3fc;font-weight:800}
 .colpf{font-weight:800;color:var(--green)}
 @media (max-width:800px){.chain .crow{flex-wrap:wrap}.chain .c{flex:1 1 40%}.chain .op{display:none}}
@@ -121,6 +124,7 @@ h1{font-size:26px;margin:0}
   .acciones,.langs,.bar{display:none!important}
   h1{font-size:18px}.sub{font-size:11px;margin-bottom:6px}
   .kpis{gap:6px;margin-bottom:8px}
+  .pobar button{display:none!important}
   .chain{gap:6px;padding:6px;margin-bottom:8px;border:1px solid #999}.chain .c{padding:4px 8px;border:1px solid #999}.chain .c .v{font-size:16px}.chain .c .l,.chain .c .h{font-size:9px}.chain .op{font-size:14px}
   .ships{gap:6px;margin-bottom:8px}.ships .s{padding:4px 8px;border:1px solid #999}.ships .s .d{font-size:11px}.ships .s .q{font-size:10px}.kpi{padding:6px 10px;border:1px solid #999}.kpi .l{font-size:10px}.kpi .v{font-size:18px}
   .tblwrap{overflow:visible!important}.tbl{min-width:0!important}.tbl th,.tbl td{position:static!important;box-shadow:none!important}
@@ -194,7 +198,7 @@ var T = {
       hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material se republica solo cada 5 min (BOM Simulator abierto) · Producido en vivo de ShipQR',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
-      kPO:'PO Balance total',cYa:'Ya producido para este envío',cYah:'Solo los modelos de este envío',cFalta2h:'Viene de la resta de arriba',shipProd:'Ya producido',sigTag:'SIGUIENTE',sinPO:'PO Balance no disponible: en el BOM Simulator sube el Excel del plan (con columnas PO Balance y Ship) y presiona 📤 Publicar TV.',sigLinea:'Siguiente en ASSY1',completoTxt:'completo',poBal:'PO Balance',poFinal:'PO final',cNext:'Próximo envío',cPO:'PO Balance por producir',cPOh:'PO abierto − producido',cFalta:'Falta para el envío',cFaltah:'Baja al producir',cFinal:'PO Balance final',cFinalh:'Lo que queda después del envío',shipsT:'Próximos envíos (se descuentan en orden)',shipQty:'Cantidad a enviar',shipFalta:'Falta',poAfter:'PO después del envío',nxt:'SIGUIENTE',prog:'PROGRAMADO',
+      kPO:'PO Balance total',poTitulo:'Resumen de PO y envíos',ocultar:'Ocultar',mostrar:'Mostrar',estim:'ESTIMADO',restoTxt:'Resto del PO sin fecha en el Excel',cYa:'Ya producido para este envío',cYah:'Solo los modelos de este envío',cFalta2h:'Viene de la resta de arriba',shipProd:'Ya producido',sigTag:'SIGUIENTE',sinPO:'PO Balance no disponible: en el BOM Simulator sube el Excel del plan (con columnas PO Balance y Ship) y presiona 📤 Publicar TV.',sigLinea:'Siguiente en ASSY1',completoTxt:'completo',poBal:'PO Balance',poFinal:'PO final',cNext:'Próximo envío',cPO:'PO Balance por producir',cPOh:'PO abierto − producido',cFalta:'Falta para el envío',cFaltah:'Baja al producir',cFinal:'PO Balance final',cFinalh:'Lo que queda después del envío',shipsT:'Próximos envíos (se descuentan en orden)',shipQty:'Cantidad a enviar',shipFalta:'Falta',poAfter:'PO después del envío',nxt:'SIGUIENTE',prog:'PROGRAMADO',
       d:'d',h:'h',m:'min',pzas:'pzas',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],loc:'es-MX'},
   en:{title:'Production order · ASSY1',loading:'Loading plan...',corte:'Cutoff',faltan:'left',publicado:'Published',viejo:'(plan older than 12 h)',
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
@@ -204,7 +208,7 @@ var T = {
       hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material auto-republished every 5 min (BOM Simulator open) · Produced live from ShipQR',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
-      kPO:'Total PO balance',cYa:'Already produced for this shipment',cYah:'Only the models in this shipment',cFalta2h:'From the subtraction above',shipProd:'Already produced',sigTag:'NEXT',sinPO:'PO Balance not available: in BOM Simulator upload the plan Excel (with PO Balance and Ship columns) and press 📤 Publicar TV.',sigLinea:'Next on ASSY1',completoTxt:'complete',poBal:'PO Balance',poFinal:'Final PO',cNext:'Next shipment',cPO:'PO balance to produce',cPOh:'Open PO − produced',cFalta:'Left for shipment',cFaltah:'Goes down as we produce',cFinal:'Final PO balance',cFinalh:'What remains after the shipment',shipsT:'Upcoming shipments (deducted in order)',shipQty:'Shipment qty',shipFalta:'Left',poAfter:'PO after shipment',nxt:'NEXT',prog:'SCHEDULED',
+      kPO:'Total PO balance',poTitulo:'PO & shipments summary',ocultar:'Hide',mostrar:'Show',estim:'ESTIMATED',restoTxt:'Rest of PO with no date in the Excel',cYa:'Already produced for this shipment',cYah:'Only the models in this shipment',cFalta2h:'From the subtraction above',shipProd:'Already produced',sigTag:'NEXT',sinPO:'PO Balance not available: in BOM Simulator upload the plan Excel (with PO Balance and Ship columns) and press 📤 Publicar TV.',sigLinea:'Next on ASSY1',completoTxt:'complete',poBal:'PO Balance',poFinal:'Final PO',cNext:'Next shipment',cPO:'PO balance to produce',cPOh:'Open PO − produced',cFalta:'Left for shipment',cFaltah:'Goes down as we produce',cFinal:'Final PO balance',cFinalh:'What remains after the shipment',shipsT:'Upcoming shipments (deducted in order)',shipQty:'Shipment qty',shipFalta:'Left',poAfter:'PO after shipment',nxt:'NEXT',prog:'SCHEDULED',
       d:'d',h:'h',m:'min',pzas:'pcs',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],loc:'en-US'},
   ko:{title:'생산 순서 · ASSY1',loading:'계획 불러오는 중...',corte:'출하 마감',faltan:'남음',publicado:'게시',viejo:'(12시간 이상 지난 계획)',
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
@@ -214,7 +218,7 @@ var T = {
       hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 5분마다 자동 재게시 (BOM Simulator 열림) · 생산 수량은 ShipQR 실시간',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
-      kPO:'총 PO 잔량',cYa:'이 출하분 기생산',cYah:'이 출하 모델만 해당',cFalta2h:'위 계산 결과',shipProd:'기생산',sigTag:'다음',sinPO:'PO 잔량 없음: BOM Simulator에서 계획 Excel(PO Balance, Ship 열 포함)을 올리고 📤 Publicar TV를 누르세요.',sigLinea:'ASSY1 다음',completoTxt:'완료',poBal:'PO 잔량',poFinal:'최종 PO',cNext:'다음 출하',cPO:'생산 대기 PO 잔량',cPOh:'미결 PO − 생산',cFalta:'출하까지 부족',cFaltah:'생산 시 감소',cFinal:'최종 PO 잔량',cFinalh:'출하 후 남는 수량',shipsT:'예정 출하 (순서대로 차감)',shipQty:'출하 수량',shipFalta:'부족',poAfter:'출하 후 PO',nxt:'다음',prog:'예정',
+      kPO:'총 PO 잔량',poTitulo:'PO 및 출하 요약',ocultar:'숨기기',mostrar:'보기',estim:'예상',restoTxt:'엑셀에 날짜 없는 PO 잔량',cYa:'이 출하분 기생산',cYah:'이 출하 모델만 해당',cFalta2h:'위 계산 결과',shipProd:'기생산',sigTag:'다음',sinPO:'PO 잔량 없음: BOM Simulator에서 계획 Excel(PO Balance, Ship 열 포함)을 올리고 📤 Publicar TV를 누르세요.',sigLinea:'ASSY1 다음',completoTxt:'완료',poBal:'PO 잔량',poFinal:'최종 PO',cNext:'다음 출하',cPO:'생산 대기 PO 잔량',cPOh:'미결 PO − 생산',cFalta:'출하까지 부족',cFaltah:'생산 시 감소',cFinal:'최종 PO 잔량',cFinalh:'출하 후 남는 수량',shipsT:'예정 출하 (순서대로 차감)',shipQty:'출하 수량',shipFalta:'부족',poAfter:'출하 후 PO',nxt:'다음',prog:'예정',
       d:'일',h:'시간',m:'분',pzas:'개',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],loc:'ko-KR'}
 };
 var lang = 'es';
@@ -305,6 +309,13 @@ function leerProducido(){
 // Si no sale pallet nuevo en MIN_SIN_PALLET minutos, ya no se marca ninguno.
 // (Ajustable: cambiar este número si se necesita más o menos tiempo.)
 var MIN_SIN_PALLET = 120;
+// Fecha a la que se asigna el resto del PO que el Excel aún no tiene en ningún envío (ajustable cada semana).
+var FECHA_RESTO_PO = '2026-10-09';
+// Mostrar / ocultar el resumen de PO y envíos (se recuerda en este navegador).
+var verPO = true;
+try { verPO = localStorage.getItem('pisoPO') !== '0'; } catch (e) {}
+function togglePO(){ verPO = !verPO; try { localStorage.setItem('pisoPO', verPO ? '1' : '0'); } catch (e) {} pintar(); }
+window.togglePO = togglePO;
 var enLinea = null; // { sm, ts }
 function leerEnLinea(){
   db.collection('shipqr_pallets').orderBy('created_at', 'desc').limit(15).get().then(function(snap){
@@ -428,12 +439,23 @@ function pintar(){
     });
     var lista = Object.keys(gs).sort(function(a, b){ return (a || '9999').localeCompare(b || '9999'); })
       .map(function(k){ return gs[k]; }).filter(function(g){ return g.falta > 0; });
+    // Resto del PO sin envío en el Excel = PO abierto − cantidad de envío de cada modelo.
+    // Se muestra como envío estimado en FECHA_RESTO_PO; lo ya producido de más en esos modelos se descuenta.
+    var rq = 0, rp = 0, rDet = [];
+    conPO.forEach(function(f){
+      var po = Number(f.m.poBalance), tg = f.m.target || 0;
+      var extra = Math.max(0, po - tg), ya = Math.min(extra, Math.max(0, f.prod - tg));
+      rq += extra; rp += ya;
+      if (extra - ya > 0) rDet.push(f.m.sm + ': ' + n(extra - ya));
+    });
+    if (rq - rp > 0) lista.push({ fecha: FECHA_RESTO_PO, qty: rq, falta: rq - rp, resto: true, det: rDet.join(' · ') });
     if (lista.length) {
       var rest = poTot;
       lista.forEach(function(g){ rest -= g.falta; g.after = Math.max(0, rest); g.prod = g.qty - g.falta; });
       var g0 = lista[0];
+      html += '<div class="pobar"><span>' + t('poTitulo') + '</span><button onclick="togglePO()">' + (verPO ? '▲ ' + t('ocultar') : '▼ ' + t('mostrar')) + '</button></div>';
       var card = function(cls, l, v, h){ return '<div class="c' + cls + '"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="h">' + h + '</div></div>'; };
-      html += '<div class="chain">' +
+      if (verPO) html += '<div class="chain">' +
         // Ecuación 1 (envío): lo que se debe producir para el envío − lo que ya se produjo = lo que falta
         '<div class="crow">' + card('', t('cNext'), n(g0.qty), fechaEnvio(g0.fecha)) + '<div class="op">−</div>' +
           card('', t('cYa'), n(g0.prod), t('cYah')) + '<div class="op">=</div>' +
@@ -442,8 +464,9 @@ function pintar(){
         '<div class="crow">' + card('', t('cPO'), n(poTot), t('cPOh')) + '<div class="op">−</div>' +
           card(' f', t('cFalta'), n(g0.falta), t('cFalta2h')) + '<div class="op">=</div>' +
           card(' z', t('cFinal'), n(g0.after), t('cFinalh')) + '</div></div>';
-      html += '<div class="ships">' + lista.slice(0, 4).map(function(g, i){
-        return '<div class="s' + (i === 0 ? ' nx' : '') + '"><div class="d"><span>' + fechaEnvio(g.fecha) + '</span><span>' + (i === 0 ? t('nxt') : t('prog')) + '</span></div>' +
+      if (verPO) html += '<div class="ships">' + lista.slice(0, 5).map(function(g, i){
+        return '<div class="s' + (i === 0 ? ' nx' : '') + '"' + (g.resto ? ' title="' + esc(g.det) + '"' : '') + '><div class="d"><span>' + fechaEnvio(g.fecha) + '</span><span>' + (g.resto ? t('estim') : (i === 0 ? t('nxt') : t('prog'))) + '</span></div>' +
+          (g.resto ? '<div class="q"><span style="font-size:12px">' + t('restoTxt') + '</span></div>' : '') +
           '<div class="q"><span>' + t('shipQty') + '</span><b>' + n(g.qty) + '</b></div>' +
           '<div class="q"><span>' + t('shipProd') + '</span><b>' + n(g.prod) + '</b></div>' +
           '<div class="q"><span>' + t('shipFalta') + '</span><b class="f">' + n(g.falta) + '</b></div>' +

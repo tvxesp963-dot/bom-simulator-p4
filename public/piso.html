@@ -49,6 +49,7 @@ h1{font-size:26px;margin:0}
 .num.wait{background:#1f2a3d;color:var(--text2);font-size:18px}
 .mdl{font-weight:800;color:var(--accent)}
 .code{font-size:12px;color:var(--text3)}
+.mdl + .code{font-size:15px;font-weight:700;color:#fcd34d;letter-spacing:.3px}
 .chip{display:inline-block;font-size:13px;font-weight:700;padding:3px 8px;border-radius:6px;margin:2px}
 .ok{background:rgba(0,230,118,.15);color:var(--green)}
 .no{background:rgba(255,77,77,.18);color:var(--red)}
@@ -84,7 +85,7 @@ h1{font-size:26px;margin:0}
 .pobar{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;font-size:14px;font-weight:700;color:var(--text2)}
 .pobar button{background:#0d1220;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 12px;font-weight:700;font-size:13px;cursor:pointer}
 .pobar button:hover{border-color:var(--accent)}
-.potbl{margin-bottom:14px}.potbl .ptit{font-size:14px;font-weight:700;color:var(--text2);margin:0 0 6px}.potbl td,.potbl th{padding:6px 10px}.potbl tr.tot td{font-weight:800;border-top:2px solid var(--border);background:var(--card2)}.potbl .pf{color:var(--yellow);font-weight:800}
+.potbl{margin-bottom:14px}.potbl .ptit{font-size:14px;font-weight:700;color:var(--text2);margin:0 0 6px}.potbl td,.potbl th{padding:6px 10px}.potbl tr.tot td{font-weight:800;border-top:2px solid var(--border);background:var(--card2)}.potbl .pf{color:var(--yellow);font-weight:800}.potbl tr.fam td{font-weight:800;background:#16233a;border-top:2px solid var(--border)}.potbl tr.fam td:first-child{color:#7dd3fc;font-size:15px}
 .colpo{color:#7dd3fc;font-weight:800}
 .colpf{font-weight:800;color:var(--green)}
 @media (max-width:800px){.chain .crow{flex-wrap:wrap}.chain .c{flex:1 1 40%}.chain .op{display:none}}
@@ -134,7 +135,7 @@ h1{font-size:26px;margin:0}
   tr{page-break-inside:avoid}
   .sep td{font-size:10px;padding:4px 6px;border-top:2px solid #000;border-bottom:1px solid #000;text-transform:uppercase}
   .num{width:22px;height:22px;font-size:12px;border:1.5px solid #000}
-  .mdl{font-size:12px}.code{font-size:8px;color:#444!important}
+  .mdl{font-size:12px}.code{font-size:8px;color:#444!important}.mdl + .code{font-size:10px;font-weight:700;color:#000!important}
   .chip{font-size:9px;padding:0 3px;margin:0 1px;border:1px solid #bbb;font-weight:400}
   .chip.no{border:1.5px solid #000;font-weight:800;text-decoration:underline}
   .chip.na{color:#888!important;border-style:dashed}
@@ -481,12 +482,26 @@ function pintar(){
           return { sm: f.m.sm, code: f.m.code || '', p: p, pr: pr, fl: fl, pcF: pcF };
         }).sort(function(a, b){ return b.fl - a.fl; });
         var sP = 0, sR = 0; pf.forEach(function(r){ sP += r.p; sR += r.pr; });
+        // Agrupar por familia (ej. SM-F976UZKACHA y SM-F976UZKAXAA -> F976), la que más falta va primero
+        var fams = {};
+        pf.forEach(function(r){
+          var mm = String(r.sm).replace(/^SM-/, '').match(/[A-Z]\d{3}/); r.fam = mm ? mm[0] : r.sm;
+          var g = fams[r.fam] || (fams[r.fam] = { fam: r.fam, rows: [], p: 0, pr: 0, fl: 0 });
+          g.rows.push(r); g.p += r.p; g.pr += r.pr; g.fl += r.fl;
+        });
+        var famList = Object.keys(fams).map(function(k){ return fams[k]; }).sort(function(a, b){ return b.fl - a.fl; });
         var sF = sP - sR, sPc = sP ? Math.round(sF * 100 / sP) : 0;
         var pfBar = function(pcF, fl){ return '<div class="bar"><div style="width:' + (100 - pcF) + '%;background:' + (fl > 0 ? '#7dd3fc' : 'var(--green)') + '"></div></div><div class="code">' + (100 - pcF) + '%</div>'; };
         html += '<div class="potbl"><div class="ptit">' + t('poTblT') + '</div><div class="tblwrap"><table class="tbl"><thead><tr><th>' + t('modelo') + '</th><th class="r">' + t('kPO') + '</th><th class="r">' + t('prod') + '</th><th class="r">' + t('poFaltaM') + '</th><th class="r">' + t('pctFalta') + '</th><th style="width:22%">' + t('avance') + '</th></tr></thead><tbody>' +
-          pf.map(function(r){
-            return '<tr' + (r.fl === 0 ? ' class="done"' : '') + '><td><div class="mdl">' + esc(r.sm) + '</div><div class="code">' + esc(r.code) + '</div></td><td class="r">' + n(r.p) + '</td><td class="r">' + n(r.pr) + '</td>' +
-              '<td class="r pf"' + (r.fl === 0 ? ' style="color:var(--green)"' : '') + '>' + n(r.fl) + '</td><td class="r pf"' + (r.fl === 0 ? ' style="color:var(--green)"' : '') + '>' + r.pcF + '%</td><td>' + pfBar(r.pcF, r.fl) + '</td></tr>';
+          famList.map(function(g){
+            var gp = g.p ? Math.round(g.fl * 100 / g.p) : 0; if (g.fl > 0 && gp === 0) gp = 1; if (g.fl > 0 && gp === 100 && g.pr > 0) gp = 99;
+            var gz = g.fl === 0 ? ' style="color:var(--green)"' : '';
+            return '<tr class="fam"><td>' + esc(g.fam) + ' <span class="code">(' + g.rows.length + ')</span></td><td class="r">' + n(g.p) + '</td><td class="r">' + n(g.pr) + '</td><td class="r pf"' + gz + '>' + n(g.fl) + '</td><td class="r pf"' + gz + '>' + gp + '%</td><td>' + pfBar(gp, g.fl) + '</td></tr>' +
+            g.rows.map(function(r){
+              var z = r.fl === 0 ? ' style="color:var(--green)"' : '';
+              return '<tr' + (r.fl === 0 ? ' class="done"' : '') + '><td style="padding-left:26px"><div class="mdl">' + esc(r.sm) + '</div><div class="code">' + esc(r.code) + '</div></td><td class="r">' + n(r.p) + '</td><td class="r">' + n(r.pr) + '</td>' +
+                '<td class="r pf"' + z + '>' + n(r.fl) + '</td><td class="r pf"' + z + '>' + r.pcF + '%</td><td>' + pfBar(r.pcF, r.fl) + '</td></tr>';
+            }).join('');
           }).join('') +
           '<tr class="tot"><td>' + t('totM') + '</td><td class="r">' + n(sP) + '</td><td class="r">' + n(sR) + '</td><td class="r pf">' + n(sF) + '</td><td class="r pf">' + sPc + '%</td><td>' + pfBar(sPc, sF) + '</td></tr>' +
           '</tbody></table></div></div>';

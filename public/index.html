@@ -1060,6 +1060,7 @@ function cargarPlanMultiExcel(file) {
       guardarPlanCompleto();
 
       let msg = `✅ ${agregados} modelo(s) cargado(s) desde Excel.`;
+      { const _nPO = Object.keys(window.simPOBalancePorModelo || {}).length; msg += _nPO ? ` · PO Balance: ${_nPO} modelo(s)` : ' · ⚠️ sin columna PO Balance'; }
       if (noEncontrados.length) msg += ` ⚠️ No encontrados en el BOM actual: ${noEncontrados.join(', ')}`;
       statusEl.textContent = msg;
     } catch (err) {

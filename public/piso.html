@@ -79,6 +79,7 @@ h1{font-size:26px;margin:0}
 .ships .s .d span:last-child{font-size:12px;color:#7dd3fc}
 .ships .s .q{display:flex;justify-content:space-between;font-size:14px;color:var(--text2)}
 .ships .s .q b{color:var(--text)}.ships .s .q b.z{color:var(--green)}.ships .s .q b.f{color:var(--yellow)}
+.aviso{background:rgba(241,196,15,.12);border:1px solid var(--yellow);color:var(--yellow);border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:14px;font-weight:700}
 .colpo{color:#7dd3fc;font-weight:800}
 .colpf{font-weight:800;color:var(--green)}
 @media (max-width:800px){.chain{flex-wrap:wrap}.chain .c{flex:1 1 40%}.chain .op{display:none}}
@@ -192,7 +193,7 @@ var T = {
       hojaPlan:'Orden',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',
       foot:'Orden = mismo "⚡ Listo" del Plan Requerido · Material se republica solo cada 5 min (BOM Simulator abierto) · Producido en vivo de ShipQR',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
-      poBal:'PO Balance',poFinal:'PO final',cNext:'Próximo envío',cPO:'PO Balance por producir',cPOh:'PO abierto − producido',cFalta:'Falta para el envío',cFaltah:'Se descuenta al producir',cFinal:'PO Balance final',cFinalh:'Lo que queda después del envío',shipsT:'Próximos envíos (se descuentan en orden)',shipQty:'Cantidad a enviar',shipFalta:'Falta',poAfter:'PO después del envío',nxt:'SIGUIENTE',prog:'PROGRAMADO',
+      sigTag:'SIGUIENTE',sinPO:'PO Balance no disponible: en el BOM Simulator sube el Excel del plan (con columnas PO Balance y Ship) y presiona 📤 Publicar TV.',sigLinea:'Siguiente en ASSY1',completoTxt:'completo',poBal:'PO Balance',poFinal:'PO final',cNext:'Próximo envío',cPO:'PO Balance por producir',cPOh:'PO abierto − producido',cFalta:'Falta para el envío',cFaltah:'Se descuenta al producir',cFinal:'PO Balance final',cFinalh:'Lo que queda después del envío',shipsT:'Próximos envíos (se descuentan en orden)',shipQty:'Cantidad a enviar',shipFalta:'Falta',poAfter:'PO después del envío',nxt:'SIGUIENTE',prog:'PROGRAMADO',
       d:'d',h:'h',m:'min',pzas:'pzas',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],loc:'es-MX'},
   en:{title:'Production order · ASSY1',loading:'Loading plan...',corte:'Cutoff',faltan:'left',publicado:'Published',viejo:'(plan older than 12 h)',
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
@@ -202,7 +203,7 @@ var T = {
       hojaPlan:'Order',impreso:'Generated',codigo:'Part number',seccion:'Section',
       foot:'Order = same "⚡ Ready" as Required Plan · Material auto-republished every 5 min (BOM Simulator open) · Produced live from ShipQR',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
-      poBal:'PO Balance',poFinal:'Final PO',cNext:'Next shipment',cPO:'PO balance to produce',cPOh:'Open PO − produced',cFalta:'Left for shipment',cFaltah:'Deducted as we produce',cFinal:'Final PO balance',cFinalh:'What remains after the shipment',shipsT:'Upcoming shipments (deducted in order)',shipQty:'Shipment qty',shipFalta:'Left',poAfter:'PO after shipment',nxt:'NEXT',prog:'SCHEDULED',
+      sigTag:'NEXT',sinPO:'PO Balance not available: in BOM Simulator upload the plan Excel (with PO Balance and Ship columns) and press 📤 Publicar TV.',sigLinea:'Next on ASSY1',completoTxt:'complete',poBal:'PO Balance',poFinal:'Final PO',cNext:'Next shipment',cPO:'PO balance to produce',cPOh:'Open PO − produced',cFalta:'Left for shipment',cFaltah:'Deducted as we produce',cFinal:'Final PO balance',cFinalh:'What remains after the shipment',shipsT:'Upcoming shipments (deducted in order)',shipQty:'Shipment qty',shipFalta:'Left',poAfter:'PO after shipment',nxt:'NEXT',prog:'SCHEDULED',
       d:'d',h:'h',m:'min',pzas:'pcs',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],loc:'en-US'},
   ko:{title:'생산 순서 · ASSY1',loading:'계획 불러오는 중...',corte:'출하 마감',faltan:'남음',publicado:'게시',viejo:'(12시간 이상 지난 계획)',
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
@@ -212,7 +213,7 @@ var T = {
       hojaPlan:'순서',impreso:'생성',codigo:'부품 번호',seccion:'구분',
       foot:'순서 = 필요 계획의 "⚡ 준비"와 동일 · 자재는 5분마다 자동 재게시 (BOM Simulator 열림) · 생산 수량은 ShipQR 실시간',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
-      poBal:'PO 잔량',poFinal:'최종 PO',cNext:'다음 출하',cPO:'생산 대기 PO 잔량',cPOh:'미결 PO − 생산',cFalta:'출하까지 부족',cFaltah:'생산 시 차감',cFinal:'최종 PO 잔량',cFinalh:'출하 후 남는 수량',shipsT:'예정 출하 (순서대로 차감)',shipQty:'출하 수량',shipFalta:'부족',poAfter:'출하 후 PO',nxt:'다음',prog:'예정',
+      sigTag:'다음',sinPO:'PO 잔량 없음: BOM Simulator에서 계획 Excel(PO Balance, Ship 열 포함)을 올리고 📤 Publicar TV를 누르세요.',sigLinea:'ASSY1 다음',completoTxt:'완료',poBal:'PO 잔량',poFinal:'최종 PO',cNext:'다음 출하',cPO:'생산 대기 PO 잔량',cPOh:'미결 PO − 생산',cFalta:'출하까지 부족',cFaltah:'생산 시 차감',cFinal:'최종 PO 잔량',cFinalh:'출하 후 남는 수량',shipsT:'예정 출하 (순서대로 차감)',shipQty:'출하 수량',shipFalta:'부족',poAfter:'출하 후 PO',nxt:'다음',prog:'예정',
       d:'일',h:'시간',m:'분',pzas:'개',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],loc:'ko-KR'}
 };
 var lang = 'es';
@@ -353,10 +354,7 @@ function pintar(){
            (viejo ? ' <span class="old">⚠ ' + t('viejo') + '</span>' :
             (edadMs > 30 * 6e4 ? ' <span class="corte ambar" style="font-size:16px">⚠ ' + t('matViejo') + ' ' + edadTxt + '</span>' : ''));
   }
-  if (enLinea) {
-    sub += ' · <span class="enlinea">▶ ' + t('enLinea') + ': ' + esc(enLinea.sm) + '</span> <span style="font-size:13px">(' + t('ultPallet') + ' ' +
-           enLinea.ts.toLocaleTimeString(t('loc'), {hour:'numeric', minute:'2-digit'}) + ')</span>';
-  }
+  if (enLinea) sub += ' · <span id="runSpan"></span>';
   document.getElementById('sub').innerHTML = sub;
 
   var app = document.getElementById('app');
@@ -383,6 +381,22 @@ function pintar(){
   var done = filas.filter(function(f){ return f.pend === 0; });
   window._ultimo = { run: run, wait: wait, done: done, tot: tot };
 
+  // Modelo que corre en ASSY1: el del último pallet. Si ese modelo ya se completó, deja de parpadear
+  // y el parpadeo pasa al siguiente de la fila (primero en "Se pueden correr"), hasta que salga un pallet nuevo.
+  var corriendoSM = null, esSiguiente = false;
+  if (enLinea) {
+    var fEn = filas.filter(function(f){ return f.m.sm === enLinea.sm; })[0];
+    if (!fEn || fEn.pend > 0) corriendoSM = enLinea.sm;
+    else if (run.length) { corriendoSM = run[0].m.sm; esSiguiente = true; }
+    var rs = document.getElementById('runSpan');
+    if (rs) {
+      rs.innerHTML = esSiguiente
+        ? '<span class="enlinea">▶ ' + t('sigLinea') + ': ' + esc(corriendoSM) + '</span> <span style="font-size:13px">(✓ ' + esc(enLinea.sm) + ' ' + t('completoTxt') + ')</span>'
+        : '<span class="enlinea">▶ ' + t('enLinea') + ': ' + esc(enLinea.sm) + '</span> <span style="font-size:13px">(' + t('ultPallet') + ' ' + enLinea.ts.toLocaleTimeString(t('loc'), {hour:'numeric', minute:'2-digit'}) + ')</span>';
+    }
+  }
+  var etiquetaRun = esSiguiente ? t('sigTag') : t('corriendo');
+
   var kp = function(l, v, color){ return '<div class="kpi"><div class="l">' + l + '</div><div class="v"' + (color ? ' style="color:' + color + '"' : '') + '>' + v + '</div></div>'; };
   var avTot = tot.t ? Math.round(tot.p * 100 / tot.t) : 0;
   var html = '<div class="kpis">' + kp(t('target'), n(tot.t)) + kp(t('prod'), n(tot.p)) + kp(t('pend'), n(tot.t - tot.p)) +
@@ -391,6 +405,7 @@ function pintar(){
   // Cadena PO: Próximo envío → PO Balance por producir − Falta para el envío = PO Balance final,
   // y lista de próximos envíos por fecha (cada uno descuenta del PO en orden).
   var conPO = filas.filter(function(f){ return f.po !== null; });
+  if (!conPO.length) html += '<div class="aviso">⚠ ' + t('sinPO') + '</div>';
   if (conPO.length) {
     var poTot = 0, gs = {};
     conPO.forEach(function(f){
@@ -442,9 +457,9 @@ function pintar(){
       var faltan = ['Strip','Top','Bot','Bundle'].filter(function(k){ return m.materiales && m.materiales[k] === false; });
       est = '<span class="est" style="color:var(--red)">' + (faltan.length ? t('falta') + ' ' + faltan.join(', ') : t('sinDatos')) + '</span>';
     }
-    var corre = enLinea && enLinea.sm === m.sm;
+    var corre = corriendoSM === m.sm;
     return '<tr' + (corre ? ' class="run-now"' : '') + '><td>' + num + '</td><td><div class="mdl">' + esc(m.sm) + '</div><div class="code">' + esc(m.code || '') + '</div>' +
-      (corre ? '<span class="runtag">▶ ' + t('corriendo') + '</span>' : '') + '</td>' +
+      (corre ? '<span class="runtag">▶ ' + etiquetaRun + '</span>' : '') + '</td>' +
       '<td style="white-space:nowrap">' + fechaEnvio(m.fecha) + '</td>' +
       '<td class="r hide-sm">' + n(m.target) + '</td><td class="r">' + n(f.prod) + '</td><td class="r" style="font-weight:800">' + n(f.pend) + '</td>' +
       '<td class="hide-sm" style="width:14%">' + bar(f, tipo === 'run' ? 'var(--green)' : '#5c6678') + '</td>' +
@@ -457,9 +472,7 @@ function pintar(){
   if (wait.length) html += '<tr class="sep"><td colspan="11">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
   if (done.length) html += '<tr class="sep sepdone"><td colspan="11">✓ ' + t('done') + '</td></tr>' + done.map(function(f){
     var extra = f.prod - (f.m.target || 0);
-    var corre = enLinea && enLinea.sm === f.m.sm;
-    return '<tr class="done' + (corre ? ' run-now' : '') + '"><td><span class="num ok">✓</span></td><td><div class="mdl">' + esc(f.m.sm) + '</div><div class="code">' + esc(f.m.code || '') + '</div>' +
-           (corre ? '<span class="runtag">▶ ' + t('corriendo') + '</span>' : '') + '</td>' +
+    return '<tr class="done"><td><span class="num ok">✓</span></td><td><div class="mdl">' + esc(f.m.sm) + '</div><div class="code">' + esc(f.m.code || '') + '</div></td>' +
            '<td style="white-space:nowrap">' + fechaEnvio(f.m.fecha) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td>' +
            '<td class="r"><span class="prodok">' + n(f.prod) + '</span>' + (extra > 0 ? '<span class="extra">+' + n(extra) + '</span>' : '') + '</td>' +
            '<td class="r" style="color:var(--green);font-weight:800">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td>' + poCells(f) + '<td></td>' +

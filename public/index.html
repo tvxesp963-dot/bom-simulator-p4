@@ -837,6 +837,7 @@ function toggleTree(idx) {
 // ── COMPARACIÓN MULTI-MODELO (no modifica lógica existente del Simulador) ──
 let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
+window.simPlanCargadoEn = window.simPlanCargadoEn || null;   // fecha/hora en que se cargó el Excel del plan (piso cuenta lo enviado desde entonces)
 window.simPOBalancePorModelo = window.simPOBalancePorModelo || {};   // PO Balance abierto por modelo (columna PO Balance del Excel)
 window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
 // Qué máquinas pueden correr cada CÓDIGO de medio proceso (GH69) — editable a mano
@@ -861,6 +862,7 @@ try {
     if (d.prioridades) window.simPrioridadPorModelo = Object.assign(window.simPrioridadPorModelo, d.prioridades);
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
     if (d.poBalance) window.simPOBalancePorModelo = Object.assign(window.simPOBalancePorModelo, d.poBalance);
+    if (d.planCargadoEn) window.simPlanCargadoEn = d.planCargadoEn;
     if (d.maquinasElegiblesPorCodigo) window.simMaquinasElegiblesPorCodigo = Object.assign(window.simMaquinasElegiblesPorCodigo, d.maquinasElegiblesPorCodigo);
     if (d.panelMaquinasColapsado !== undefined) window.simPanelMaquinasColapsado = d.panelMaquinasColapsado;
     // Migración del ajuste anterior (solo Zhongke por código) al esquema nuevo (todas las máquinas).
@@ -882,6 +884,7 @@ function guardarPlanCompleto() {
       prioridades: window.simPrioridadPorModelo || {},
       fechas: window.simFechaEntregaPorModelo || {},
       poBalance: window.simPOBalancePorModelo || {},
+      planCargadoEn: window.simPlanCargadoEn || null,
       maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {},
       panelMaquinasColapsado: !!window.simPanelMaquinasColapsado
     }));
@@ -1005,6 +1008,7 @@ function cargarPlanMultiExcel(file) {
       window.simPrioridadPorModelo = {};
       window.simFechaEntregaPorModelo = {};
       window.simPOBalancePorModelo = {};
+      window.simPlanCargadoEn = new Date().toISOString();   // marca de carga: piso cuenta como enviado lo que salga desde este momento
 
       const modelosBOM = [...new Set(BOM.map(r => r.sm))];
       let agregados = 0, noEncontrados = [];
@@ -6241,6 +6245,7 @@ async function publicarPlanPiso(auto) {
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
       publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida, auto: auto,
+      planCargadoEn: window.simPlanCargadoEn || null,
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
       capacidadSabado: (typeof CAPACIDAD_SABADO_ASSY1 !== 'undefined') ? CAPACIDAD_SABADO_ASSY1 : 0
     });

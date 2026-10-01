@@ -412,6 +412,8 @@ function pintar(){
 
   var run = filas.filter(function(f){ return f.pend > 0 && f.m.orden; }).sort(function(a,b){ return a.m.orden - b.m.orden; });
   var wait = filas.filter(function(f){ return f.pend > 0 && !f.m.orden; }).sort(function(a,b){ return (a.m.prioridad||999) - (b.m.prioridad||999); });
+  // Renumerar en vivo: 1, 2, 3… sin huecos (los completados ya no cuentan)
+  run.forEach(function(f, i){ f.m = Object.assign({}, f.m, { orden: i + 1 }); });
   var done = filas.filter(function(f){ return f.pend === 0; });
   window._ultimo = { run: run, wait: wait, done: done, tot: tot };
 

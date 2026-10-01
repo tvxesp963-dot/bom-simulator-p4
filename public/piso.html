@@ -131,7 +131,7 @@ h1{font-size:26px;margin:0}
   .pobar button{display:none!important}
   .chain{gap:6px;padding:6px;margin-bottom:8px;border:1px solid #999}.chain .c{padding:4px 8px;border:1px solid #999}.chain .c .v{font-size:16px}.chain .c .l,.chain .c .h{font-size:9px}.chain .op{font-size:14px}
   .ships{gap:6px;margin-bottom:8px}.ships .s{padding:4px 8px;border:1px solid #999}.ships .s .d{font-size:11px}.ships .s .q{font-size:10px}.kpi{padding:6px 10px;border:1px solid #999}.kpi .l{font-size:10px}.kpi .v{font-size:18px}
-  .tblwrap{overflow:visible!important}.tbl{min-width:0!important}.tbl th,.tbl td{position:static!important;box-shadow:none!important}
+  .tblwrap{overflow:visible!important;height:auto!important;max-height:none!important}.tbl{min-width:0!important}.tblmain .tbl thead th{position:static!important;box-shadow:none!important}.tbl th,.tbl td{position:static!important;box-shadow:none!important}
   .tbl{border:1px solid #666}.tbl th{font-size:9px;padding:4px 5px;border-bottom:2px solid #000}
   .tbl td{font-size:11px;padding:3px 5px;border-top:1px solid #ccc}
   tr{page-break-inside:avoid}
@@ -155,6 +155,11 @@ h1{font-size:26px;margin:0}
   .tbl{min-width:980px;overflow:visible}.tbl td{font-size:15px;padding:10px 6px}.kpi .v{font-size:24px}h1{font-size:20px}
   .tbl th:first-child,.tbl tr:not(.sep) td:first-child{position:sticky;left:0;z-index:2;background:var(--card2);min-width:54px;width:54px}
   .tbl th:nth-child(2),.tbl tr:not(.sep) td:nth-child(2){position:sticky;left:54px;z-index:2;background:var(--card2);box-shadow:6px 0 8px -4px rgba(0,0,0,.6)}}
+/* Encabezado de la tabla CONGELADO: lo de arriba queda fijo y solo las filas suben y bajan */
+.tblmain{overflow-y:auto;overflow-x:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.tblmain .tbl{overflow:visible}
+.tblmain .tbl thead th{position:sticky;top:0;z-index:5;background:#1b2538;box-shadow:0 2px 0 var(--border)}
+.tblmain .tbl th:first-child,.tblmain .tbl th:nth-child(2){z-index:7}
 /* Vista previa del Pick List (antes de imprimir) */
 #pickBar{display:none}
 body.vista-pick,body.vista-pick.fit{overflow:auto!important;height:auto!important;padding:0!important}
@@ -583,7 +588,7 @@ function pintar(){
       poCells(f) + '<td>' + chips(m) + '</td><td>' + est + '</td></tr>';
   };
 
-  html += '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th>' + t('envio') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
+  html += '<div class="tblwrap tblmain" id="tblMain"><table class="tbl"><thead><tr><th style="width:60px">' + t('orden') + '</th><th>' + t('modelo') + '</th><th>' + t('envio') + '</th><th class="r hide-sm">' + t('target') + '</th><th class="r">' + t('prod') +
           '</th><th class="r">' + t('pend') + '</th><th class="hide-sm">' + t('avance') + '</th><th class="r">' + t('poTot') + '</th><th class="r" style="color:#7dd3fc">' + t('poBal') + '</th><th class="r" style="color:var(--green)">' + t('poFinal') + '</th><th>' + t('material') + '</th><th>' + t('estado') + '</th></tr></thead><tbody>';
   if (run.length) html += '<tr class="sep"><td colspan="12">⚡ ' + t('run') + '</td></tr>' + run.map(function(f){ return fila(f, 'run'); }).join('');
   if (wait.length) html += '<tr class="sep"><td colspan="12">⏳ ' + t('wait') + '</td></tr>' + wait.map(function(f){ return fila(f, 'wait'); }).join('');
@@ -596,8 +601,11 @@ function pintar(){
            '<td><span class="est" style="color:var(--green)">✓ ' + t('completo') + '</span></td></tr>';
   }).join('');
   html += '</tbody></table></div>';
+  var tmPrev = document.getElementById('tblMain'), tmTop = tmPrev ? tmPrev.scrollTop : 0, tmLeft = tmPrev ? tmPrev.scrollLeft : 0;
   app.innerHTML = html;
   ajustarPantalla();
+  var tmNew = document.getElementById('tblMain');
+  if (tmNew) { tmNew.scrollTop = tmTop; tmNew.scrollLeft = tmLeft; }
 }
 // Tamaño AJUSTABLE A MANO (A− / 100% / A+). Antes se encogía todo automáticamente para
 // que cupiera en la pantalla y quedaba muy chico. Cada pantalla (TV, PC, celular) recuerda
@@ -612,7 +620,22 @@ function ajustarPantalla(){
   var pct = document.getElementById('btnZoomPct'); if (pct) { pct.textContent = Math.round(z * 100) + '%'; pct.title = t('zoomReset'); }
   var m = document.getElementById('btnZoomMenos'); if (m) m.title = t('zoomMenos');
   var M = document.getElementById('btnZoomMas'); if (M) M.title = t('zoomMas');
+  ajustarTabla();
 }
+// La tabla ocupa solo lo que queda de pantalla debajo del encabezado y los resúmenes:
+// lo de arriba se queda fijo (freeze) y las filas suben y bajan dentro de la tabla.
+function ajustarTabla(){
+  var w = document.getElementById('tblMain'); if (!w) return;
+  if (document.body.classList.contains('vista-pick')) return;
+  w.style.maxHeight = '';
+  var r = w.getBoundingClientRect();
+  var ratio = (w.offsetHeight > 0 && r.height > 0) ? r.height / w.offsetHeight : zoomActual();
+  var pie = document.getElementById('foot'), altoPie = pie ? pie.getBoundingClientRect().height : 0;
+  var libre = window.innerHeight - r.top - altoPie - 30;   // pantalla que queda debajo de la tabla, sin tapar el pie (px visibles)
+  var max = Math.max(220, libre) / (ratio || 1);         // en px del propio elemento (ya con el zoom)
+  w.style.maxHeight = Math.floor(max) + 'px';
+}
+window.ajustarTabla = ajustarTabla;
 function cambiarZoom(d){
   var z = d === 0 ? 1 : Math.min(3, Math.max(0.5, Math.round((zoomActual() + d) * 10) / 10));
   try { localStorage.setItem(ZOOM_KEY, z); } catch (e) {}

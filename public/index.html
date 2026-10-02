@@ -6439,6 +6439,90 @@ async function publicarPlanSemanal() {
 }
 window.publicarPlanSemanal = publicarPlanSemanal;
 
+// ── COLAS DE MEDIO PROCESO POR MÁQUINA (para el piso de S1-S5, Zhongke, VC1, VC2) ──
+// Usa EXACTAMENTE la misma lógica de la tabla "Plan Requerido · Medio Proceso"
+// (calcularPlanMedioProceso: prioridad del Excel + material disponible + máquinas
+// elegibles por código) y la convierte en una cola ordenada por máquina.
+// VC1/VC2: ranurado de Chip Board (Top / Bottom) en orden de prioridad.
+async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
+  const targetsMaq = await obtenerTargetsMaquinas();
+  const pickPorModelo = {};
+  (window._planPickList || []).forEach(p => {
+    if (!pickPorModelo[p.modelo]) pickPorModelo[p.modelo] = {};
+    pickPorModelo[p.modelo][p.etiqueta] = p;
+  });
+  const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+  const ordenados = conTargetOrdenado.slice().sort((a, b) => prio(a) - prio(b));
+  const planTop = calcularPlanMedioProceso('Top', ['Zhongke', 'S1', 'S2', 'S3', 'S4', 'S5'], ordenados, pickPorModelo, produccionReal, targetsMaq);
+  const planBot = calcularPlanMedioProceso('Bot', ['S1', 'S2', 'S3', 'S4', 'S5'], ordenados, pickPorModelo, produccionReal, targetsMaq);
+  const descDe = (tipo, modelos) => {
+    const sm = modelos[0];
+    const pick = (pickPorModelo[sm] || {})[tipo];
+    return (pick && pick.desc) || (tipo === 'Top' ? 'Gift box (Top)' : 'Lower box (Bottom)');
+  };
+  const colas = {};
+  const agregar = (maq, tipo, plan) => {
+    const porCodigo = {};
+    plan.dias.forEach((d, di) => (d.asignacionesPorMaquina[maq] || []).forEach(a => {
+      const k = tipo + '|' + a.codeHijo;
+      if (!porCodigo[k]) porCodigo[k] = { tipo, pn: String(a.codeHijo).toUpperCase(), modelos: a.modelos.slice(), pendiente: 0, dia0: di, listo: true };
+      porCodigo[k].pendiente += a.qty;
+    }));
+    // Códigos sin material suficiente: van al final de la cola de las máquinas elegibles
+    plan.sinMaterial.forEach(it => {
+      if (!esElegibleParaMaquina(it.codeHijo, maq)) return;
+      const k = tipo + '|' + it.codeHijo;
+      if (porCodigo[k]) { porCodigo[k].falta = it.restante; return; }
+      porCodigo[k] = { tipo, pn: String(it.codeHijo).toUpperCase(), modelos: it.modelos.slice(), pendiente: it.restante, dia0: 999, listo: false };
+    });
+    (colas[maq] = colas[maq] || []).push(...Object.values(porCodigo));
+  };
+  ['Zhongke', 'S1', 'S2', 'S3', 'S4', 'S5'].forEach(m => agregar(m, 'Top', planTop));
+  ['S1', 'S2', 'S3', 'S4', 'S5'].forEach(m => agregar(m, 'Bot', planBot));
+
+  // VC1 (Chip Board Top) y VC2 (Chip Board Bottom): ranurar lo que falta, con pool compartido de virgen
+  const pool = {};
+  const tomar = (pn, cant) => { if (!pn) return 0; if (pool[pn] === undefined) { const r = BOM.find(x => x.pn === pn); pool[pn] = r ? (r.inv || 0) : 0; } const t = Math.min(pool[pn], cant); pool[pn] -= t; return t; };
+  ordenados.forEach(sm => {
+    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
+    if (pendiente <= 0) return;
+    [['VC1', 'TOP', 'Top'], ['VC2', 'BOTTOM', 'Bottom']].forEach(([maq, pos, txt]) => {
+      const virgen = getComp(sm, ['CHIP BOARD ' + pos, 'VIRGEN']);
+      const ranur = getComp(sm, ['CHIP BOARD ' + pos, 'RANURADO']);
+      if (!virgen || !ranur) return;
+      const falta = Math.max(0, pendiente - (ranur.inv || 0));
+      if (falta <= 0) return;
+      const ok = tomar(virgen.pn, falta);
+      const lista = colas[maq] = colas[maq] || [];
+      const ex = lista.find(x => x.pn === String(ranur.pn).toUpperCase());
+      if (ex) { ex.pendiente += falta; ex.modelos.push(sm); if (ok > 0) ex.listo = true; return; }
+      lista.push({ tipo: 'VC', pn: String(ranur.pn).toUpperCase(), desc: ranur.desc || ('Chip Board ' + txt + ' (Ranurado)'), modelos: [sm], pendiente: falta, dia0: ok > 0 ? 0 : 999, listo: ok > 0 });
+    });
+  });
+
+  // Orden final por máquina: primero lo que tiene material (en el orden del plan), luego lo que no
+  const salida = {};
+  Object.keys(colas).forEach(maq => {
+    const cap = targetsMaq[maq] || 0;
+    const lista = colas[maq].slice().sort((a, b) => (b.listo - a.listo) || (a.dia0 - b.dia0) || (Math.min(...a.modelos.map(prio)) - Math.min(...b.modelos.map(prio))));
+    salida[maq] = lista.map((it, i) => ({
+      orden: i + 1, sm: it.modelos[0], modelos: it.modelos, pn: it.pn,
+      desc: it.desc || descDe(it.tipo === 'Bot' ? 'Bot' : 'Top', it.modelos),
+      pendiente: Math.round(it.pendiente), listo: !!it.listo,
+      dias: (cap > 0 && it.pendiente > 0) ? Math.round(it.pendiente / cap * 10) / 10 : null
+    }));
+  });
+  return salida;
+}
+
+async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionReal) {
+  const colas = await calcularColasMedioProceso(conTargetOrdenado, produccionReal);
+  await db.collection('bom_simulator_p4').doc('plan_piso_medio').set({
+    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto,
+    colas: colas
+  });
+}
+
 // ── PUBLICAR AL PISO ──
 // Guarda una "foto" del Plan Requerido (mismo orden ⚡ Listo, material de los 4
 // componentes Strip/Top/Bot/Bundle) en bom_simulator_p4/plan_piso, para que la
@@ -6522,10 +6606,15 @@ async function publicarPlanPiso(auto) {
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
       capacidadSabado: (typeof CAPACIDAD_SABADO_ASSY1 !== 'undefined') ? CAPACIDAD_SABADO_ASSY1 : 0
     });
+    // Misma publicación para el piso de medio proceso (S1-S5, Zhongke, VC1, VC2)
+    let avisoMedio = '';
+    try { await publicarPlanMedio(auto, u, conTarget, produccionReal); }
+    catch (eMedio) { console.warn('[Publicar medio proceso]', eMedio); avisoMedio = eMedio.message || 'error'; }
     if (!auto) { window._pisoAutoOn = true; window._pisoAutoTick = 0; window._pisoAutoTick2 = 0; }
     window._pisoAutoEstado = { estado: 'OK', alertas: 0 };
     try { localStorage.setItem('pisoAutoOn_p4', String(Date.now())); } catch (e) {}
     if (!auto) latidoPisoAuto();
+    if (avisoMedio && !auto) window.alert('ASSY publicado, pero el plan de medio proceso falló: ' + avisoMedio);
     regresar(auto ? '' : '✅ Publicado · auto 5 min');
   } catch (e) {
     alert('Error: ' + e.message);

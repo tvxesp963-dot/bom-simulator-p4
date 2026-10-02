@@ -2439,13 +2439,15 @@ function renderCons() {
       // que solo aparecen en la total: urgente ya cubierto, pero el PO completo sí falta).
       const gT = capTotal[pl.key] || {};
       const keys = Object.keys(grupos); Object.keys(gT).forEach(k => { if (keys.indexOf(k) < 0) keys.push(k); });
-      const mapaModelo = (g) => { const o = {}; ((g && g.modelos) || []).forEach(m => { o[m.sm] = (m.aPedir > 0 ? m.falta : 0); }); return o; };
+      const mapaModelo = (g) => { const o = {}; ((g && g.modelos) || []).forEach(m => { o[m.sm] = ((m.aPedir > 0 || (g.esBundle && (g.desc||'').toUpperCase() === 'BUNDLE')) && m.falta > 0 ? m.falta : 0); }); return o; };
       filasCapas = keys.map(k => {
         const gU = grupos[k], gTT = gT[k], base = gU || gTT;
         const d = (base.desc||'').toUpperCase();
         const esRanu = d.includes('RANURADO') && (d.includes('CHIP BOARD TOP') || d.includes('CHIP BOARD BOTTOM'));
-        const fU = gU ? gU.faltaAcumulada : 0;
-        const fT = gTT ? gTT.faltaAcumulada : 0;
+        // Bundle terminado (padre): no genera pedido propio, pero su faltante se muestra siempre (urgente y PO Balance)
+        const esHdr = base.esBundle && d === 'BUNDLE';
+        const fU = gU ? (esHdr ? gU.faltaMostrada : gU.faltaAcumulada) : 0;
+        const fT = gTT ? (esHdr ? gTT.faltaMostrada : gTT.faltaAcumulada) : 0;
         const fA = Math.max(0, fT - fU);
         const mU = mapaModelo(gU), mT = mapaModelo(gTT);
         const txtU = [], txtA = [];
@@ -2458,9 +2460,9 @@ function renderCons() {
         const prios = Object.keys(mT).concat(Object.keys(mU)).map(x => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[x]) || 999);
         return { _prio: prios.length ? Math.min.apply(null, prios) : 999, pn: base.pn, desc: base.desc, esBundle: base.esBundle, esRanu,
                  inv: gU ? gU.invMuestra : gTT.invMuestra,
-                 fU, fA, pYA: fU > 0 ? calcularAPedir(fU) : 0, pAnt: fA > 0 ? calcularAPedir(fA) : 0,
+                 fU, fA, pYA: (!esHdr && fU > 0) ? calcularAPedir(fU) : 0, pAnt: (!esHdr && fA > 0) ? calcularAPedir(fA) : 0,
                  txtU: txtU.join(' · '), txtA: txtA.join(' · '),
-                 infoBundle: !!(gU && esBundleHeaderInfo(gU)) };
+                 infoBundle: esHdr };
       }).filter(f => !f.esRanu && (f.fU > 0 || f.fA > 0 || f.infoBundle)).map((f,i) => ({...f, _i:i})).sort((a,b) => (a._prio - b._prio) || (a._i - b._i));  // orden = prioridad del Excel
       window.consCapas.grupos[pl.key] = filasCapas.map(f => ({...f, total: f.pYA + f.pAnt}));
     }
@@ -3223,7 +3225,7 @@ function exportarExcel() {
         const bg = i%2===1 ? ALT_BG : null;
         const esHB = row.esBundle && !(row.desc||'').toUpperCase().includes('MANUAL');
         const txt = [row.txtU ? `${capT('urg')}: ${row.txtU}` : '', row.txtA ? `${capT('antc')}: ${row.txtA}` : ''].filter(Boolean).join('  |  ');
-        const nota = row.total>0 ? `${pl.key} ${capT('pedir')}: ${capT('ya')} ${row.pYA.toLocaleString()} + ${capT('ant')} ${row.pAnt.toLocaleString()}` : (esHB ? `${pl.key} PRODUCIR ${row.fU.toLocaleString()}` : 'OK');
+        const nota = row.total>0 ? `${pl.key} ${capT('pedir')}: ${capT('ya')} ${row.pYA.toLocaleString()} + ${capT('ant')} ${row.pAnt.toLocaleString()}` : (esHB ? (row.fU>0||row.fA>0 ? `${pl.key} PRODUCIR: ${capT('ya')} ${row.fU.toLocaleString()} + ${capT('ant')} ${row.fA.toLocaleString()}` : 'OK') : 'OK');
         pushX([
           n(noX++,false,null,bg,'center'),
           c(row.pn,true,row.esBundle?'FFFFFF':'1A4F9C',row.esBundle?BUNDLE_BG:bg),

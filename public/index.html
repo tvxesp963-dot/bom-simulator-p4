@@ -450,19 +450,35 @@ function goTab(n) {
       if (tabPlan && tabPlan.classList.contains('active')) {
         if (modoSoloSimulador) { if (typeof cargarPlanCompartido === 'function') cargarPlanCompartido(); }
         else if (typeof sincronizarProducidoDesdeMES === 'function') {
-          const p = sincronizarProducidoDesdeMES();
-          // AUTO-PUBLICAR AL PISO cada 5 min: solo admin y solo si ya presionó "📤 Publicar TV"
-          // en esta sesión (así nunca se publica un plan a medio armar). Espera a que termine
-          // la sincronización del Producido para publicar con los números frescos.
-          window._pisoAutoTick = (window._pisoAutoTick || 0) + 1;
-          if (window._pisoAutoOn && adminAuthed && window._pisoAutoTick % 5 === 0 && typeof publicarPlanPiso === 'function') {
-            Promise.resolve(p).catch(() => {}).then(() => publicarPlanPiso(true));
-          }
+          sincronizarProducidoDesdeMES();
+          // (La auto-publicación al piso ya no depende de esta pestaña: la hace tickPisoAuto, abajo.)
         }
       }
     }, 60000);
   }
 }
+
+// AUTO-PUBLICAR AL PISO cada 5 min, en CUALQUIER pestaña del BOM Simulator (antes solo funcionaba con la
+// pestaña "Plan" abierta). Solo admin, y solo si ya presionó "📤 Publicar TV" (así nunca se publica un plan a
+// medio armar). Ese permiso se recuerda 24 h en este navegador, para que sobreviva a un refresco de la página.
+// Cada minuto manda un "latido" a Firestore para que piso.html sepa si el BOM Simulator sigue publicando y,
+// si no, muestre el motivo.
+window._pisoAutoEstado = window._pisoAutoEstado || { estado: 'OK', alertas: 0 };
+function latidoPisoAuto() {
+  try {
+    if (typeof db === 'undefined' || !db) return;
+    const e = window._pisoAutoEstado || {};
+    db.collection('bom_simulator_p4').doc('piso_auto').set({ ts: Date.now(), estado: e.estado || 'OK', alertas: e.alertas || 0 }).catch(() => {});
+  } catch (err) {}
+}
+function tickPisoAuto() {
+  if (!window._pisoAutoOn || !adminAuthed || modoSoloSimulador || typeof publicarPlanPiso !== 'function') return;
+  window._pisoAutoTick2 = (window._pisoAutoTick2 || 0) + 1;
+  if (window._pisoAutoTick2 % 5 !== 0) { latidoPisoAuto(); return; }
+  const p = (typeof sincronizarProducidoDesdeMES === 'function') ? sincronizarProducidoDesdeMES() : null;
+  Promise.resolve(p).catch(() => {}).then(() => publicarPlanPiso(true)).catch(() => { window._pisoAutoEstado = { estado: 'ERROR', alertas: 0 }; }).then(latidoPisoAuto);
+}
+if (!window._pisoAutoTimer) window._pisoAutoTimer = setInterval(tickPisoAuto, 60000);
 
 // DRAG & DROP
 const dz = document.getElementById('dropZone');
@@ -3459,6 +3475,7 @@ Storage.prototype.removeItem = function (k) {
 };
 
 function alEntrarAdminPlan() {
+  try { const t0 = Number(localStorage.getItem('pisoAutoOn_p4') || 0); if (t0 && Date.now() - t0 < 24 * 36e5) { window._pisoAutoOn = true; latidoPisoAuto(); } } catch (e) {}
   var b = document.getElementById('btnCompartirPlan'); if (b) b.style.display = '';
   if (!db) return;
   // Si todavía no hay plan compartido, se comparte el de este navegador.
@@ -6178,7 +6195,7 @@ async function publicarPlanPiso(auto) {
   const alert = auto ? (m) => console.warn('[Auto-publicar piso]', m) : (m) => window.alert(m);
   if (auto && window._publicandoPiso) return;
   if (!adminAuthed) { alert('Solo el administrador puede publicar al piso.'); return; }
-  if (auto) { ejecutarAutochequeo(); if (window._autoChk && window._autoChk.errores.length) { console.warn('[Auto-publicar piso] omitido: Autochequeo con alertas'); return; } }
+  if (auto) { ejecutarAutochequeo(); if (window._autoChk && window._autoChk.errores.length) { window._pisoAutoEstado = { estado: 'AUTOCHEQUEO', alertas: window._autoChk.errores.length }; console.warn('[Auto-publicar piso] omitido: Autochequeo con alertas'); return; } }
   else if (!confirmarSiHayAlertas()) return;
   if (!db) { alert('Firebase no disponible — no se pudo publicar'); return; }
   window._publicandoPiso = true;
@@ -6249,7 +6266,10 @@ async function publicarPlanPiso(auto) {
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
       capacidadSabado: (typeof CAPACIDAD_SABADO_ASSY1 !== 'undefined') ? CAPACIDAD_SABADO_ASSY1 : 0
     });
-    if (!auto) { window._pisoAutoOn = true; window._pisoAutoTick = 0; }
+    if (!auto) { window._pisoAutoOn = true; window._pisoAutoTick = 0; window._pisoAutoTick2 = 0; }
+    window._pisoAutoEstado = { estado: 'OK', alertas: 0 };
+    try { localStorage.setItem('pisoAutoOn_p4', String(Date.now())); } catch (e) {}
+    if (!auto) latidoPisoAuto();
     regresar(auto ? '' : '✅ Publicado · auto 5 min');
   } catch (e) {
     alert('Error: ' + e.message);

@@ -710,7 +710,7 @@ function quitarPinBOM() {
       document.getElementById('semanaRef').value = d.semana || '';
       if (typeof actualizarInvBOM === 'function') actualizarInvBOM();
       const fc = document.getElementById('fileChip');
-      if (fc) fc.innerHTML = `<div class="file-chip">✅ BOM actual de Firebase · ${BOM.length.toLocaleString()} filas</div>`;
+      if (fc) fc.innerHTML = `<div class="file-chip">✅ BOM actual de Firebase · ${BOM.length.toLocaleString('en-US')} filas</div>`;
       renderPreview(); renderSim(); renderCons(); renderProd();
     }
     actualizarUIPin();
@@ -728,7 +728,7 @@ function restaurarBomFijado() {
     BOM = data.bom;
     document.getElementById('semanaRef').value = data.semana || '';
     document.getElementById('fileChip').innerHTML =
-      `<div class="file-chip">📌 ${data.nombre} · fijado · ${BOM.length.toLocaleString()} filas</div>`;
+      `<div class="file-chip">📌 ${data.nombre} · fijado · ${BOM.length.toLocaleString('en-US')} filas</div>`;
     document.getElementById('pinBomExcel').checked = true;
     renderPreview(); renderSim(); renderCons(); renderProd();
     document.getElementById('btnExport').style.display = 'flex';
@@ -781,7 +781,7 @@ function renderPreview(smSeleccionado) {
     <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${sinInv>0?'rgba(255,68,68,.1)':'rgba(0,230,118,.1)'};color:${sinInv>0?'var(--red)':'var(--green)'};border:1px solid ${sinInv>0?'rgba(255,68,68,.3)':'rgba(0,230,118,.3)'}">
       ${sinInv>0?'⚠ '+sinInv+' sin inventario':'✓ Inventario OK'}
     </span>
-    <span style="font-size:11px;color:var(--text2);padding:3px 8px;border-radius:4px;background:var(--bg3);border:1px solid var(--border2)">Target: ${target.toLocaleString()}</span>
+    <span style="font-size:11px;color:var(--text2);padding:3px 8px;border-radius:4px;background:var(--bg3);border:1px solid var(--border2)">Target: ${target.toLocaleString('en-US')}</span>
   </div>`;
 
   // Árbol del modelo activo
@@ -801,7 +801,7 @@ function renderPreview(smSeleccionado) {
   groups.forEach(g => {
     const r = g.header;
     const famColor = r.familia==='GH90'?'var(--purple)':r.familia==='GH69'?'var(--green)':'var(--accent)';
-    const invTxt = r.inv > 0 ? r.inv.toLocaleString() : '—';
+    const invTxt = r.inv > 0 ? r.inv.toLocaleString('en-US') : '—';
     html += `<div style="background:var(--bg3);border-top:1px solid var(--border2);">
       <div class="comp-row" style="padding:.5rem .9rem;align-items:center;">
         <span style="font-size:10px;color:var(--text2);width:20px;text-align:center;flex-shrink:0;font-weight:700">${r.groupNo||''}</span>
@@ -813,7 +813,7 @@ function renderPreview(smSeleccionado) {
       </div>`;
     g.subs.forEach((s,si) => {
       const sFamColor = s.familia==='GH90'?'var(--purple)':s.familia==='GH69'?'var(--green)':'var(--accent)';
-      const sInvTxt = s.inv > 0 ? s.inv.toLocaleString() : '—';
+      const sInvTxt = s.inv > 0 ? s.inv.toLocaleString('en-US') : '—';
       const isLast = si === g.subs.length-1;
       html += `<div class="comp-row" style="padding:.4rem .9rem .4rem 2.5rem;background:rgba(77,166,255,.02)">
         <span style="color:var(--text3);font-size:9px;flex-shrink:0;margin-right:4px">${isLast?'└─':'├─'}</span>
@@ -1539,14 +1539,14 @@ function calcSim() {
   const aPedir = comps.filter(r => r.inv < targetNeto).length;
 
   document.getElementById('simStats').innerHTML = `
-    <div class="stat bl"><div class="stat-l">Capacidad real · <span style="color:var(--accent);font-weight:700">${sm}</span></div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString()}</div><div class="stat-s">${pct}% del restante · ${target.toLocaleString()} meta${producidoSm>0?` · Producido: ${producidoSm.toLocaleString()}`:''}</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
+    <div class="stat bl"><div class="stat-l">Capacidad real · <span style="color:var(--accent);font-weight:700">${sm}</span></div><div class="stat-v" style="color:${color}">${maxProd.toLocaleString('en-US')}</div><div class="stat-s">${pct}% del restante · ${target.toLocaleString('en-US')} meta${producidoSm>0?` · Producido: ${producidoSm.toLocaleString('en-US')}`:''}</div><div class="prog"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div></div>
     <div class="stat ${aPedir>0?'rd':'gr'}"><div class="stat-l">A pedir</div><div class="stat-v" style="color:${aPedir>0?'var(--red)':'var(--green)'}">${aPedir}</div><div class="stat-s">de ${comps.length} componentes</div></div>
-    <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--amber)">${Math.round(maxProd/dias).toLocaleString()}</div><div class="stat-s">piezas en ${dias} días</div></div>
-    <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--red)">${Math.max(0,targetNeto-maxProd).toLocaleString()}</div><div class="stat-s">unidades bloqueadas</div></div>`;
+    <div class="stat am"><div class="stat-l">Por día</div><div class="stat-v" style="color:var(--amber)">${Math.round(maxProd/dias).toLocaleString('en-US')}</div><div class="stat-s">piezas en ${dias} días</div></div>
+    <div class="stat"><div class="stat-l">Faltante</div><div class="stat-v" style="color:var(--red)">${Math.max(0,targetNeto-maxProd).toLocaleString('en-US')}</div><div class="stat-s">unidades bloqueadas</div></div>`;
 
   if (cuello) {
     document.getElementById('simCuello').style.display = 'block';
-    document.getElementById('simCuelloContent').innerHTML = `<div style="display:flex;align-items:center;gap:.7rem"><span style="font-size:22px">⛔</span><div><div style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--amber)">${cuello.pn}</div><div style="font-size:11px;color:var(--text2)">${cuello.desc} · ${cuello.planta}</div><div style="font-size:11px;color:var(--red);margin-top:2px">Inv: ${cuello.inv.toLocaleString()} · Faltante: ${(targetNeto-cuello.inv).toLocaleString()} pzas</div></div></div>`;
+    document.getElementById('simCuelloContent').innerHTML = `<div style="display:flex;align-items:center;gap:.7rem"><span style="font-size:22px">⛔</span><div><div style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--amber)">${cuello.pn}</div><div style="font-size:11px;color:var(--text2)">${cuello.desc} · ${cuello.planta}</div><div style="font-size:11px;color:var(--red);margin-top:2px">Inv: ${cuello.inv.toLocaleString('en-US')} · Faltante: ${(targetNeto-cuello.inv).toLocaleString('en-US')} pzas</div></div></div>`;
   } else {
     document.getElementById('simCuello').style.display = 'none';
   }
@@ -1687,7 +1687,7 @@ function renderSimTable() {
     const esBundleL1diff = r.familia === 'GH90' && (r.isLevel1 || r.level===1 || (r.isBold && r.level!==2)) && !esStripDiff;
     const diff = (r.familia === 'GH90' && !esStripDiff && !esBundleL1diff && !esManualBundleDiff) ? null : invForDiff - tgt;
     const dc = diff===null?'var(--text3)':noRequerido?'var(--text3)':poolOK?'var(--green)':diff>=0?'var(--green)':'var(--red)';
-    const dtxt = diff===null?'—':noRequerido?'—':(diff>=0?'+':'')+diff.toLocaleString();
+    const dtxt = diff===null?'—':noRequerido?'—':(diff>=0?'+':'')+diff.toLocaleString('en-US');
     // Strip (GH90 ENSAMBLE): mostrar OK/ORDER según inventario vs target
     // Bundle Level1 (P4, terminado): mostrar OK/ORDER con inventario real
     // MANUAL BUNDLE (P3, insumo real): mostrar OK/ORDER con inventario real
@@ -1733,8 +1733,8 @@ function renderSimTable() {
       <td>${r.desc}</td>
       <td style="width:70px;text-align:center"><span class="fam fam-${r.familia}">${r.familia}</span></td>
       <td style="width:75px;text-align:center">${destSel}</td>
-      <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':(r.inv===0||noRequerido)?'var(--text2)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString():(r.inv===0||noRequerido)?'0':'—'}</td>
-      <td style="width:100px;text-align:right;color:var(--text2)">${tgt.toLocaleString()}</td>
+      <td style="width:100px;text-align:right;color:${r.inv>0?'var(--text)':(r.inv===0||noRequerido)?'var(--text2)':'var(--text3)'}">${r.inv>0?r.inv.toLocaleString('en-US'):(r.inv===0||noRequerido)?'0':'—'}</td>
+      <td style="width:100px;text-align:right;color:var(--text2)">${tgt.toLocaleString('en-US')}</td>
       <td style="width:100px;text-align:right;color:${dc};font-weight:600">${dtxt}</td>
       <td style="width:90px;text-align:right">${precioTxt}</td>
       <td style="width:90px;text-align:center">${estado}</td>
@@ -1794,7 +1794,7 @@ function renderSimTable() {
       const bannerRow = `<tr>
         <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
           <span style="color:var(--green);font-weight:700;font-size:12px">✓ ${label}</span>
-          <span style="color:var(--text2);font-size:11px;margin-left:8px">${header.pn} · ${headerInv.toLocaleString()} en inventario ≥ target ${targetSim2.toLocaleString()}</span>
+          <span style="color:var(--text2);font-size:11px;margin-left:8px">${header.pn} · ${headerInv.toLocaleString('en-US')} en inventario ≥ target ${targetSim2.toLocaleString('en-US')}</span>
         </td>
       </tr>`;
       if(sec === 'TOP') secTOP.push(bannerRow);
@@ -1920,7 +1920,7 @@ function renderSimTable() {
       rows.push(`<tr>
         <td colspan="8" style="padding:.5rem .75rem;background:rgba(0,230,118,.06);border-left:3px solid var(--green)">
           <span style="color:var(--green);font-weight:700;font-size:12px">✓ Bundle OK — No requiere producción P3</span>
-          <span style="color:var(--text2);font-size:11px;margin-left:8px">${bundleHeader.pn} · ${bundleInv.toLocaleString()} en inventario ≥ target ${targetSim.toLocaleString()}</span>
+          <span style="color:var(--text2);font-size:11px;margin-left:8px">${bundleHeader.pn} · ${bundleInv.toLocaleString('en-US')} en inventario ≥ target ${targetSim.toLocaleString('en-US')}</span>
         </td>
       </tr>`);
     }
@@ -2454,8 +2454,8 @@ function renderCons() {
         Object.keys(mT).concat(Object.keys(mU).filter(x => !(x in mT))).forEach(sm => {
           const corto = sm.replace('SM-F976UZKA','').replace('SM-F976UZK','');
           const u = mU[sm] || 0, a = Math.max(0, (mT[sm] || 0) - u);
-          if (u > 0) txtU.push(corto + ': -' + u.toLocaleString());
-          if (a > 0) txtA.push(corto + ': -' + a.toLocaleString());
+          if (u > 0) txtU.push(corto + ': -' + u.toLocaleString('en-US'));
+          if (a > 0) txtA.push(corto + ': -' + a.toLocaleString('en-US'));
         });
         const prios = Object.keys(mT).concat(Object.keys(mU)).map(x => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[x]) || 999);
         return { _prio: prios.length ? Math.min.apply(null, prios) : 999, pn: base.pn, desc: base.desc, esBundle: base.esBundle, esRanu,
@@ -2500,12 +2500,12 @@ function renderCons() {
         return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
         <td class="pn-cell" style="color:${colP};font-size:12px">${f.pn}</td>
         <td style="font-size:12px">${f.desc}${f.txtU?`<div style="font-size:9px;color:var(--text2);margin-top:2px">${capT('urg')}: ${f.txtU}</div>`:''}${f.txtA?`<div style="font-size:9px;color:var(--amber);margin-top:1px">${capT('antc')}: ${f.txtA}</div>`:''}</td>
-        ${tdN(f.inv>0?f.inv.toLocaleString():'0', f.inv>0?'var(--text)':'var(--red)')}
-        ${f.fU>0 ? tdN('-'+f.fU.toLocaleString(),'var(--red)') : tdN(cubierto?capT('cub'):'OK','var(--green)')}
-        ${f.fA>0 ? tdN('-'+f.fA.toLocaleString(),'var(--amber)') : tdN('—','var(--text2)')}
-        ${tdN(f.pYA>0?f.pYA.toLocaleString():'—', f.pYA>0?'var(--amber)':'var(--text2)', true)}
-        ${tdN(f.pAnt>0?f.pAnt.toLocaleString():'—', f.pAnt>0?'#4da6ff':'var(--text2)', true)}
-        ${tdN((f.pYA+f.pAnt)>0?(f.pYA+f.pAnt).toLocaleString():'—', 'var(--text)', true)}
+        ${tdN(f.inv>0?f.inv.toLocaleString('en-US'):'0', f.inv>0?'var(--text)':'var(--red)')}
+        ${f.fU>0 ? tdN('-'+f.fU.toLocaleString('en-US'),'var(--red)') : tdN(cubierto?capT('cub'):'OK','var(--green)')}
+        ${f.fA>0 ? tdN('-'+f.fA.toLocaleString('en-US'),'var(--amber)') : tdN('—','var(--text2)')}
+        ${tdN(f.pYA>0?f.pYA.toLocaleString('en-US'):'—', f.pYA>0?'var(--amber)':'var(--text2)', true)}
+        ${tdN(f.pAnt>0?f.pAnt.toLocaleString('en-US'):'—', f.pAnt>0?'#4da6ff':'var(--text2)', true)}
+        ${tdN((f.pYA+f.pAnt)>0?(f.pYA+f.pAnt).toLocaleString('en-US'):'—', 'var(--text)', true)}
       </tr>`;
       };
       const fB = filasCapas.filter(f=>f.esBundle), fN = filasCapas.filter(f=>!f.esBundle);
@@ -2514,7 +2514,7 @@ function renderCons() {
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);gap:.5rem;flex-wrap:wrap">
           <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">Consolidado ${pl.key} — ${modelos.length} modelo(s)</span>
-          <span style="font-size:10px;color:var(--text2)">${filasCapas.length} ${capT('var_')} · <b style="color:var(--amber)">${totYA.toLocaleString()} ${capT('pz')} ${capT('ya')}</b> · <b style="color:#4da6ff">${totAnt.toLocaleString()} ${capT('pz')} ${capT('ant')}</b></span>
+          <span style="font-size:10px;color:var(--text2)">${filasCapas.length} ${capT('var_')} · <b style="color:var(--amber)">${totYA.toLocaleString('en-US')} ${capT('pz')} ${capT('ya')}</b> · <b style="color:#4da6ff">${totAnt.toLocaleString('en-US')} ${capT('pz')} ${capT('ant')}</b></span>
         </div>
         <div style="overflow-x:auto">
         <table class="dt" style="width:100%;table-layout:fixed;min-width:760px">
@@ -2551,14 +2551,14 @@ function renderCons() {
 
     const renderRowConsolidada = (g, i, color) => {
       const aPedirConsolidado = g.faltaAcumulada > 0 ? calcularAPedir(g.faltaAcumulada) : 0;
-      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
+      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString('en-US'):'OK'}`).join(' · ');
       const esRanuradoInfo = ((g.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') || (g.desc||'').toUpperCase().includes('CHIP BOARD TOP')) && (g.desc||'').toUpperCase().includes('RANURADO');
       return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
       <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${g.pn}</td>
       <td style="font-size:12px">${g.desc}${esRanuradoInfo?'<div style="font-size:9px;color:var(--text2);margin-top:1px">(no se compra aparte — su faltante se cubre con Virgen)</div>':''}<div style="font-size:9px;color:var(--text2);margin-top:2px">${modelosTexto}</div></td>
-      <td style="text-align:right;color:${g.invMuestra>0?'var(--text)':'var(--red)'}">${g.invMuestra>0?g.invMuestra.toLocaleString():'0'}</td>
-      <td style="text-align:right;color:${g.faltaMostrada>0?'var(--red)':'var(--green)'};font-weight:600">${g.faltaMostrada>0?'-'+g.faltaMostrada.toLocaleString():'OK'}</td>
-      <td style="text-align:right;color:${aPedirConsolidado>0?'var(--amber)':'var(--text)'};font-weight:700" title="Faltante real sumado entre todos los modelos que comparten esta variante, +10% aplicado una sola vez al final">${esRanuradoInfo?'N/R':(aPedirConsolidado>0?aPedirConsolidado.toLocaleString():'—')}</td>
+      <td style="text-align:right;color:${g.invMuestra>0?'var(--text)':'var(--red)'}">${g.invMuestra>0?g.invMuestra.toLocaleString('en-US'):'0'}</td>
+      <td style="text-align:right;color:${g.faltaMostrada>0?'var(--red)':'var(--green)'};font-weight:600">${g.faltaMostrada>0?'-'+g.faltaMostrada.toLocaleString('en-US'):'OK'}</td>
+      <td style="text-align:right;color:${aPedirConsolidado>0?'var(--amber)':'var(--text)'};font-weight:700" title="Faltante real sumado entre todos los modelos que comparten esta variante, +10% aplicado una sola vez al final">${esRanuradoInfo?'N/R':(aPedirConsolidado>0?aPedirConsolidado.toLocaleString('en-US'):'—')}</td>
     </tr>`;
     };
 
@@ -2574,7 +2574,7 @@ function renderCons() {
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
         <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">Consolidado ${pl.key} — ${modelos.length} modelo(s)</span>
-        <span style="font-size:10px;color:var(--text2)">${listaGrupos.length} variante(s) · ${totalPedirPlanta.toLocaleString()} pzas a pedir</span>
+        <span style="font-size:10px;color:var(--text2)">${listaGrupos.length} variante(s) · ${totalPedirPlanta.toLocaleString('en-US')} pzas a pedir</span>
       </div>
       <div style="overflow-x:auto">
       <table class="dt" style="width:100%;table-layout:fixed;min-width:500px">
@@ -2654,7 +2654,7 @@ function renderCons() {
     const yA = window.consCapas.totYA, aN = window.consCapas.totAnt;
     const card = (tit, val, sub, col) => `<div style="flex:1;min-width:180px;background:var(--bg2);border:1px solid var(--border);border-top:3px solid ${col};border-radius:10px;padding:.7rem 1rem">
       <div style="font-size:11px;color:var(--text2);font-weight:600">${tit}</div>
-      <div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:${col}">${val.toLocaleString()} <span style="font-size:12px;color:var(--text2)">${capT('pz')}</span></div>
+      <div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:${col}">${val.toLocaleString('en-US')} <span style="font-size:12px;color:var(--text2)">${capT('pz')}</span></div>
       <div style="font-size:10px;color:var(--text2)">${sub}</div></div>`;
     cards.innerHTML = `<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.9rem">
       ${card(capT('cardYA'), yA, capT('cardYAs'), 'var(--amber)')}
@@ -2715,16 +2715,16 @@ function renderProd() {
         <div style="display:flex;align-items:center;gap:.75rem">
           <span style="font-size:13px;font-weight:600;color:${color}">${icon} ${label}</span>
           <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;background:${color}25;color:${color};border:1px solid ${color}50">
-            ${accion}: ${puede.toLocaleString()} pzas
+            ${accion}: ${puede.toLocaleString('en-US')} pzas
           </span>
-          ${faltaLinea > 0 ? `<span style="font-size:10px;color:var(--red);font-weight:600">· faltan ${faltaLinea.toLocaleString()} pzas</span>` : ''}
+          ${faltaLinea > 0 ? `<span style="font-size:10px;color:var(--red);font-weight:600">· faltan ${faltaLinea.toLocaleString('en-US')} pzas</span>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:.5rem">
           <div style="width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
             <div style="width:${pctLinea}%;height:100%;background:${color};border-radius:2px"></div>
           </div>
-          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString()}</span>
-          <span style="font-size:10px;color:var(--text2)">/ ${targetLinea.toLocaleString()}</span>
+          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:${color}">${puede.toLocaleString('en-US')}</span>
+          <span style="font-size:10px;color:var(--text2)">/ ${targetLinea.toLocaleString('en-US')}</span>
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -2744,8 +2744,8 @@ function renderProd() {
           return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}${esCuello?';border-left:3px solid var(--red)':''}">
             <td>${m.label}${m.nota?` <span style="font-size:9px;color:var(--accent)">(${m.nota})</span>`:''}${esCuello?' <span style="font-size:9px;color:var(--red)">⛔</span>':''}</td>
             <td style="font-family:monospace;font-size:12px;color:${color}">${m.pn}</td>
-            <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString()}</td>
-            <td style="text-align:right;color:var(--red);font-weight:600">${targetLinea.toLocaleString()}</td>
+            <td style="text-align:right;color:${tc};font-weight:600">${m.inv.toLocaleString('en-US')}</td>
+            <td style="text-align:right;color:var(--red);font-weight:600">${targetLinea.toLocaleString('en-US')}</td>
             <td style="text-align:center">${tag}</td>
           </tr>`;
         }).join('')}
@@ -2821,7 +2821,7 @@ function renderProd() {
     // Sheet Top Box se pide a P1, no es input de producción S1/S2
     const topMats = [];
     if (cbTopRan || cbTopVirgen) topMats.push(
-      {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString()+' de VC':''});
+      {label:'Chip Board Top (Ranurado)', inv: topRanTotal, pn: cbTopRan?.pn||cbTopVirgen?.pn||'—', nota: vcTopPuede>0?'+'+vcTopPuede.toLocaleString('en-US')+' de VC':''});
     const topPuede = Math.min(topMats.length ? Math.min(...topMats.map(m=>m.inv)) : 0, targetRealTop);
 
     // ── S3 — Producir Lower Box (S3) ──
@@ -2829,7 +2829,7 @@ function renderProd() {
     // Sheet Lower Box se pide a P1, no es input de producción S3
     const s3Mats = [];
     if (cbBotRan || cbBotVirgen) s3Mats.push(
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString('en-US')+' de VC':''});
     if (setPad) s3Mats.push(
       {label:'Set Pad', inv: inv(setPad), pn: setPad.pn, nota:''});
     if (backSticker) s3Mats.push(
@@ -2840,7 +2840,7 @@ function renderProd() {
     // Input: Chip Board Bottom Ranurado + Pulp Tray → Output: Lower Box Bottom
     const s4Mats = [];
     if (cbBotRan || cbBotVirgen) s4Mats.push(
-      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString()+' de VC':''});
+      {label:'Chip Board Bottom (Ranurado)', inv: botRanTotal, pn: cbBotRan?.pn||cbBotVirgen?.pn||'—', nota: vcBotPuede>0?'+'+vcBotPuede.toLocaleString('en-US')+' de VC':''});
     if (pulpTray) s4Mats.push(
       {label:'Pulp Tray', inv: inv(pulpTray), pn: pulpTray.pn, nota:''});
     const s4Puede = pulpTray ? Math.min(Math.min(...s4Mats.map(m=>m.inv)), targetRealBot) : 0;
@@ -2876,7 +2876,7 @@ function renderProd() {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border)">
         <span style="font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;color:var(--text)">${sm}</span>
         <div style="display:flex;align-items:center;gap:.75rem">
-          <span style="font-size:11px;color:var(--text2)">Target: ${target.toLocaleString()} · ASSY1: <b style="color:${sc}">${assy1Puede.toLocaleString()}</b></span>
+          <span style="font-size:11px;color:var(--text2)">Target: ${target.toLocaleString('en-US')} · ASSY1: <b style="color:${sc}">${assy1Puede.toLocaleString('en-US')}</b></span>
           ${stag}
         </div>
       </div>
@@ -2886,23 +2886,23 @@ function renderProd() {
           ? lineaCard('VC1 — Ranurar TOP', 'var(--amber)', '⚙️',
               [{label:'Chip Board Top (Virgen)', inv: virgenTopInv, pn: cbTopVirgen?.pn||'—', nota:'→ produce Ranurado'}],
               vcTopPuede, vcTopNecesario)
-          : bannerOK('VC1 — No necesita ranurar', `Ranurado TOP (${topRanInvAct.toLocaleString()}) cubre el requerido (${targetRealTop.toLocaleString()})`)
+          : bannerOK('VC1 — No necesita ranurar', `Ranurado TOP (${topRanInvAct.toLocaleString('en-US')}) cubre el requerido (${targetRealTop.toLocaleString('en-US')})`)
         }
 
         ${/* ── VC2 ── */ vcBotNecesario > 0
           ? lineaCard('VC2 — Ranurar BOT', '#00B8A0', '⚙️',
               [{label:'Chip Board Bottom (Virgen)', inv: virgenBotInv, pn: cbBotVirgen?.pn||'—', nota:'→ produce Ranurado'}],
               vcBotPuede, vcBotNecesario)
-          : bannerOK('VC2 — No necesita ranurar', `Ranurado BOT (${botRanInvAct.toLocaleString()}) cubre el requerido (${targetRealBot.toLocaleString()})`)
+          : bannerOK('VC2 — No necesita ranurar', `Ranurado BOT (${botRanInvAct.toLocaleString('en-US')}) cubre el requerido (${targetRealBot.toLocaleString('en-US')})`)
         }
 
         ${/* ── S1/S2 ── */ giftBoxDisp >= target
-          ? bannerOK('S1/S2 + Zhongke — No necesita producir', `Gift Box Top (${giftBoxInv.toLocaleString()}) ya cubre el target`)
+          ? bannerOK('S1/S2 + Zhongke — No necesita producir', `Gift Box Top (${giftBoxInv.toLocaleString('en-US')}) ya cubre el target`)
           : lineaCard('S1 / S2 + Zhongke — Producir TOP', 'var(--accent)', '🏭', topMats, topPuede, targetRealTop)
         }
 
         ${/* ── S3 ── */ lowerBoxDisp >= target
-          ? bannerOK('S3 — No necesita producir', `Lower Box Bottom (${lowerBoxInv.toLocaleString()}) ya cubre el target`)
+          ? bannerOK('S3 — No necesita producir', `Lower Box Bottom (${lowerBoxInv.toLocaleString('en-US')}) ya cubre el target`)
           : lineaCard('S3 — Producir Lower Box (S3)', '#00B8A0', '🏭', s3Mats, s3Puede, targetRealBot)
         }
 
@@ -3004,7 +3004,7 @@ function exportarSimuladorExcel() {
   hojas.forEach(h => XLSX.utils.book_append_sheet(wb, h.ws, h.nombre));
   const fecha = new Date().toISOString().slice(0,10);
   const nombreArchivo = hojas.length === 1 ? ('BOM_Simulador_' + hojas[0].nombre + '_' + fecha + '.xlsx') : ('BOM_Simulador_Multi_' + fecha + '.xlsx');
-  XLSX.writeFile(wb, nombreArchivo);
+  XLSX.writeFile(formatoMilesWb(wb), nombreArchivo);
 }
 
 // Descarga TODOS los BOM cargados (sin filtrar por modelo), un modelo por hoja,
@@ -3082,7 +3082,7 @@ function exportarTodosLosBomsExcel() {
   // Archivo 1 (igual que siempre): un modelo por hoja
   const wb = XLSX.utils.book_new();
   hojas.forEach(h => XLSX.utils.book_append_sheet(wb, h.ws, h.nombre));
-  XLSX.writeFile(wb, `BOM_Simulador_TODOS_HORIZONTAL_${fecha}.xlsx`);
+  XLSX.writeFile(formatoMilesWb(wb), `BOM_Simulador_TODOS_HORIZONTAL_${fecha}.xlsx`);
 
   // Archivo 2 (nuevo): todos los modelos apilados en una sola hoja, en orden
   // alfabético (mismo orden en que se procesaron), con "Modelo" como primera columna.
@@ -3112,7 +3112,22 @@ function exportarTodosLosBomsExcel() {
   }
   const wbVert = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wbVert, wsVert, 'Todos los BOM');
-  XLSX.writeFile(wbVert, `BOM_Simulador_TODOS_VERTICAL_${fecha}.xlsx`);
+  XLSX.writeFile(formatoMilesWb(wbVert), `BOM_Simulador_TODOS_VERTICAL_${fecha}.xlsx`);
+}
+
+// Miles con coma (1,000) en TODAS las celdas numéricas de cualquier Excel que se descargue
+function formatoMilesWb(wb) {
+  try {
+    (wb.SheetNames || []).forEach(function (nm) {
+      var ws = wb.Sheets[nm]; if (!ws) return;
+      Object.keys(ws).forEach(function (k) {
+        if (k.charAt(0) === '!') return;
+        var c = ws[k];
+        if (c && c.t === 'n' && typeof c.v === 'number' && !c.z) c.z = (c.v % 1 === 0) ? '#,##0' : '#,##0.##';
+      });
+    });
+  } catch (e) {}
+  return wb;
 }
 
 function exportarExcel() {
@@ -3143,8 +3158,8 @@ function exportarExcel() {
       left:{style:'thin',color:{rgb:'BBBBBB'}}, right:{style:'thin',color:{rgb:'BBBBBB'}}
     } : {}
   });
-  const c  = (v,bold,fg,bg,ha,sz,wrap) => ({ v: v??'', t: typeof v==='number'?'n':'s', s: s(bold,fg,bg,ha,sz,wrap,true) });
-  const n  = (v,bold,fg,bg,ha)         => ({ v: v||0,  t:'n', s: s(bold,fg,bg,ha||'right',10,false,true) });
+  const c  = (v,bold,fg,bg,ha,sz,wrap) => ({ v: v??'', t: typeof v==='number'?'n':'s', z: typeof v==='number'?'#,##0':undefined, s: s(bold,fg,bg,ha,sz,wrap,true) });
+  const n  = (v,bold,fg,bg,ha)         => ({ v: v||0,  t:'n', z:'#,##0', s: s(bold,fg,bg,ha||'right',10,false,true) });
 
   // ── Colores ──
   const TITLE_BG='1A3A6B', TITLE_FG='FFFFFF';
@@ -3188,7 +3203,7 @@ function exportarExcel() {
       const d = (g.desc||'').toUpperCase();
       const esRanuradoInfo = (d.includes('CHIP BOARD BOTTOM') || d.includes('CHIP BOARD TOP')) && d.includes('RANURADO');
       const aPedir = esRanuradoInfo ? 0 : (g.faltaAcumulada > 0 ? calcularAPedir(g.faltaAcumulada) : 0);
-      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString():'OK'}`).join(' · ');
+      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString('en-US'):'OK'}`).join(' · ');
       return { pn:g.pn, desc:g.desc, inv:g.inv, falta:g.faltaMostrada, aPedir, isBundle:g.isBundle, esRanuradoInfo, modelosTexto };
     }).filter(r => !r.esRanuradoInfo && (r.falta > 0 || r.aPedir > 0));
   };
@@ -3217,7 +3232,7 @@ function exportarExcel() {
       const tYA = rows.reduce((a,r)=>a+r.pYA,0), tAnt = rows.reduce((a,r)=>a+r.pAnt,0);
       porPl[pl.key] = [tYA, tAnt]; totYA += tYA; totAnt += tAnt;
       pushX([c(`► ${pl.label}`,true,pl.fg,pl.bg,'left',11), c(pl.sub,false,pl.fg,pl.bg,'left',9), ...Array(3).fill(c('',false,pl.fg,pl.bg)),
-             c(`${capT('totPl')}: ${capT('ya')} ${tYA.toLocaleString()} | ${capT('ant')} ${tAnt.toLocaleString()} | ${capT('tot')} ${(tYA+tAnt).toLocaleString()} ${capT('pz')}`,true,pl.fg,pl.bg,'right',10),
+             c(`${capT('totPl')}: ${capT('ya')} ${tYA.toLocaleString('en-US')} | ${capT('ant')} ${tAnt.toLocaleString('en-US')} | ${capT('tot')} ${(tYA+tAnt).toLocaleString('en-US')} ${capT('pz')}`,true,pl.fg,pl.bg,'right',10),
              ...Array(NC-6).fill(c('',false,pl.fg,pl.bg))]);
       mgX.push({s:{r:RX(),c:1},e:{r:RX(),c:4}}); mgX.push({s:{r:RX(),c:5},e:{r:RX(),c:NC-1}});
       pushX(COLSX.map(h => c(h,true,HDR_FG,HDR_BG,'center',9,true)));
@@ -3225,7 +3240,7 @@ function exportarExcel() {
         const bg = i%2===1 ? ALT_BG : null;
         const esHB = row.esBundle && !(row.desc||'').toUpperCase().includes('MANUAL');
         const txt = [row.txtU ? `${capT('urg')}: ${row.txtU}` : '', row.txtA ? `${capT('antc')}: ${row.txtA}` : ''].filter(Boolean).join('  |  ');
-        const nota = row.total>0 ? `${pl.key} ${capT('pedir')}: ${capT('ya')} ${row.pYA.toLocaleString()} + ${capT('ant')} ${row.pAnt.toLocaleString()}` : (esHB ? (row.fU>0||row.fA>0 ? `${pl.key} PRODUCIR: ${capT('ya')} ${row.fU.toLocaleString()} + ${capT('ant')} ${row.fA.toLocaleString()}` : 'OK') : 'OK');
+        const nota = row.total>0 ? `${pl.key} ${capT('pedir')}: ${capT('ya')} ${row.pYA.toLocaleString('en-US')} + ${capT('ant')} ${row.pAnt.toLocaleString('en-US')}` : (esHB ? (row.fU>0||row.fA>0 ? `${pl.key} PRODUCIR: ${capT('ya')} ${row.fU.toLocaleString('en-US')} + ${capT('ant')} ${row.fA.toLocaleString('en-US')}` : 'OK') : 'OK');
         pushX([
           n(noX++,false,null,bg,'center'),
           c(row.pn,true,row.esBundle?'FFFFFF':'1A4F9C',row.esBundle?BUNDLE_BG:bg),
@@ -3247,7 +3262,7 @@ function exportarExcel() {
     });
     pushX([...Array(3).fill(c('',true,TOT_FG,TOT_BG)), c(capT('totGen'),true,TOT_FG,TOT_BG,'right'), c('',false,TOT_FG,TOT_BG), c('',false,TOT_FG,TOT_BG), c('',false,TOT_FG,TOT_BG),
            n(totYA,true,TOT_FG,TOT_BG), n(totAnt,true,TOT_FG,TOT_BG), n(totYA+totAnt,true,TOT_FG,TOT_BG),
-           c(Object.entries(porPl).map(([k,v])=>`${k}: ${(v[0]+v[1]).toLocaleString()}`).join('  |  '),true,TOT_FG,TOT_BG,'center',9)]);
+           c(Object.entries(porPl).map(([k,v])=>`${k}: ${(v[0]+v[1]).toLocaleString('en-US')}`).join('  |  '),true,TOT_FG,TOT_BG,'center',9)]);
     mgX.push({s:{r:RX(),c:0},e:{r:RX(),c:3}});
     ws1Capas = {};
     aoaX.forEach((row,ri) => row.forEach((cell,ci) => { if (cell) ws1Capas[XLSX.utils.encode_cell({r:ri,c:ci})] = cell; }));
@@ -3282,9 +3297,9 @@ function exportarExcel() {
   const tpd = Math.round(totalTarget/dias);
   push([
     c('TARGETS DE PRODUCCIÓN DIARIA',true,'FFFFFF','243F60','left',9), c('',false,null,'243F60'),
-    c(`S1/S2 — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
-    c(`S3/S4 — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
-    c(`VC/Zhongke — ${tpd.toLocaleString()} pcs/día`,true,TITLE_FG,'7B4F00','center',9), c('',false,null,'7B4F00'),
+    c(`S1/S2 — ${tpd.toLocaleString('en-US')} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
+    c(`S3/S4 — ${tpd.toLocaleString('en-US')} pcs/día`,true,TITLE_FG,'1A6B3C','center',9), c('',false,null,'1A6B3C'),
+    c(`VC/Zhongke — ${tpd.toLocaleString('en-US')} pcs/día`,true,TITLE_FG,'7B4F00','center',9), c('',false,null,'7B4F00'),
   ]);
   merges.push({s:{r:R(),c:0},e:{r:R(),c:1}});
   merges.push({s:{r:R(),c:2},e:{r:R(),c:3}});
@@ -3315,7 +3330,7 @@ function exportarExcel() {
       c(`► ${pl.label}`,true,pl.fg,pl.bg,'left',11),
       c(pl.sub,false,pl.fg,pl.bg,'left',9),
       ...Array(4).fill(c('',false,pl.fg,pl.bg)),
-      c(`TOTAL PLANTA: ${totPlanta.toLocaleString()} pzas`,true,pl.fg,pl.bg,'right',10),
+      c(`TOTAL PLANTA: ${totPlanta.toLocaleString('en-US')} pzas`,true,pl.fg,pl.bg,'right',10),
       c('',false,pl.fg,pl.bg),
     ]);
     merges.push({s:{r:R(),c:0},e:{r:R(),c:0}});
@@ -3332,8 +3347,8 @@ function exportarExcel() {
       const pBg = row.esRanuradoInfo ? OK_BG : row.aPedir>0 ? PEDIR_BG : esHeaderBundle ? PEDIR_BG : OK_BG;
       const pFg = row.esRanuradoInfo ? OK_FG : row.aPedir>0 ? PEDIR_FG : esHeaderBundle ? PEDIR_FG : OK_FG;
       const nota = row.esRanuradoInfo ? 'N/R — no se compra aparte, se cubre con Virgen'
-        : row.aPedir>0 ? `${pl.key} PEDIR ${row.aPedir.toLocaleString()}`
-        : esHeaderBundle ? `${pl.key} PRODUCIR ${row.falta.toLocaleString()}` : 'OK';
+        : row.aPedir>0 ? `${pl.key} PEDIR ${row.aPedir.toLocaleString('en-US')}`
+        : esHeaderBundle ? `${pl.key} PRODUCIR ${row.falta.toLocaleString('en-US')}` : 'OK';
       const pnBg = row.isBundle ? BUNDLE_BG : bg;
       const pnFg = row.isBundle ? 'FFFFFF' : '1A4F9C';
       push([
@@ -3368,7 +3383,7 @@ function exportarExcel() {
     c('TOTAL GENERAL A PEDIR',true,TOT_FG,TOT_BG,'right'),
     c('',false,TOT_FG,TOT_BG),
     n(totalGen,true,TOT_FG,TOT_BG),
-    c(Object.entries(totPorPlanta).map(([k,v])=>`${k}: ${v.toLocaleString()}`).join('  |  '),true,TOT_FG,TOT_BG,'center'),
+    c(Object.entries(totPorPlanta).map(([k,v])=>`${k}: ${v.toLocaleString('en-US')}`).join('  |  '),true,TOT_FG,TOT_BG,'center'),
     c('',false,TOT_FG,TOT_BG),
   ]);
   merges.push({s:{r:R(),c:0},e:{r:R(),c:3}});
@@ -3417,7 +3432,7 @@ function exportarExcel() {
   ws2['!cols'] = [{wch:5},{wch:18},{wch:14},{wch:30},{wch:13},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws2, 'Producir y VC Ranurar');
 
-  XLSX.writeFile(wb, `BOM_Consolidado_P4_${semana.replace(/[\s\u2014]+/g,'_')}_${fechaArchivo}.xlsx`);
+  XLSX.writeFile(formatoMilesWb(wb), `BOM_Consolidado_P4_${semana.replace(/[\s\u2014]+/g,'_')}_${fechaArchivo}.xlsx`);
 }
 
 
@@ -4860,7 +4875,7 @@ function construirTablaRGB() {
     if (!asigns.length) return `<td style="padding:8px 6px;text-align:center;color:var(--text3)">—</td>`;
     const partes = asigns.map(a => {
       const modelosTxt = a.modelos && a.modelos.length ? a.modelos.join(', ') : '';
-      return `<div style="font-weight:700;color:var(--accent)">${a.codeHijo}</div><div style="font-size:10px;color:var(--text2)">${modelosTxt}</div><div style="font-size:11px">${a.qty.toLocaleString()}</div>`;
+      return `<div style="font-weight:700;color:var(--accent)">${a.codeHijo}</div><div style="font-size:10px;color:var(--text2)">${modelosTxt}</div><div style="font-size:11px">${a.qty.toLocaleString('en-US')}</div>`;
     }).join('<div style="height:4px"></div>');
     return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}</td>`;
   };
@@ -4881,7 +4896,7 @@ function construirTablaRGB() {
 
   const avisoSinMaterialHtml = (sinMaterial) => !sinMaterial.length ? '' : `
     <div style="margin-top:.8rem;padding:.6rem .8rem;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.35);border-radius:8px;font-size:11px;color:var(--red)">
-      ⚠ Sin material para completar: ${sinMaterial.map(it => `${it.codeHijo} (${it.modelos.join(', ')}) — faltan ${it.restante.toLocaleString()} pzas`).join(' · ')}
+      ⚠ Sin material para completar: ${sinMaterial.map(it => `${it.codeHijo} (${it.modelos.join(', ')}) — faltan ${it.restante.toLocaleString('en-US')} pzas`).join(' · ')}
     </div>`;
 
   const construirGridMedioProceso = (titulo, descripcion, maquinasTipo, plan) => {
@@ -5472,8 +5487,8 @@ async function renderPlanSemanal() {
     const pendiente = Math.max(0, diff);
     const excedente = diff < 0 ? Math.abs(diff) : 0;
     const pendienteTxt = excedente > 0
-      ? ('+' + excedente.toLocaleString())
-      : (pendiente > 0 ? pendiente.toLocaleString() : '0');
+      ? ('+' + excedente.toLocaleString('en-US'))
+      : (pendiente > 0 ? pendiente.toLocaleString('en-US') : '0');
     // ── Autocheck Plan Requerido: si algo aquí no cuadra matemáticamente,
     // avisa en la consola (F12) en vez de quedar oculto en un número raro.
     if (producido < 0 || target < 0) console.warn(`⚠️ Plan Requerido [${sm}]: target o producido negativo (target=${target}, producido=${producido})`);
@@ -5512,17 +5527,17 @@ async function renderPlanSemanal() {
         <td style="padding:10px 8px;text-align:center;font-weight:700">${prioridad}</td>
         <td style="padding:10px 8px;font-weight:700;color:var(--accent)">
           ${sm}
-          ${listoParaCorrer ? `<div class="plan-listo-badge" id="plan-listo-${sm.replace(/[^a-zA-Z0-9]/g, '_')}" data-cap="${Math.floor(capMaterial)}" data-completo="${capMaterial >= pendiente ? 1 : 0}" title="Strip/Gift Top/Lower Bottom/Bundle tienen material suficiente para arrancar, con el inventario que queda tras los modelos de mayor prioridad"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterial).toLocaleString()} pzas</div>` : ''}
+          ${listoParaCorrer ? `<div class="plan-listo-badge" id="plan-listo-${sm.replace(/[^a-zA-Z0-9]/g, '_')}" data-cap="${Math.floor(capMaterial)}" data-completo="${capMaterial >= pendiente ? 1 : 0}" title="Strip/Gift Top/Lower Bottom/Bundle tienen material suficiente para arrancar, con el inventario que queda tras los modelos de mayor prioridad"><span class="plan-listo-num"></span>⚡ Listo: ${Math.floor(capMaterial).toLocaleString('en-US')} pzas</div>` : ''}
         </td>
         <td style="padding:10px 8px;color:var(--text2);font-size:12px">${numParte}</td>
-        <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${target.toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:right;font-weight:700;color:var(--accent)">${target.toLocaleString('en-US')}</td>
         <td style="padding:10px 8px;text-align:center;color:var(--text2)">${fechaTxt}</td>
         <td style="padding:10px 8px;text-align:right;font-weight:700">
           <input type="number" min="0" value="${producido}" style="width:90px;text-align:right;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 6px;font-weight:700" onchange="actualizarProducidoManual('${sm.replace(/'/g, "\\'")}', this.value)">
           ${(() => {
             const d = (window.simProducidoDesglosePorModelo || {})[sm];
             if (!d || !d.arrastre) return '';
-            return `<div style="font-size:10px;color:var(--yellow, #f1c40f);margin-top:3px;white-space:nowrap" title="Sigue sin embarcar de un corte anterior — revisa si sigue vigente">🕐 ${d.arrastre.toLocaleString()} de ciclo(s) anterior(es)</div>`;
+            return `<div style="font-size:10px;color:var(--yellow, #f1c40f);margin-top:3px;white-space:nowrap" title="Sigue sin embarcar de un corte anterior — revisa si sigue vigente">🕐 ${d.arrastre.toLocaleString('en-US')} de ciclo(s) anterior(es)</div>`;
           })()}
         </td>
         <td style="padding:10px 8px;text-align:center"><span style="${pendStyle};padding:3px 12px;border-radius:999px;font-weight:700;font-size:12px">${pendienteTxt}</span></td>
@@ -5556,9 +5571,9 @@ async function renderPlanSemanal() {
               <td style="padding:8px 6px;font-weight:700;color:var(--accent)">${f.modelo}</td>
               <td style="padding:8px 6px;color:var(--text2)">${f.etiqueta}</td>
               <td style="padding:8px 6px;color:var(--text2);font-size:12px">${f.pn}</td>
-              <td style="padding:8px 6px;text-align:right">${f.requerido.toLocaleString()}</td>
-              <td style="padding:8px 6px;text-align:right">${f.disponible.toLocaleString()}</td>
-              <td style="padding:8px 6px;text-align:right;font-weight:700;color:var(--red)">${(f.requerido - f.disponible).toLocaleString()}</td>
+              <td style="padding:8px 6px;text-align:right">${f.requerido.toLocaleString('en-US')}</td>
+              <td style="padding:8px 6px;text-align:right">${f.disponible.toLocaleString('en-US')}</td>
+              <td style="padding:8px 6px;text-align:right;font-weight:700;color:var(--red)">${(f.requerido - f.disponible).toLocaleString('en-US')}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -5629,12 +5644,12 @@ async function renderPlanSemanal() {
     const partes = dia.asignaciones.map(a => {
       const code = codePorModelo[a.sm] || '—';
       const qty = a.qty * factor;
-      return `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:10px;color:var(--text2)">${code}</div><div style="font-size:11px">${qty.toLocaleString()}</div>`;
+      return `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:10px;color:var(--text2)">${code}</div><div style="font-size:11px">${qty.toLocaleString('en-US')}</div>`;
     }).join('<div style="height:4px"></div>');
     const ok = capacidad >= dia.necesidad;
     const style = ok ? 'background:rgba(0,230,118,.15);color:#00e676' : 'background:rgba(255,68,68,.15);color:var(--red)';
     const icono = ok ? '✓' : '⚠';
-    return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}<div style="font-size:10px;${style};display:inline-block;padding:1px 6px;border-radius:999px;margin-top:4px">${icono} ${dia.necesidad.toLocaleString()} de ${capacidad.toLocaleString()}</div></td>`;
+    return `<td style="padding:8px 6px;text-align:center;background:rgba(0,188,212,.05)">${partes}<div style="font-size:10px;${style};display:inline-block;padding:1px 6px;border-radius:999px;margin-top:4px">${icono} ${dia.necesidad.toLocaleString('en-US')} de ${capacidad.toLocaleString('en-US')}</div></td>`;
   };
 
   const filaTop = diasTopBot.map(d => celdaEstado(d, capTop)).join('');
@@ -5668,7 +5683,7 @@ async function renderPlanSemanal() {
         </div>
       </div>
 
-      <div style="font-size:11px;color:var(--text2);margin-bottom:.4rem;font-weight:700;text-transform:uppercase">Top / Bot — S1-S4, Zhongke (capacidad Top: ${capTop.toLocaleString()} · Bot: ${capBot.toLocaleString()})</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:.4rem;font-weight:700;text-transform:uppercase">Top / Bot — S1-S4, Zhongke (capacidad Top: ${capTop.toLocaleString('en-US')} · Bot: ${capBot.toLocaleString('en-US')})</div>
       <div style="overflow-x:auto;margin-bottom:1rem">
       <table style="width:100%;font-size:12px;border-collapse:collapse">
         <thead><tr>
@@ -5688,7 +5703,7 @@ async function renderPlanSemanal() {
       </table>
       </div>
 
-      <div style="font-size:11px;color:var(--text2);margin-bottom:.4rem;font-weight:700;text-transform:uppercase">VC1 + VC2 — Ranurado (capacidad: ${capVC.toLocaleString()})</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:.4rem;font-weight:700;text-transform:uppercase">VC1 + VC2 — Ranurado (capacidad: ${capVC.toLocaleString('en-US')})</div>
       <div style="overflow-x:auto">
       <table style="width:100%;font-size:12px;border-collapse:collapse">
         <thead><tr>
@@ -5723,13 +5738,13 @@ async function renderPlanSemanal() {
       const falts = faltantesPorModelo[a.sm] || [];
       const alerta = falts.length ? ' ⚠' : '';
       const code = codePorModelo[a.sm] || '—';
-      return `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:11px;color:var(--text2)">${code}</div><div style="font-size:12px">${a.qty.toLocaleString()}${alerta}</div>`;
+      return `<div style="font-weight:700;color:var(--accent)">${a.sm}</div><div style="font-size:11px;color:var(--text2)">${code}</div><div style="font-size:12px">${a.qty.toLocaleString('en-US')}${alerta}</div>`;
     }).join('<div style="height:6px"></div>');
     return `<td style="padding:8px 6px;background:rgba(0,188,212,.08);text-align:center">${partes}</td>`;
   }).join('');
 
   const celdasTotal = todosLosDias.map(d =>
-    `<td style="padding:8px 6px;text-align:center;font-weight:700;background:rgba(0,230,118,.12);color:#00e676">${d.usoCapacidad > 0 ? d.usoCapacidad.toLocaleString() : '—'}</td>`
+    `<td style="padding:8px 6px;text-align:center;font-weight:700;background:rgba(0,230,118,.12);color:#00e676">${d.usoCapacidad > 0 ? d.usoCapacidad.toLocaleString('en-US') : '—'}</td>`
   ).join('');
 
   const thStyle = 'text-align:left;padding:10px 8px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)';
@@ -5805,7 +5820,7 @@ async function renderPlanSemanal() {
         </tbody>
       </table>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString()} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString()} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 11:00am</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString('en-US')} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString('en-US')} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 11:00am</div>
     </div>
     </div>
     <div id="planSubRGB" style="display:${window.simPlanSubTab === 'rgb' ? 'block' : 'none'}">
@@ -5917,9 +5932,9 @@ async function renderEmpaque() {
       const h = historialPorModelo[sm.toUpperCase()];
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:8px 6px;font-weight:700;color:var(--accent)">${sm}</td>
-        <td style="padding:8px 6px;text-align:right">${h.pzas.toLocaleString()}</td>
-        <td style="padding:8px 6px;text-align:right">${h.cajas.toLocaleString()}</td>
-        <td style="padding:8px 6px;text-align:right">${h.pallets.toLocaleString()}</td>
+        <td style="padding:8px 6px;text-align:right">${h.pzas.toLocaleString('en-US')}</td>
+        <td style="padding:8px 6px;text-align:right">${h.cajas.toLocaleString('en-US')}</td>
+        <td style="padding:8px 6px;text-align:right">${h.pallets.toLocaleString('en-US')}</td>
       </tr>`;
     }).join('');
 
@@ -5950,9 +5965,9 @@ async function renderEmpaque() {
         <tbody>${filasHist || `<tr><td colspan="4" style="text-align:center;padding:1.5rem;color:var(--text3)">Sin pallets registrados todavía</td></tr>`}</tbody>
         ${filasHist ? `<tfoot><tr style="border-top:2px solid var(--border)">
           <td style="padding:8px 6px;font-weight:700">Total</td>
-          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.pzas.toLocaleString()}</td>
-          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.cajas.toLocaleString()}</td>
-          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.pallets.toLocaleString()}</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.pzas.toLocaleString('en-US')}</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.cajas.toLocaleString('en-US')}</td>
+          <td style="padding:8px 6px;text-align:right;font-weight:700">${totalHist.pallets.toLocaleString('en-US')}</td>
         </tr></tfoot>` : ''}
       </table>
       </div>
@@ -5996,10 +6011,10 @@ function calcEmpaqueSim() {
   const pallets = cp ? Math.ceil(cajas / cp) : 0;
   cont.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem">
-      <div class="stat"><div class="stat-l">Pzas/caja</div><div class="stat-v">${pc.toLocaleString()}</div></div>
-      <div class="stat"><div class="stat-l">Cajas/pallet</div><div class="stat-v">${cp ? cp.toLocaleString() : '—'}</div></div>
-      <div class="stat bl"><div class="stat-l">Cajas necesarias</div><div class="stat-v" style="color:var(--accent)">${cajas.toLocaleString()}</div></div>
-      <div class="stat bl"><div class="stat-l">Pallets necesarios</div><div class="stat-v" style="color:var(--accent)">${cp ? pallets.toLocaleString() : '—'}</div></div>
+      <div class="stat"><div class="stat-l">Pzas/caja</div><div class="stat-v">${pc.toLocaleString('en-US')}</div></div>
+      <div class="stat"><div class="stat-l">Cajas/pallet</div><div class="stat-v">${cp ? cp.toLocaleString('en-US') : '—'}</div></div>
+      <div class="stat bl"><div class="stat-l">Cajas necesarias</div><div class="stat-v" style="color:var(--accent)">${cajas.toLocaleString('en-US')}</div></div>
+      <div class="stat bl"><div class="stat-l">Pallets necesarios</div><div class="stat-v" style="color:var(--accent)">${cp ? pallets.toLocaleString('en-US') : '—'}</div></div>
     </div>`;
 }
 window.calcEmpaqueSim = calcEmpaqueSim;
@@ -6040,7 +6055,7 @@ function exportarEmpaqueExcel() {
   }
 
   const fecha = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `Empaque_ShipQR_${fecha}.xlsx`);
+  XLSX.writeFile(formatoMilesWb(wb), `Empaque_ShipQR_${fecha}.xlsx`);
 }
 window.exportarEmpaqueExcel = exportarEmpaqueExcel;
 
@@ -6364,7 +6379,7 @@ function descargarMaterialesPlan() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Pick List');
   const fecha = new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb, `PickList_Almacen_Plan_Semanal_${fecha}.xlsx`);
+  XLSX.writeFile(formatoMilesWb(wb), `PickList_Almacen_Plan_Semanal_${fecha}.xlsx`);
 }
 window.descargarMaterialesPlan = descargarMaterialesPlan;
 
@@ -6713,7 +6728,7 @@ function renderAdminPartes() {
     var stockTxt, stockColor;
     if (stock === null) { stockTxt = '— Sin IMS'; stockColor = 'var(--text2)'; }
     else if (stock === 0) { stockTxt = '0'; stockColor = '#FFBA00'; }
-    else { stockTxt = stock.toLocaleString(); stockColor = '#00e676'; }
+    else { stockTxt = stock.toLocaleString('en-US'); stockColor = '#00e676'; }
 
     var famColor = r.familia==='GH90'?'rgba(168,85,247,.2)':
                    r.familia==='GH69'?'rgba(0,230,118,.2)':
@@ -6756,7 +6771,7 @@ function abrirAdmEdit(idx) {
   var stock = _admGetStockIMS(r.pn, r.desc);
   if (stock !== null && stock > 0) {
     var w = document.getElementById('admEditWarning');
-    w.innerHTML = '⚠️ Esta parte tiene stock en IMS ('+stock.toLocaleString()+'). ' +
+    w.innerHTML = '⚠️ Esta parte tiene stock en IMS ('+stock.toLocaleString('en-US')+'). ' +
       'Si cambias el PN, se renombrará el documento en IMS preservando el stock e historial. ' +
       'Si solo cambias descripción o familia, también se actualiza en IMS.';
     w.style.display = 'block';
@@ -6876,7 +6891,7 @@ async function eliminarAdmParte(idx) {
   } else if (puedeBorrarIMS) {
     msg += '✅ En IMS: estatus "Pendiente" con stock 0 → se borrará también del IMS.';
   } else {
-    msg += '⚠️ La parte EXISTE en IMS con estatus "'+imsEstatus+'" y stock '+imsStock.toLocaleString()+'.\n' +
+    msg += '⚠️ La parte EXISTE en IMS con estatus "'+imsEstatus+'" y stock '+imsStock.toLocaleString('en-US')+'.\n' +
            'Solo se borrará del BOM activo. NO se borrará del IMS para no perder stock real.';
   }
   msg += '\n\n¿Continuar?';
@@ -7597,7 +7612,7 @@ function cfExcel() {
     filas.push([it.pn, it.desc, it.loc || it.ubic, it.sistema, it.conteo == null ? '' : it.conteo, it.conteo == null ? '' : it.conteo - it.sistema, it.ajuste ? cfT('ajustado') : (it.conteo == null ? cfT('sinContar') : '')]);
   });
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), 'Conteo');
-  XLSX.writeFile(wb, f.folio + '.xlsx');
+  XLSX.writeFile(formatoMilesWb(wb), f.folio + '.xlsx');
 }
 window.cfAbrir = cfAbrir; window.cfCerrar = cfCerrar; window.cfGenerar = cfGenerar; window.cfCambioPlanta = cfCambioPlanta; window.cfAbrirFolio = cfAbrirFolio;
 window.cfPintarInicio = cfPintarInicio; window.cfImprimir = cfImprimir; window.cfCambioConteo = cfCambioConteo; window.cfAprobar = cfAprobar;

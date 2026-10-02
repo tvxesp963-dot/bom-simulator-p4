@@ -1964,23 +1964,23 @@ function filtSim(f, el) {
 
 // ── CONSOLIDADO EN DOS CAPAS: Urgente (embarques con fecha) + Anticipado (resto del PO) ──
 var CAP_TXT = {
-  es: { vista:'Vista', modoU:'Solo urgente (como hoy)', modoA:'Urgente + anticipado', fechaAnt:'Fecha estimada anticipado',
-        cardYA:'Pedir YA', cardYAs:'Embarques con fecha', cardAnt:'Pedir ANTICIPADO', cardAnts:'Resto del PO · est. ', cardTot:'Total a pedir', cardTots:'+10% aplicado a cada capa',
-        pn:'N° Parte', desc:'Descripción', inv:'Inv. Actual', fU:'Falta urgente', fA:'Falta anticipada', pYA:'Pedir YA +10%', pAnt:'Pedir anticipado +10%', tot:'Total',
-        cub:'✓ cubierto', pz:'pzas', var_:'variante(s)', ya:'YA', ant:'anticipado', mod:'Modelos (faltante por modelo)', urg:'URG', antc:'ANT', notas:'Notas BOM',
-        tituloX:'CONSOLIDADO DE MATERIALES A PEDIR — URGENTE + ANTICIPADO — P4 BOM', subX:'Solo materiales con faltante  |  Urgente = embarques con fecha  |  Anticipado = resto del PO, est. ',
+  es: { vista:'Vista', modoU:'Solo urgente (como hoy)', modoA:'Urgente + PO Balance', fechaAnt:'Fecha estimada PO Balance',
+        cardYA:'Pedir YA', cardYAs:'Embarques con fecha', cardAnt:'Pedir PO BALANCE', cardAnts:'Resto del PO · est. ', cardTot:'Total a pedir', cardTots:'+10% aplicado a cada capa',
+        pn:'N° Parte', desc:'Descripción', inv:'Inv. Actual', fU:'Falta urgente', fA:'Falta PO Balance', pYA:'Pedir YA +10%', pAnt:'Pedir PO Balance +10%', tot:'Total',
+        cub:'✓ cubierto', pz:'pzas', var_:'variante(s)', ya:'YA', ant:'PO Balance', mod:'Modelos (faltante por modelo)', urg:'URG', antc:'PO BAL', notas:'Notas BOM',
+        tituloX:'CONSOLIDADO DE MATERIALES A PEDIR — URGENTE + PO BALANCE — P4 BOM', subX:'Solo materiales con faltante  |  Urgente = embarques con fecha  |  PO Balance = resto del PO, est. ',
         totPl:'TOTAL PLANTA', totGen:'TOTAL GENERAL A PEDIR', pedir:'PEDIR', ordenar:'Orden: P1 → P3 → ALIBER' },
-  en: { vista:'View', modoU:'Urgent only (as today)', modoA:'Urgent + advance', fechaAnt:'Advance est. date',
-        cardYA:'Order NOW', cardYAs:'Dated shipments', cardAnt:'Order IN ADVANCE', cardAnts:'Rest of PO · est. ', cardTot:'Total to order', cardTots:'+10% applied to each layer',
-        pn:'Part No.', desc:'Description', inv:'Current Inv.', fU:'Urgent short', fA:'Advance short', pYA:'Order NOW +10%', pAnt:'Advance order +10%', tot:'Total',
-        cub:'✓ covered', pz:'pcs', var_:'variant(s)', ya:'NOW', ant:'advance', mod:'Models (shortage per model)', urg:'URG', antc:'ADV', notas:'BOM Notes',
-        tituloX:'MATERIALS TO ORDER — URGENT + ADVANCE — P4 BOM', subX:'Only materials with shortage  |  Urgent = dated shipments  |  Advance = rest of PO, est. ',
+  en: { vista:'View', modoU:'Urgent only (as today)', modoA:'Urgent + PO Balance', fechaAnt:'PO Balance est. date',
+        cardYA:'Order NOW', cardYAs:'Dated shipments', cardAnt:'Order PO BALANCE', cardAnts:'Rest of PO · est. ', cardTot:'Total to order', cardTots:'+10% applied to each layer',
+        pn:'Part No.', desc:'Description', inv:'Current Inv.', fU:'Urgent short', fA:'PO Balance short', pYA:'Order NOW +10%', pAnt:'PO Balance order +10%', tot:'Total',
+        cub:'✓ covered', pz:'pcs', var_:'variant(s)', ya:'NOW', ant:'PO Balance', mod:'Models (shortage per model)', urg:'URG', antc:'PO BAL', notas:'BOM Notes',
+        tituloX:'MATERIALS TO ORDER — URGENT + PO BALANCE — P4 BOM', subX:'Only materials with shortage  |  Urgent = dated shipments  |  PO Balance = rest of PO, est. ',
         totPl:'PLANT TOTAL', totGen:'GRAND TOTAL TO ORDER', pedir:'ORDER', ordenar:'Order: P1 → P3 → ALIBER' },
-  ko: { vista:'보기', modoU:'긴급만 (현재 방식)', modoA:'긴급 + 선발주', fechaAnt:'선발주 예상일',
-        cardYA:'즉시 발주', cardYAs:'출하일 확정분', cardAnt:'선발주', cardAnts:'나머지 PO · 예상 ', cardTot:'총 발주량', cardTots:'각 구분별 +10% 적용',
-        pn:'품번', desc:'품명', inv:'현재 재고', fU:'긴급 부족', fA:'선발주 부족', pYA:'즉시 발주 +10%', pAnt:'선발주 +10%', tot:'합계',
-        cub:'✓ 충분', pz:'개', var_:'종', ya:'즉시', ant:'선발주', mod:'모델별 부족 수량', urg:'긴급', antc:'선발', notas:'BOM 비고',
-        tituloX:'발주 필요 자재 — 긴급 + 선발주 — P4 BOM', subX:'부족 자재만  |  긴급 = 출하일 확정분  |  선발주 = 나머지 PO, 예상 ',
+  ko: { vista:'보기', modoU:'긴급만 (현재 방식)', modoA:'긴급 + PO Balance', fechaAnt:'PO Balance 예상일',
+        cardYA:'즉시 발주', cardYAs:'출하일 확정분', cardAnt:'PO Balance 발주', cardAnts:'나머지 PO · 예상 ', cardTot:'총 발주량', cardTots:'각 구분별 +10% 적용',
+        pn:'품번', desc:'품명', inv:'현재 재고', fU:'긴급 부족', fA:'PO Balance 부족', pYA:'즉시 발주 +10%', pAnt:'PO Balance +10%', tot:'합계',
+        cub:'✓ 충분', pz:'개', var_:'종', ya:'즉시', ant:'PO Balance', mod:'모델별 부족 수량', urg:'긴급', antc:'PO BAL', notas:'BOM 비고',
+        tituloX:'발주 필요 자재 — 긴급 + PO Balance — P4 BOM', subX:'부족 자재만  |  긴급 = 출하일 확정분  |  PO Balance = 나머지 PO, 예상 ',
         totPl:'공장 합계', totGen:'총 발주 합계', pedir:'발주', ordenar:'순서: P1 → P3 → ALIBER' }
 };
 function capT(k) { return CAP_TXT[autoChkLang()][k]; }

@@ -358,6 +358,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <span style="font-size:12px;color:var(--text2)" id="consTitle"></span>
       <button class="btn btn-success btn-sm" style="margin-left:auto" onclick="exportarExcel()">📊 Descargar Excel</button>
     </div>
+    <div id="consCapasBar"></div>
+    <div id="consCards"></div>
     <div id="consTablas"></div>
   </div>
 </div>
@@ -1959,6 +1961,36 @@ function filtSim(f, el) {
   renderSimTable();
 }
 
+
+// ── CONSOLIDADO EN DOS CAPAS: Urgente (embarques con fecha) + Anticipado (resto del PO) ──
+var CAP_TXT = {
+  es: { vista:'Vista', modoU:'Solo urgente (como hoy)', modoA:'Urgente + anticipado', fechaAnt:'Fecha estimada anticipado',
+        cardYA:'Pedir YA', cardYAs:'Embarques con fecha', cardAnt:'Pedir ANTICIPADO', cardAnts:'Resto del PO · est. ', cardTot:'Total a pedir', cardTots:'+10% aplicado a cada capa',
+        pn:'N° Parte', desc:'Descripción', inv:'Inv. Actual', fU:'Falta urgente', fA:'Falta anticipada', pYA:'Pedir YA +10%', pAnt:'Pedir anticipado +10%', tot:'Total',
+        cub:'✓ cubierto', pz:'pzas', var_:'variante(s)', ya:'YA', ant:'anticipado', mod:'Modelos (faltante por modelo)', urg:'URG', antc:'ANT', notas:'Notas BOM',
+        tituloX:'CONSOLIDADO DE MATERIALES A PEDIR — URGENTE + ANTICIPADO — P4 BOM', subX:'Solo materiales con faltante  |  Urgente = embarques con fecha  |  Anticipado = resto del PO, est. ',
+        totPl:'TOTAL PLANTA', totGen:'TOTAL GENERAL A PEDIR', pedir:'PEDIR', ordenar:'Orden: P1 → P3 → ALIBER' },
+  en: { vista:'View', modoU:'Urgent only (as today)', modoA:'Urgent + advance', fechaAnt:'Advance est. date',
+        cardYA:'Order NOW', cardYAs:'Dated shipments', cardAnt:'Order IN ADVANCE', cardAnts:'Rest of PO · est. ', cardTot:'Total to order', cardTots:'+10% applied to each layer',
+        pn:'Part No.', desc:'Description', inv:'Current Inv.', fU:'Urgent short', fA:'Advance short', pYA:'Order NOW +10%', pAnt:'Advance order +10%', tot:'Total',
+        cub:'✓ covered', pz:'pcs', var_:'variant(s)', ya:'NOW', ant:'advance', mod:'Models (shortage per model)', urg:'URG', antc:'ADV', notas:'BOM Notes',
+        tituloX:'MATERIALS TO ORDER — URGENT + ADVANCE — P4 BOM', subX:'Only materials with shortage  |  Urgent = dated shipments  |  Advance = rest of PO, est. ',
+        totPl:'PLANT TOTAL', totGen:'GRAND TOTAL TO ORDER', pedir:'ORDER', ordenar:'Order: P1 → P3 → ALIBER' },
+  ko: { vista:'보기', modoU:'긴급만 (현재 방식)', modoA:'긴급 + 선발주', fechaAnt:'선발주 예상일',
+        cardYA:'즉시 발주', cardYAs:'출하일 확정분', cardAnt:'선발주', cardAnts:'나머지 PO · 예상 ', cardTot:'총 발주량', cardTots:'각 구분별 +10% 적용',
+        pn:'품번', desc:'품명', inv:'현재 재고', fU:'긴급 부족', fA:'선발주 부족', pYA:'즉시 발주 +10%', pAnt:'선발주 +10%', tot:'합계',
+        cub:'✓ 충분', pz:'개', var_:'종', ya:'즉시', ant:'선발주', mod:'모델별 부족 수량', urg:'긴급', antc:'선발', notas:'BOM 비고',
+        tituloX:'발주 필요 자재 — 긴급 + 선발주 — P4 BOM', subX:'부족 자재만  |  긴급 = 출하일 확정분  |  선발주 = 나머지 PO, 예상 ',
+        totPl:'공장 합계', totGen:'총 발주 합계', pedir:'발주', ordenar:'순서: P1 → P3 → ALIBER' }
+};
+function capT(k) { return CAP_TXT[autoChkLang()][k]; }
+function consModo() { try { var m = localStorage.getItem('consModo'); if (m === 'urgente' || m === 'ambas') return m; } catch (e) {} return 'ambas'; }
+function consFechaAnt() { try { var f = localStorage.getItem('consFechaAnt'); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) return f; } catch (e) {} return '2026-10-09'; }
+function consFechaCorta(f) { var p = (f || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] : f; }
+function consCambiarModo(m) { try { localStorage.setItem('consModo', m); } catch (e) {} renderCons(); }
+function consCambiarFecha(f) { try { if (f) localStorage.setItem('consFechaAnt', f); } catch (e) {} renderCons(); }
+function consIdioma(l) { try { localStorage.setItem('autoChkLang', l); } catch (e) {} if (typeof pintarAutochequeo === 'function') pintarAutochequeo(); renderCons(); }
+
 // CONSOLIDADO
 function renderCons() {
   document.getElementById('consTitle').textContent = `Consolidado Pedidos — ${document.getElementById('semanaRef').value}`;
@@ -1984,6 +2016,20 @@ function renderCons() {
     const producidoConsSm = (window.simProducidoManualPorModelo && window.simProducidoManualPorModelo[sm]) || 0;
     modeloTargets[sm] = Math.max(0, targetBrutoCons - producidoConsSm);
   });
+
+  // Capa TOTAL (urgente + anticipado): lo que se necesita para cubrir TODO el PO Balance abierto.
+  // Anticipado = Total - Urgente. Si un modelo no tiene PO Balance, su anticipado es 0.
+  const modoCons = consModo();
+  const modeloTargetsTot = {};
+  let hayAnticipado = false;
+  modelos.forEach(sm => {
+    const po = (window.simPOBalancePorModelo && window.simPOBalancePorModelo[sm]) || 0;
+    const prod = (window.simProducidoManualPorModelo && window.simProducidoManualPorModelo[sm]) || 0;
+    modeloTargetsTot[sm] = Math.max(0, Math.max(simTargetsPorModelo[sm] || 0, po) - prod);
+    if (modeloTargetsTot[sm] > (modeloTargets[sm] || 0)) hayAnticipado = true;
+  });
+  let capTotal = null;   // se llena más abajo (necesita procesarPlantas)
+  window.consCapas = { modo: modoCons, fecha: consFechaAnt(), grupos: {}, totYA: 0, totAnt: 0 };
 
   let html = '';
   let hayAlgo = false;
@@ -2049,7 +2095,8 @@ function renderCons() {
   // Se ejecuta DOS VECES: la primera en modo silencioso (silencioso=true) solo
   // para llenar faltanteAcumuladoPorPN con el faltante real de cada modelo;
   // la segunda vez (real) ya pinta el HTML usando ese acumulado completo.
-  function procesarPlantas(silencioso) {
+  const esBundleHeaderInfo = (g) => g.esBundle && (g.desc||'').toUpperCase() === 'BUNDLE' && g.modelos.some(m => m.falta > 0);
+  function procesarPlantas(silencioso, targetsX, capt) {
     let htmlLocal = '';
     let hayAlgoLocal = false;
     // El pool parte de una copia fresca del inventario real en CADA pasada completa
@@ -2082,7 +2129,7 @@ function renderCons() {
     filasPorPlanta[pl.key] = filasPorPlanta[pl.key] || [];
     let plantaHtml = '';
     modelos.forEach(sm => {
-      const target = modeloTargets[sm] || 0;
+      const target = (targetsX || modeloTargets)[sm] || 0;
       if (!target) return;
       // Pre-calcular inventario de Ranurado y medio proceso para excluir lo innecesario
       const topRanC = BOM.find(r => r.sm===sm && (r.desc||'').toUpperCase().includes('CHIP BOARD TOP') && (r.desc||'').toUpperCase().includes('RANURADO'));
@@ -2383,6 +2430,40 @@ function renderCons() {
       // Mostrar el inventario más representativo (el del header/pool, que es el mismo para todos los modelos)
       grupos[key].invMuestra = r.inv;
     });
+    // Pasada de la capa TOTAL: solo se guardan los grupos, no se pinta nada.
+    if (capt) { capt[pl.key] = grupos; return; }
+    const ambasAqui = (modoCons === 'ambas' && capTotal);
+    let filasCapas = null;
+    if (ambasAqui) {
+      // Une los grupos de la capa urgente con los de la capa total (puede haber variantes
+      // que solo aparecen en la total: urgente ya cubierto, pero el PO completo sí falta).
+      const gT = capTotal[pl.key] || {};
+      const keys = Object.keys(grupos); Object.keys(gT).forEach(k => { if (keys.indexOf(k) < 0) keys.push(k); });
+      const mapaModelo = (g) => { const o = {}; ((g && g.modelos) || []).forEach(m => { o[m.sm] = (m.aPedir > 0 ? m.falta : 0); }); return o; };
+      filasCapas = keys.map(k => {
+        const gU = grupos[k], gTT = gT[k], base = gU || gTT;
+        const d = (base.desc||'').toUpperCase();
+        const esRanu = d.includes('RANURADO') && (d.includes('CHIP BOARD TOP') || d.includes('CHIP BOARD BOTTOM'));
+        const fU = gU ? gU.faltaAcumulada : 0;
+        const fT = gTT ? gTT.faltaAcumulada : 0;
+        const fA = Math.max(0, fT - fU);
+        const mU = mapaModelo(gU), mT = mapaModelo(gTT);
+        const txtU = [], txtA = [];
+        Object.keys(mT).concat(Object.keys(mU).filter(x => !(x in mT))).forEach(sm => {
+          const corto = sm.replace('SM-F976UZKA','').replace('SM-F976UZK','');
+          const u = mU[sm] || 0, a = Math.max(0, (mT[sm] || 0) - u);
+          if (u > 0) txtU.push(corto + ': -' + u.toLocaleString());
+          if (a > 0) txtA.push(corto + ': -' + a.toLocaleString());
+        });
+        const prios = Object.keys(mT).concat(Object.keys(mU)).map(x => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[x]) || 999);
+        return { _prio: prios.length ? Math.min.apply(null, prios) : 999, pn: base.pn, desc: base.desc, esBundle: base.esBundle, esRanu,
+                 inv: gU ? gU.invMuestra : gTT.invMuestra,
+                 fU, fA, pYA: fU > 0 ? calcularAPedir(fU) : 0, pAnt: fA > 0 ? calcularAPedir(fA) : 0,
+                 txtU: txtU.join(' · '), txtA: txtA.join(' · '),
+                 infoBundle: !!(gU && esBundleHeaderInfo(gU)) };
+      }).filter(f => !f.esRanu && (f.fU > 0 || f.fA > 0 || f.infoBundle)).map((f,i) => ({...f, _i:i})).sort((a,b) => (a._prio - b._prio) || (a._i - b._i));  // orden = prioridad del Excel
+      window.consCapas.grupos[pl.key] = filasCapas.map(f => ({...f, total: f.pYA + f.pAnt}));
+    }
     // El Bundle terminado (header) siempre tiene aPedir=0 por diseño (su
     // faltante se cubre con MANUAL BUNDLE), pero debe seguir VISIBLE para
     // mostrar su diferencia real informativamente.
@@ -2405,6 +2486,64 @@ function renderCons() {
       (esSiempreVisibleInformativo(g) && g.modelos.some(m => m.falta > 0))
     ));
 
+    if (ambasAqui) {
+      if (!filasCapas.length) return;
+      hayAlgoLocal = true;
+      const totYA = filasCapas.reduce((a,f)=>a+f.pYA,0), totAnt = filasCapas.reduce((a,f)=>a+f.pAnt,0);
+      window.consCapas.totYA += totYA; window.consCapas.totAnt += totAnt;
+      const tdN = (v, col, bold) => `<td style="text-align:right;color:${col};font-weight:${bold?700:600}">${v}</td>`;
+      const filaC = (f, i) => {
+        const cubierto = f.fU <= 0 && !f.infoBundle;
+        const colP = f.esBundle ? '#a78bfa' : pl.tc;
+        return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
+        <td class="pn-cell" style="color:${colP};font-size:12px">${f.pn}</td>
+        <td style="font-size:12px">${f.desc}${f.txtU?`<div style="font-size:9px;color:var(--text2);margin-top:2px">${capT('urg')}: ${f.txtU}</div>`:''}${f.txtA?`<div style="font-size:9px;color:var(--amber);margin-top:1px">${capT('antc')}: ${f.txtA}</div>`:''}</td>
+        ${tdN(f.inv>0?f.inv.toLocaleString():'0', f.inv>0?'var(--text)':'var(--red)')}
+        ${f.fU>0 ? tdN('-'+f.fU.toLocaleString(),'var(--red)') : tdN(cubierto?capT('cub'):'OK','var(--green)')}
+        ${f.fA>0 ? tdN('-'+f.fA.toLocaleString(),'var(--amber)') : tdN('—','var(--text2)')}
+        ${tdN(f.pYA>0?f.pYA.toLocaleString():'—', f.pYA>0?'var(--amber)':'var(--text2)', true)}
+        ${tdN(f.pAnt>0?f.pAnt.toLocaleString():'—', f.pAnt>0?'#4da6ff':'var(--text2)', true)}
+        ${tdN((f.pYA+f.pAnt)>0?(f.pYA+f.pAnt).toLocaleString():'—', 'var(--text)', true)}
+      </tr>`;
+      };
+      const fB = filasCapas.filter(f=>f.esBundle), fN = filasCapas.filter(f=>!f.esBundle);
+      const secC = (label,bg,tc) => `<tr style="background:${bg}"><td colspan="8" style="padding:.3rem .75rem;font-size:10px;font-weight:700;color:${tc};letter-spacing:.04em">${label}</td></tr>`;
+      plantaHtml = `
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.75rem;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:var(--bg3);border-bottom:1px solid var(--border);gap:.5rem;flex-wrap:wrap">
+          <span style="font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:var(--text)">Consolidado ${pl.key} — ${modelos.length} modelo(s)</span>
+          <span style="font-size:10px;color:var(--text2)">${filasCapas.length} ${capT('var_')} · <b style="color:var(--amber)">${totYA.toLocaleString()} ${capT('pz')} ${capT('ya')}</b> · <b style="color:#4da6ff">${totAnt.toLocaleString()} ${capT('pz')} ${capT('ant')}</b></span>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="dt" style="width:100%;table-layout:fixed;min-width:760px">
+          <colgroup><col style="width:11%"><col style="width:27%"><col style="width:9%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:12%"><col style="width:10%"></colgroup>
+          <thead><tr style="font-size:10px">
+            <th>${capT('pn')}</th><th>${capT('desc')}</th>
+            <th style="text-align:right">${capT('inv')}</th>
+            <th style="text-align:right">${capT('fU')}</th>
+            <th style="text-align:right;color:var(--amber)">${capT('fA')}</th>
+            <th style="text-align:right;color:var(--amber)">${capT('pYA')}</th>
+            <th style="text-align:right;color:#4da6ff">${capT('pAnt')}</th>
+            <th style="text-align:right">${capT('tot')}</th>
+          </tr></thead><tbody>
+          ${fB.length ? secC('Bundle — Ensamble Padre','rgba(147,130,255,.12)','#a78bfa') : ''}
+          ${fB.map(filaC).join('')}
+          ${fN.length ? secC('Componentes '+pl.key,'rgba(255,255,255,.03)','var(--text2)') : ''}
+          ${fN.map(filaC).join('')}
+          </tbody>
+        </table>
+        </div>
+      </div>`;
+      htmlLocal += `
+      <div style="margin-bottom:1.25rem">
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+          <span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;background:${pl.color};border:1px solid ${pl.bc};color:${pl.tc}">${pl.label}</span>
+          <span style="font-size:11px;color:var(--text2)">${pl.sub}</span>
+        </div>
+        ${plantaHtml}
+      </div>`;
+      return;
+    }
     if (!listaGrupos.length) return;
     hayAlgoLocal = true;
 
@@ -2470,7 +2609,20 @@ function renderCons() {
   // los modelos DENTRO de la misma planta), ya no se depende de una pasada previa
   // — el agrupamiento ocurre completo en una sola pasada por planta. Se mantiene
   // la llamada doble por compatibilidad, sin efecto negativo.
+  // Capa total (solo si hay anticipado y se pidió verlo): corre el mismo motor con el PO completo
+  // y guarda los grupos; consolidadoData (que usa el autochequeo) queda intacto = capa urgente.
+  if (modoCons === 'ambas' && hayAnticipado) {
+    const _cd = window.consolidadoData;
+    window.consolidadoData = {};   // la pasada total escribe aquí y se descarta
+    const _tmp = {};
+    procesarPlantas(true, modeloTargetsTot, _tmp);
+    window.consolidadoData = _cd;
+    capTotal = _tmp;
+  } else if (modoCons === 'ambas') {
+    capTotal = {};   // sin PO por encima de lo urgente: anticipado = 0
+  }
   procesarPlantas(true);
+  window.consCapas.totYA = 0; window.consCapas.totAnt = 0; window.consCapas.grupos = {};
   const resultado = procesarPlantas(false);
   html = resultado.htmlLocal;
   hayAlgo = resultado.hayAlgoLocal;
@@ -2484,6 +2636,29 @@ function renderCons() {
   document.getElementById('consEmpty').style.display = 'none';
   document.getElementById('consContent').style.display = 'block';
   document.getElementById('consTablas').innerHTML = html;
+  (function pintarBarraCapas() {
+    const f = consFechaAnt(), lg = autoChkLang();
+    const bandera = (l, cod) => `<button onclick="consIdioma('${l}')" style="border:${l===lg?'2px solid #4da6ff':'1px solid transparent'};background:none;border-radius:4px;padding:1px;cursor:pointer"><img src="https://flagcdn.com/w20/${cod}.png" width="20" alt="${l}"></button>`;
+    document.getElementById('consCapasBar').innerHTML = `<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin:.2rem 0 .75rem;font-size:12px;color:var(--text2)">
+      <span>${capT('vista')}:</span>
+      <select onchange="consCambiarModo(this.value)" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px">
+        <option value="urgente"${modoCons==='urgente'?' selected':''}>${capT('modoU')}</option>
+        <option value="ambas"${modoCons==='ambas'?' selected':''}>${capT('modoA')}</option>
+      </select>
+      ${modoCons==='ambas' ? `<span>${capT('fechaAnt')}:</span><input type="date" value="${f}" onchange="consCambiarFecha(this.value)" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px">` : ''}
+      <span style="margin-left:auto;display:flex;gap:3px">${bandera('es','mx')}${bandera('en','us')}${bandera('ko','kr')}</span></div>`;
+    const cards = document.getElementById('consCards');
+    if (modoCons !== 'ambas') { cards.innerHTML = ''; return; }
+    const yA = window.consCapas.totYA, aN = window.consCapas.totAnt;
+    const card = (tit, val, sub, col) => `<div style="flex:1;min-width:180px;background:var(--bg2);border:1px solid var(--border);border-top:3px solid ${col};border-radius:10px;padding:.7rem 1rem">
+      <div style="font-size:11px;color:var(--text2);font-weight:600">${tit}</div>
+      <div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:${col}">${val.toLocaleString()} <span style="font-size:12px;color:var(--text2)">${capT('pz')}</span></div>
+      <div style="font-size:10px;color:var(--text2)">${sub}</div></div>`;
+    cards.innerHTML = `<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.9rem">
+      ${card(capT('cardYA'), yA, capT('cardYAs'), 'var(--amber)')}
+      ${card(capT('cardAnt'), aN, capT('cardAnts')+consFechaCorta(f), '#4da6ff')}
+      ${card(capT('cardTot'), yA+aN, capT('cardTots'), 'var(--green)')}</div>`;
+  })();
   if (window._vistasPendientes) delete window._vistasPendientes.cons; // ya está al día
   if (typeof programarAutochequeo === 'function') programarAutochequeo();
 }
@@ -3016,6 +3191,70 @@ function exportarExcel() {
     }).filter(r => !r.esRanuradoInfo && (r.falta > 0 || r.aPedir > 0));
   };
 
+  // Vista "Urgente + anticipado": hoja alternativa con las dos capas (la vista "Solo urgente" sale como siempre)
+  const capasX = (window.consCapas && window.consCapas.modo === 'ambas') ? window.consCapas : null;
+  let ws1Capas = null;
+  if (capasX) {
+    const NC = 11, aoaX = [], mgX = [];
+    const pushX = r => aoaX.push(r), RX = () => aoaX.length - 1;
+    const fAnt = consFechaCorta(capasX.fecha);
+    pushX([c(capT('tituloX'),true,TITLE_FG,TITLE_BG,'center',14), ...Array(NC-1).fill(c('',false,TITLE_FG,TITLE_BG))]);
+    mgX.push({s:{r:RX(),c:0},e:{r:RX(),c:NC-1}});
+    pushX([c(`Fecha: ${fecha}  |  ${capT('subX')}${fAnt}  |  ${capT('ordenar')}`,false,SUB_FG,SUB_BG,'center',10), ...Array(NC-1).fill(c('',false,SUB_FG,SUB_BG))]);
+    mgX.push({s:{r:RX(),c:0},e:{r:RX(),c:NC-1}});
+    pushX(Array(NC).fill(c('')));
+    const COLSX = ['No.', capT('pn'), capT('desc'), capT('mod'), capT('inv'), capT('fU'), capT('fA')+' ('+fAnt+')', capT('pYA'), capT('pAnt')+' ('+fAnt+')', capT('tot'), capT('notas')];
+    const URG_BG='FFF2CC', URG_FG='7B4F00', ANT_BG='DDEBF7', ANT_FG='1F4E79';
+    let noX = 1, totYA = 0, totAnt = 0; const porPl = {};
+    [{key:'P1',label:'PLANTA 1  (P1)',sub:'Chip Boards · Sheets · Strip',bg:P1_BG,fg:P1_FG},
+     {key:'P3',label:'PLANTA 3  (P3)',sub:'Bundles · Inserts · QSG',bg:P3_BG,fg:P3_FG},
+     {key:'P4',label:'PLANTA 4  (P4)',sub:'Gift Box Top · Lower Box Bottom (S1-S4)',bg:'007A8A',fg:'FFFFFF'},
+     {key:'ALIBER',label:'ALIBER',sub:'Pulp Tray · Data Cable · Ejection Pin',bg:ALI_BG,fg:ALI_FG}].forEach(pl => {
+      const rows = capasX.grupos[pl.key] || [];
+      if (!rows.length) return;
+      const tYA = rows.reduce((a,r)=>a+r.pYA,0), tAnt = rows.reduce((a,r)=>a+r.pAnt,0);
+      porPl[pl.key] = [tYA, tAnt]; totYA += tYA; totAnt += tAnt;
+      pushX([c(`► ${pl.label}`,true,pl.fg,pl.bg,'left',11), c(pl.sub,false,pl.fg,pl.bg,'left',9), ...Array(3).fill(c('',false,pl.fg,pl.bg)),
+             c(`${capT('totPl')}: ${capT('ya')} ${tYA.toLocaleString()} | ${capT('ant')} ${tAnt.toLocaleString()} | ${capT('tot')} ${(tYA+tAnt).toLocaleString()} ${capT('pz')}`,true,pl.fg,pl.bg,'right',10),
+             ...Array(NC-6).fill(c('',false,pl.fg,pl.bg))]);
+      mgX.push({s:{r:RX(),c:1},e:{r:RX(),c:4}}); mgX.push({s:{r:RX(),c:5},e:{r:RX(),c:NC-1}});
+      pushX(COLSX.map(h => c(h,true,HDR_FG,HDR_BG,'center',9,true)));
+      rows.forEach((row,i) => {
+        const bg = i%2===1 ? ALT_BG : null;
+        const esHB = row.esBundle && !(row.desc||'').toUpperCase().includes('MANUAL');
+        const txt = [row.txtU ? `${capT('urg')}: ${row.txtU}` : '', row.txtA ? `${capT('antc')}: ${row.txtA}` : ''].filter(Boolean).join('  |  ');
+        const nota = row.total>0 ? `${pl.key} ${capT('pedir')}: ${capT('ya')} ${row.pYA.toLocaleString()} + ${capT('ant')} ${row.pAnt.toLocaleString()}` : (esHB ? `${pl.key} PRODUCIR ${row.fU.toLocaleString()}` : 'OK');
+        pushX([
+          n(noX++,false,null,bg,'center'),
+          c(row.pn,true,row.esBundle?'FFFFFF':'1A4F9C',row.esBundle?BUNDLE_BG:bg),
+          c(row.desc,false,null,bg),
+          c(txt,false,'555555',bg,'left',8,true),
+          n(row.inv,false,null,bg),
+          row.fU>0 ? n(row.fU,false,'CC0000',bg) : c(capT('cub'),false,'1A6B3C',bg,'right'),
+          n(row.fA,false,row.fA>0?ANT_FG:'999999',bg),
+          n(row.pYA,true,row.pYA>0?URG_FG:'999999',row.pYA>0?URG_BG:bg),
+          n(row.pAnt,true,row.pAnt>0?ANT_FG:'999999',row.pAnt>0?ANT_BG:bg),
+          n(row.total,true,row.total>0?URG_FG:OK_FG,row.total>0?PEDIR_BG:OK_BG),
+          c(nota,true,row.total>0?URG_FG:OK_FG,row.total>0?PEDIR_BG:OK_BG,'left',9,true),
+        ]);
+      });
+      pushX([...Array(3).fill(c('',false,pl.fg,pl.bg)), c(`${capT('totPl')} ${pl.label}`,true,pl.fg,pl.bg,'right'), c('',false,pl.fg,pl.bg), c('',false,pl.fg,pl.bg), c('',false,pl.fg,pl.bg),
+             n(tYA,true,pl.fg,pl.bg), n(tAnt,true,pl.fg,pl.bg), n(tYA+tAnt,true,pl.fg,pl.bg), c('',false,pl.fg,pl.bg)]);
+      mgX.push({s:{r:RX(),c:0},e:{r:RX(),c:3}});
+      pushX(Array(NC).fill(c('')));
+    });
+    pushX([...Array(3).fill(c('',true,TOT_FG,TOT_BG)), c(capT('totGen'),true,TOT_FG,TOT_BG,'right'), c('',false,TOT_FG,TOT_BG), c('',false,TOT_FG,TOT_BG), c('',false,TOT_FG,TOT_BG),
+           n(totYA,true,TOT_FG,TOT_BG), n(totAnt,true,TOT_FG,TOT_BG), n(totYA+totAnt,true,TOT_FG,TOT_BG),
+           c(Object.entries(porPl).map(([k,v])=>`${k}: ${(v[0]+v[1]).toLocaleString()}`).join('  |  '),true,TOT_FG,TOT_BG,'center',9)]);
+    mgX.push({s:{r:RX(),c:0},e:{r:RX(),c:3}});
+    ws1Capas = {};
+    aoaX.forEach((row,ri) => row.forEach((cell,ci) => { if (cell) ws1Capas[XLSX.utils.encode_cell({r:ri,c:ci})] = cell; }));
+    ws1Capas['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:aoaX.length,c:NC-1}});
+    ws1Capas['!merges'] = mgX;
+    ws1Capas['!cols'] = [{wch:5},{wch:15},{wch:26},{wch:40},{wch:12},{wch:13},{wch:15},{wch:14},{wch:16},{wch:13},{wch:34}];
+    ws1Capas['!rows'] = [{hpt:28},{hpt:18}];
+  }
+
   // ══════════════════════════════════════════
   // HOJA 1 — CONSOLIDADO PEDIDOS
   // ══════════════════════════════════════════
@@ -3140,7 +3379,7 @@ function exportarExcel() {
   ws1['!merges'] = merges;
   ws1['!cols'] = [{wch:5},{wch:15},{wch:26},{wch:38},{wch:12},{wch:13},{wch:16},{wch:32}];
   ws1['!rows'] = [{hpt:28},{hpt:18},{hpt:22}];
-  XLSX.utils.book_append_sheet(wb, ws1, 'Consolidado Pedidos');
+  XLSX.utils.book_append_sheet(wb, ws1Capas || ws1, 'Consolidado Pedidos');
 
   // ══════════════════════════════════════════
   // HOJA 2 — PRODUCIR Y VC RANURAR

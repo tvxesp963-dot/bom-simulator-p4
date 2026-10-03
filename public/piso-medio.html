@@ -207,8 +207,12 @@ var db=firebase.firestore();
 var plan=null, pallets=[], unsubPlan=null, unsubPal=null, fechaPal='';
 function hoyISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
+function cambiarIdioma(l){
+  lang=l; try{localStorage.setItem('pisoLang',lang);}catch(e){}
+  if(firebase.auth().currentUser) pintar(); else mostrarLogin();
+}
 function ligarLangs(){
-  document.querySelectorAll('.langs button').forEach(function(b){ b.onclick=function(){ lang=b.dataset.l; try{localStorage.setItem('pisoLang',lang);}catch(e){} if(firebase.auth().currentUser) pintar(); else mostrarLogin(); }; });
+  document.querySelectorAll('.langs button').forEach(function(b){ b.onclick=function(){ cambiarIdioma(b.dataset.l); }; });
 }
 function langsHtml(){
   return '<div class="langs">'+['es','en','ko'].map(function(l){
@@ -217,13 +221,14 @@ function langsHtml(){
 }
 function mostrarLogin(){
   document.title=t('title'); document.getElementById('tTitle').textContent=t('title');
+  document.querySelectorAll('.langs button').forEach(function(b){ b.classList.toggle('on', b.dataset.l===lang); });
   document.getElementById('tabs').innerHTML=''; document.getElementById('sub').innerHTML=''; document.getElementById('foot').textContent='';
   document.getElementById('app').innerHTML=
     '<div class="login"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>'+t('login')+'</b>'+langsHtml()+'</div>'+
     '<input id="lgE" type="email" placeholder="'+t('correo')+'"><input id="lgP" type="password" placeholder="'+t('pass')+'">'+
     '<button id="lgB">'+t('entrar')+'</button><div class="err" id="lgErr"></div>'+
     '<a id="lgF">'+t('forgot')+'</a></div>';
-  document.querySelectorAll('.langs button').forEach(function(b){ b.onclick=function(){ lang=b.dataset.l; try{localStorage.setItem('pisoLang',lang);}catch(e){} mostrarLogin(); }; });
+  ligarLangs();
   document.getElementById('lgB').onclick=function(){
     var e=document.getElementById('lgE').value.trim(), p=document.getElementById('lgP').value;
     firebase.auth().signInWithEmailAndPassword(e,p).catch(function(){ document.getElementById('lgErr').textContent=t('errLogin'); });

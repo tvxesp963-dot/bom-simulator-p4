@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Plan de piso · Medio proceso P4</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Medio proceso · Piso P4</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
@@ -11,7 +11,7 @@
 :root{--bg:#0a0e1a;--card:#111827;--card2:#0d1220;--border:#1f2a3d;--text:#e8edf5;--text2:#8b96a8;--text3:#5c6678;--green:#00e676;--red:#ff4d4d;--yellow:#f1c40f;--accent:#4da6ff}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;padding:16px}
-.wrap{max-width:1600px;margin:0 auto}
+.wrap{max-width:1400px;margin:0 auto}
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 h1{font-size:26px;margin:0}
 .langs{display:flex;gap:4px;align-items:center}
@@ -21,41 +21,61 @@ h1{font-size:26px;margin:0}
 .langs img{width:28px;height:20px;border-radius:3px;display:block}
 .sub{color:var(--text2);font-size:15px;margin-bottom:14px}
 .sub .old{color:var(--yellow);font-weight:700}
+.corte{display:inline-block;padding:2px 10px;border-radius:8px}
+.corte.ambar{background:rgba(241,196,15,.18);color:var(--yellow);font-weight:800;font-size:16px;animation:corteBlink 1.2s ease-in-out infinite}
+@keyframes corteBlink{0%,100%{opacity:1}50%{opacity:.25}}
+.tbl tr.run-now td{animation:runBlink 1.2s ease-in-out infinite}
+.tbl tr.run-now td:first-child{box-shadow:inset 6px 0 0 var(--accent)}
+.runtag{display:inline-block;margin-top:4px;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--accent);color:#04203f;letter-spacing:.5px}
+@keyframes runBlink{0%,100%{background:rgba(77,166,255,.30)}50%{background:rgba(77,166,255,.04)}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
 .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
 .kpi .l{font-size:14px;color:var(--text2)}
 .kpi .v{font-size:32px;font-weight:800;margin-top:2px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px}
-.mq{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px}
-.mq .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px}
-.mq .nm{font-size:26px;font-weight:900;color:var(--accent)}
-.mq .st{font-size:13px;color:var(--text2);text-align:right}
-.mq .st b{color:var(--text);font-size:15px}
-.it{display:flex;align-items:center;gap:10px;border:1px solid var(--border);background:var(--card);border-radius:10px;padding:9px;margin-bottom:8px}
-.it.run{border-color:var(--accent);background:#102238}
-.it.next{border:2px solid var(--green);background:#0b2a1b}
-.num{min-width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;background:#1f2a3d;color:var(--text2)}
-.it.run .num{background:var(--accent);color:#04203f}
-.it.next .num{background:var(--green);color:#002b14}
-.it.ok .num{background:var(--green);color:#002b14}
-.it .t{flex:1;min-width:0}
-.it .t .mdl{font-weight:800;color:var(--accent);font-size:16px}
-.it .t .code{font-size:14px;font-weight:700;color:#fcd34d;letter-spacing:.3px}
-.it .t .d{font-size:13px;color:var(--text2)}
-.it .nx{font-size:11px;font-weight:900;color:var(--green);letter-spacing:.5px}
-.tag{font-size:12px;font-weight:800;padding:3px 10px;border-radius:12px;white-space:nowrap}
-.tag.ok{background:var(--yellow);color:#241c00}
-.tag.run{background:var(--accent);color:#04203f}
-.tag.no{background:#3a2a0f;color:#ffb84d;border:1px solid #6b4a14}
-.mats{display:flex;flex-direction:column;gap:3px;min-width:170px;max-width:230px}
-.mt{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:6px;display:flex;justify-content:space-between;gap:8px;white-space:nowrap}
-.mt.ok{background:rgba(0,230,118,.16);color:var(--green)}
-.mt.parcial{background:rgba(241,196,15,.18);color:var(--yellow)}
-.mt.no{background:rgba(255,77,77,.18);color:var(--red)}
-.nx.run{color:var(--accent)}
-.empty{color:var(--text3);font-size:14px;padding:10px 2px}
-.more{color:var(--text3);font-size:13px;text-align:center}
-.foot{color:var(--text3);font-size:12px;margin-top:14px}
+.tbl{width:100%;border-collapse:collapse;background:var(--card2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.tbl th{font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--text2);text-align:left;padding:12px 10px;border-bottom:2px solid var(--border)}
+.tbl td{padding:14px 10px;border-top:1px solid var(--border);font-size:20px}
+.r,.tbl th.r{text-align:right}
+.sep td{background:#151d2e;color:var(--text2);font-size:15px;font-weight:700;padding:8px 12px}
+.num{display:inline-flex;width:40px;height:40px;border-radius:50%;align-items:center;justify-content:center;background:var(--green);color:#002b14;font-weight:900;font-size:22px}
+.num.wait{background:#1f2a3d;color:var(--text2);font-size:18px}
+.mdl{font-weight:800;color:var(--accent)}
+.code{font-size:12px;color:var(--text3)}
+.mdl + .code{font-size:15px;font-weight:700;color:#fcd34d;letter-spacing:.3px}
+.chip{display:inline-block;font-size:13px;font-weight:700;padding:3px 8px;border-radius:6px;margin:2px}
+.ok{background:rgba(0,230,118,.15);color:var(--green)}
+.par{background:rgba(241,196,15,.18);color:var(--yellow)}
+.no{background:rgba(255,77,77,.18);color:var(--red)}
+.bar{background:#1f2a3d;height:12px;border-radius:6px;min-width:90px}
+.bar div{height:12px;border-radius:6px}
+.est{font-weight:800;font-size:18px}
+.done td{background:rgba(0,230,118,.07)}
+.sep.sepdone td{background:rgba(0,230,118,.14);color:var(--green)}
+.num.ok{background:rgba(0,230,118,.2);color:var(--green);border:2px solid var(--green)}
+.prodok{color:var(--green);font-weight:900;font-size:22px}
+.foot{color:var(--text3);font-size:13px;margin-top:10px}
+.msg{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;color:var(--text2);font-size:18px}
+.acciones{display:flex;gap:6px;align-items:center;margin-right:8px}
+.acciones button,.tabs button{background:#0d1220;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
+.acciones button:hover,.tabs button:hover{border-color:var(--accent)}
+.derecha{display:flex;align-items:center}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
+.tabs button{font-size:18px;font-weight:900;padding:8px 16px;color:var(--text2);border-radius:10px}
+.tabs button small{display:block;font-size:11px;font-weight:700;color:var(--text3)}
+.tabs button.on{border-color:var(--accent);color:var(--accent);background:#102238;box-shadow:0 0 8px rgba(79,142,247,.3)}
+.tabs button.auto.on{border-color:var(--green);color:var(--green);background:#0b2a1b}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px}
+.tblmain{overflow-y:auto;overflow-x:auto;overscroll-behavior:contain}
+.tblmain .tbl{overflow:visible}
+.tblmain .tbl thead th{position:sticky;top:0;z-index:5;background:#1b2538;box-shadow:0 2px 0 var(--border)}
+@media (max-width:800px){.acciones,.derecha,.top{flex-wrap:wrap}.tbl{min-width:980px;overflow:visible}.tbl td{font-size:15px;padding:10px 6px}.kpi .v{font-size:24px}h1{font-size:20px}}
+@page{size:letter landscape;margin:8mm}
+@media print{
+  :root{--bg:#fff;--card:#fff;--card2:#fff;--border:#999;--text:#000;--text2:#222;--text3:#555;--green:#000;--red:#000;--yellow:#000;--accent:#000}
+  *{animation:none!important;box-shadow:none!important;background:transparent!important;color:#000!important}
+  body{padding:0}.acciones,.langs,.bar,.tabs{display:none!important}
+  .tblwrap{overflow:visible!important;max-height:none!important}.tbl th,.tbl td{font-size:11px;padding:3px 5px;position:static!important}
+}
 .login{max-width:340px;margin:80px auto;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px}
 .login input{width:100%;margin:6px 0;padding:11px;background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px}
 .login button{width:100%;margin-top:8px;padding:12px;border:0;border-radius:8px;background:var(--accent);color:#04203f;font-weight:800;font-size:15px;cursor:pointer}
@@ -68,7 +88,24 @@ h1{font-size:26px;margin:0}
 </style>
 </head>
 <body>
-<div class="wrap" id="app"></div>
+<div class="wrap">
+  <div class="top">
+    <h1 id="tTitle"></h1>
+    <div class="derecha">
+    <div class="acciones">
+      <button id="btnZoomMenos" onclick="cambiarZoom(-0.1)">A−</button><button id="btnZoomPct" onclick="cambiarZoom(0)">100%</button><button id="btnZoomMas" onclick="cambiarZoom(0.1)">A+</button>
+      <button id="btnPdf" onclick="window.print()">🖨️ PDF</button>
+    </div>
+    <div class="langs">
+      <button data-l="es" title="Español"><img src="https://flagcdn.com/w40/mx.png" alt="MX"></button><button data-l="en" title="English"><img src="https://flagcdn.com/w40/us.png" alt="US"></button><button data-l="ko" title="한국어"><img src="https://flagcdn.com/w40/kr.png" alt="KR"></button>
+    </div>
+    </div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="sub" id="sub"></div>
+  <div id="app"><div class="msg" id="loading"></div></div>
+  <div class="foot" id="foot"></div>
+</div>
 <div class="modal hide" id="rst"><div class="box">
   <div style="font-weight:800;margin-bottom:6px" id="rstT"></div>
   <div style="font-size:13px;color:var(--text2);margin-bottom:8px" id="rstS"></div>
@@ -80,38 +117,39 @@ h1{font-size:26px;margin:0}
   </div>
 </div></div>
 
+
 <script>
 var T = {
-  es:{title:'Plan de piso · Medio proceso',sub:'Cola por máquina según el plan del BOM Simulator',
-      pub:function(m){return 'Plan publicado hace '+m+' min';},old:function(m){return '⚠ El plan lleva '+m+' min sin actualizarse';},
-      nopub:'Todavía no hay plan de medio proceso publicado. Publícalo desde el BOM Simulator (Publicar TV).',
-      kPal:'Pallets hoy',kPz:'Piezas hoy',kPend:'Pendientes de recibir en IMS',
-      run:'Corriendo',listo:'Listo',nomat:'Sin material',next:'SIGUIENTE EN LA COLA',pend:'Pendiente',dias:'días',sinCola:'Sin cola en el plan publicado',
-      mas:function(n){return '+'+n+' más en la cola';},palHoy:'pallets hoy',pzHoy:'pzas',
+  es:{title:'Medio proceso · Piso P4',loading:'Cargando plan...',publicado:'Publicado',viejo:'(plan de hace más de 12 h)',matViejo:'Plan de hace',
+      target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
+      run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
+      vacio:'Todavía no hay plan de medio proceso. Publícalo desde el BOM Simulator (Publicar TV).',sinCola:'Sin cola para esta máquina en el plan publicado',
+      corriendo:'CORRIENDO',pallets:'Pallets hoy',pendIMS:'Por recibir en IMS',auto:'Auto',autoT:'Rotar máquinas automáticamente',items:'items',
+      zoomMenos:'Hacer más chico',zoomMas:'Hacer más grande',zoomReset:'Tamaño normal (100%)',pzas:'pzas',d:'d',h:'h',m:'min',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
       forgot:'¿Olvidaste tu contraseña? Da clic aquí para restablecerla',rstT:'Restablecer contraseña',rstS:'Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.',
       rstB:'Enviar enlace',rstC:'Cancelar',rstOk:'Listo. Revisa tu correo y también la carpeta de SPAM.',rstErr:'No se pudo enviar. Revisa el correo escrito.',
-      foot:'Orden = plan de medio proceso del BOM Simulator (prioridad del Excel + material disponible) · Pallets en vivo del MES',loc:'es-MX'},
-  en:{title:'Floor plan · In-process',sub:'Queue per machine from the BOM Simulator plan',
-      pub:function(m){return 'Plan published '+m+' min ago';},old:function(m){return '⚠ Plan not updated for '+m+' min';},
-      nopub:'No in-process plan has been published yet. Publish it from the BOM Simulator (Publish TV).',
-      kPal:'Pallets today',kPz:'Pieces today',kPend:'Pending receipt in IMS',
-      run:'Running',listo:'Ready',nomat:'No material',next:'NEXT IN QUEUE',pend:'Pending',dias:'days',sinCola:'No queue in the published plan',
-      mas:function(n){return '+'+n+' more in queue';},palHoy:'pallets today',pzHoy:'pcs',
+      foot:'Orden = plan de medio proceso del BOM Simulator (prioridad del Excel + material + máquinas del master) · Producido = pallets del MES de hoy · Se republica cada 5 min',loc:'es-MX'},
+  en:{title:'In-process · P4 Floor',loading:'Loading plan...',publicado:'Published',viejo:'(plan older than 12 h)',matViejo:'Plan from',
+      target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
+      run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
+      vacio:'No in-process plan yet. Publish it from the BOM Simulator (Publish TV).',sinCola:'No queue for this machine in the published plan',
+      corriendo:'RUNNING',pallets:'Pallets today',pendIMS:'Pending receipt in IMS',auto:'Auto',autoT:'Rotate machines automatically',items:'items',
+      zoomMenos:'Smaller',zoomMas:'Larger',zoomReset:'Normal size (100%)',pzas:'pcs',d:'d',h:'h',m:'min',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
       forgot:'Forgot your password? Click here to reset it',rstT:'Reset password',rstS:'Enter your email and we will send you a link to create a new password.',
       rstB:'Send link',rstC:'Cancel',rstOk:'Done. Check your email and also your SPAM folder.',rstErr:'Could not send. Check the email you typed.',
-      foot:'Order = in-process plan from the BOM Simulator (Excel priority + available material) · Live pallets from MES',loc:'en-US'},
-  ko:{title:'현장 계획 · 반제품',sub:'BOM Simulator 계획 기준 설비별 작업 순서',
-      pub:function(m){return '계획 게시 '+m+'분 전';},old:function(m){return '⚠ 계획이 '+m+'분째 갱신되지 않음';},
-      nopub:'게시된 반제품 계획이 아직 없습니다. BOM Simulator에서 게시하세요 (TV 게시).',
-      kPal:'오늘 팔레트',kPz:'오늘 수량',kPend:'IMS 입고 대기',
-      run:'작업 중',listo:'준비됨',nomat:'자재 부족',next:'다음 작업',pend:'잔량',dias:'일',sinCola:'게시된 계획에 작업 없음',
-      mas:function(n){return '대기열 +'+n+'건';},palHoy:'오늘 팔레트',pzHoy:'개',
+      foot:'Order = in-process plan from the BOM Simulator (Excel priority + material + master machines) · Produced = today\'s MES pallets · Republished every 5 min',loc:'en-US'},
+  ko:{title:'반제품 · P4 현장',loading:'계획 불러오는 중...',publicado:'게시',viejo:'(12시간 이상 지난 계획)',matViejo:'계획 경과',
+      target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
+      run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
+      vacio:'아직 반제품 계획이 없습니다. BOM Simulator에서 게시하세요 (TV 게시).',sinCola:'게시된 계획에 이 설비의 작업 없음',
+      corriendo:'작업 중',pallets:'오늘 팔레트',pendIMS:'IMS 입고 대기',auto:'자동',autoT:'설비 자동 전환',items:'건',
+      zoomMenos:'작게',zoomMas:'크게',zoomReset:'기본 크기 (100%)',pzas:'개',d:'일',h:'시간',m:'분',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
       forgot:'비밀번호를 잊으셨나요? 여기를 눌러 재설정하세요',rstT:'비밀번호 재설정',rstS:'이메일을 입력하면 새 비밀번호를 만들 수 있는 링크를 보내드립니다.',
       rstB:'링크 보내기',rstC:'취소',rstOk:'완료. 이메일과 스팸 폴더도 확인하세요.',rstErr:'전송하지 못했습니다. 입력한 이메일을 확인하세요.',
-      foot:'순서 = BOM Simulator 반제품 계획 (엑셀 우선순위 + 가용 자재) · MES 팔레트 실시간',loc:'ko-KR'}
+      foot:'순서 = BOM Simulator 반제품 계획 (엑셀 우선순위 + 자재 + 마스터 설비) · 생산 = 오늘 MES 팔레트 · 5분마다 재게시',loc:'ko-KR'}
 };
 var MATL={
  es:{SHEET_TOP:'Sheet Top',CB_TOP_R:'Chip Board Top Ranurado',CB_TOP_V:'Chip Board Top Virgen',SHEET_LOW:'Sheet Lower Box',CB_BOT_R:'Chip Board Bot Ranurado',CB_BOT_V:'Chip Board Bot Virgen',PULP:'Pulp Tray',SETPAD:'Set Pad',GALLETA:'Galleta',STICKER:'Sticker'},
@@ -122,32 +160,34 @@ var lang='es'; try{ lang=localStorage.getItem('pisoLang')||'es'; }catch(e){} if(
 function t(k){ return T[lang][k]; }
 function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
 function n(x){ return Math.round(x||0).toLocaleString('en-US'); }
+function fechaEnvio(f){ if(!f) return '—'; var d=new Date(f+'T00:00:00'); return isNaN(d)?'—':d.toLocaleDateString(t('loc'),{day:'2-digit',month:'short'}); }
 var FLAGS={es:'mx',en:'us',ko:'kr'};
 var MAQS=['S1','S2','S3','S4','S5','Zhongke','VC1','VC2'];
-var MAX_ITEMS=6;
+var selMaq='S1', autoRot=false, autoTimer=null;
+try{ var sm0=localStorage.getItem('pisoMedioMaq'); if(MAQS.indexOf(sm0)>=0) selMaq=sm0; autoRot=localStorage.getItem('pisoMedioAuto')==='1'; }catch(e){}
 
 firebase.initializeApp({apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"});
 var db=firebase.firestore();
 var plan=null, pallets=[], unsubPlan=null, unsubPal=null, fechaPal='';
 function hoyISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
-function pintarLangs(){
-  return '<div class="langs">'+['es','en','ko'].map(function(l){
-    return '<button class="'+(l===lang?'on':'')+'" data-l="'+l+'" title="'+l.toUpperCase()+'"><img src="https://flagcdn.com/w40/'+FLAGS[l]+'.png" alt="'+l.toUpperCase()+'"></button>';
-  }).join('')+'</div>';
-}
 function ligarLangs(){
   document.querySelectorAll('.langs button').forEach(function(b){ b.onclick=function(){ lang=b.dataset.l; try{localStorage.setItem('pisoLang',lang);}catch(e){} if(firebase.auth().currentUser) pintar(); else mostrarLogin(); }; });
 }
-
+function langsHtml(){
+  return '<div class="langs">'+['es','en','ko'].map(function(l){
+    return '<button class="'+(l===lang?'on':'')+'" data-l="'+l+'"><img src="https://flagcdn.com/w40/'+FLAGS[l]+'.png" alt="'+l.toUpperCase()+'"></button>';
+  }).join('')+'</div>';
+}
 function mostrarLogin(){
-  document.title=t('title');
+  document.title=t('title'); document.getElementById('tTitle').textContent=t('title');
+  document.getElementById('tabs').innerHTML=''; document.getElementById('sub').innerHTML=''; document.getElementById('foot').textContent='';
   document.getElementById('app').innerHTML=
-    '<div class="login"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>'+t('login')+'</b>'+pintarLangs()+'</div>'+
+    '<div class="login"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>'+t('login')+'</b>'+langsHtml()+'</div>'+
     '<input id="lgE" type="email" placeholder="'+t('correo')+'"><input id="lgP" type="password" placeholder="'+t('pass')+'">'+
     '<button id="lgB">'+t('entrar')+'</button><div class="err" id="lgErr"></div>'+
     '<a id="lgF">'+t('forgot')+'</a></div>';
-  ligarLangs();
+  document.querySelectorAll('.langs button').forEach(function(b){ b.onclick=function(){ lang=b.dataset.l; try{localStorage.setItem('pisoLang',lang);}catch(e){} mostrarLogin(); }; });
   document.getElementById('lgB').onclick=function(){
     var e=document.getElementById('lgE').value.trim(), p=document.getElementById('lgP').value;
     firebase.auth().signInWithEmailAndPassword(e,p).catch(function(){ document.getElementById('lgErr').textContent=t('errLogin'); });
@@ -168,59 +208,149 @@ document.getElementById('rstB').onclick=function(){
 };
 
 function colaDe(m){ return (plan && plan.colas && plan.colas[m]) ? plan.colas[m] : []; }
+function vivosDe(m){ return pallets.filter(function(p){ return p.maquina===m && p.status!=='VOID'; }); }
 function enCurso(m){
-  var l=pallets.filter(function(p){ return p.maquina===m && p.status!=='VOID'; }).sort(function(a,b){ return (b.horaMs||0)-(a.horaMs||0); });
+  var l=vivosDe(m).sort(function(a,b){ return (b.horaMs||0)-(a.horaMs||0); });
   return l.length ? l[0] : null;
+}
+function prodDe(m,pn){ return vivosDe(m).filter(function(p){ return p.parte===pn; }).reduce(function(s,p){ return s+(Number(p.qty)||0); },0); }
+function esCB(x){ return /^CB_/.test(x.k); }
+// Chip Board ranurado y virgen se SUMAN (el virgen se ranura en VC); los demás materiales se toman por mínimo
+function capDe(c){
+  var pend=c.pendiente||0, ms=c.materiales||[];
+  if(!ms.length) return c.listo ? pend : 0;
+  var cb=ms.filter(esCB), otros=ms.filter(function(x){ return !esCB(x); });
+  var caps=otros.map(function(x){ return x.disp||0; });
+  if(cb.length) caps.push(cb.reduce(function(s,x){ return s+(x.disp||0); },0));
+  return Math.min.apply(null,caps);
+}
+function faltantes(c){
+  var ms=c.materiales||[], out=ms.filter(function(x){ return !esCB(x) && x.e==='no'; }).map(function(x){ return matLabel(x.k); });
+  var cb=ms.filter(esCB);
+  if(cb.length && cb.every(function(x){ return !x.disp; })) out.push(matLabel(cb[0].k));
+  return out;
+}
+function chips(c){
+  if(!c.materiales || !c.materiales.length) return '';
+  return c.materiales.map(function(x){
+    var cls = x.e==='ok' ? 'ok' : (x.e==='parcial' ? 'par' : 'no');
+    var q = x.e==='ok' ? '' : ' '+(x.e==='parcial' ? n(x.disp)+'/'+n(x.req) : '0');
+    return '<span class="chip '+cls+'" title="'+esc(x.pn)+' · '+n(x.disp)+' / '+n(x.req)+'">'+esc(matLabel(x.k))+q+'</span>';
+  }).join('');
+}
+function bar(pct,color){ return '<div class="bar"><div style="width:'+pct+'%;background:'+color+'"></div></div><div class="code">'+pct+'%</div>'; }
+
+function pintarTabs(){
+  var h=MAQS.map(function(m){
+    var c=colaDe(m).length;
+    return '<button data-m="'+m+'" class="'+(m===selMaq?'on':'')+'">'+m+'<small>'+c+' '+t('items')+'</small></button>';
+  }).join('')+'<button class="auto '+(autoRot?'on':'')+'" id="btnAuto" title="'+esc(t('autoT'))+'">🔄 '+t('auto')+'</button>';
+  var el=document.getElementById('tabs'); el.innerHTML=h;
+  el.querySelectorAll('button[data-m]').forEach(function(b){ b.onclick=function(){ selMaq=b.dataset.m; try{localStorage.setItem('pisoMedioMaq',selMaq);}catch(e){} pintar(); }; });
+  document.getElementById('btnAuto').onclick=function(){ autoRot=!autoRot; try{localStorage.setItem('pisoMedioAuto',autoRot?'1':'0');}catch(e){} ponerAuto(); pintar(); };
+}
+function ponerAuto(){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
+  if(autoRot) autoTimer=setInterval(function(){ selMaq=MAQS[(MAQS.indexOf(selMaq)+1)%MAQS.length]; try{localStorage.setItem('pisoMedioMaq',selMaq);}catch(e){} pintar(); },20000);
 }
 
 function pintar(){
-  if(!firebase.auth().currentUser){ return; }
-  document.title=t('title');
+  if(!firebase.auth().currentUser) return;
+  document.documentElement.lang=lang; document.title=t('title');
+  document.getElementById('tTitle').textContent=t('title')+' · '+selMaq;
+  document.querySelectorAll('.langs button').forEach(function(b){ b.classList.toggle('on', b.dataset.l===lang); });
+  document.getElementById('foot').textContent=t('foot');
+  pintarTabs();
+
+  var ahora=new Date(), sub='';
   var pubMs = plan ? (plan.publicadoMs || Date.parse(plan.publicadoEn)) : 0;
-  var min = pubMs ? Math.max(0, Math.round((Date.now()-pubMs)/60000)) : null;
-  var subTxt = min===null ? t('nopub') : (min>30 ? '<span class="old">'+t('old')(min)+'</span>' : t('pub')(min));
-  var vivos = pallets.filter(function(p){ return p.status!=='VOID'; });
-  var pz = vivos.reduce(function(s,p){ return s+(Number(p.qty)||0); },0);
-  var pend = vivos.filter(function(p){ return p.status==='PENDING'; }).length;
+  if(pubMs){
+    var edadMs=ahora-pubMs, viejo=edadMs>12*36e5;
+    var edadTxt = edadMs>=36e5 ? Math.floor(edadMs/36e5)+' '+t('h')+' '+Math.floor(edadMs%36e5/6e4)+' '+t('m') : Math.floor(edadMs/6e4)+' '+t('m');
+    sub += t('publicado')+': '+new Date(pubMs).toLocaleString(t('loc'),{weekday:'short',hour:'numeric',minute:'2-digit'})+
+      (viejo ? ' <span class="old">⚠ '+t('viejo')+'</span>' : (edadMs>30*6e4 ? ' <span class="corte ambar">⚠ '+t('matViejo')+' '+edadTxt+'</span>' : ''));
+  }
+  document.getElementById('sub').innerHTML=sub;
 
-  var cards = MAQS.map(function(m){
-    var cola=colaDe(m), run=enCurso(m);
-    var pm = vivos.filter(function(p){ return p.maquina===m; });
-    var pzm = pm.reduce(function(s,p){ return s+(Number(p.qty)||0); },0);
-    var esRun=function(c){ return run && c.pn===run.parte && (c.modelos||[c.sm]).indexOf(run.modelo)>=0; };
-    var nextIdx=-1; cola.forEach(function(c,i){ if(nextIdx<0 && c.listo && !esRun(c)) nextIdx=i; });
-    var items = cola.slice(0,MAX_ITEMS).map(function(c,i){
-      var isRun=esRun(c), isNext=(i===nextIdx);
-      var mods=(c.modelos||[c.sm]); var modTxt=mods.slice(0,2).join(', ')+(mods.length>2?' +'+(mods.length-2):'');
-      var tag;
-      if (c.materiales && c.materiales.length) {
-        tag = '<div class="mats">'+c.materiales.map(function(x){
-          var q = x.e==='ok' ? '✓' : (x.e==='parcial' ? n(x.disp)+'/'+n(x.req) : '✗ 0');
-          return '<div class="mt '+x.e+'" title="'+esc(x.pn)+' · '+n(x.disp)+' / '+n(x.req)+'"><span>'+esc(matLabel(x.k))+'</span><span>'+q+'</span></div>';
-        }).join('')+'</div>';
-      } else {
-        tag = isRun ? '<span class="tag run">'+t('run')+'</span>' : (c.listo ? '<span class="tag ok">'+t('listo')+'</span>' : '<span class="tag no">'+t('nomat')+'</span>');
-      }
-      return '<div class="it '+(isRun?'run':isNext?'next':'')+'"><div class="num">'+(c.orden||i+1)+'</div><div class="t">'+
-        (isRun?'<div class="nx run">▶ '+t('run').toUpperCase()+'</div>':'')+
-        (isNext?'<div class="nx">'+t('next')+'</div>':'')+
-        '<div class="mdl">'+esc(modTxt)+'</div><div class="code">'+esc(c.pn)+'</div>'+
-        '<div class="d">'+t('pend')+' '+n(c.pendiente)+(c.dias?' · ~'+c.dias+' '+t('dias'):'')+'</div></div>'+tag+'</div>';
-    }).join('');
-    var mas = cola.length>MAX_ITEMS ? '<div class="more">'+t('mas')(cola.length-MAX_ITEMS)+'</div>' : '';
-    return '<div class="mq"><div class="h"><div class="nm">'+m+'</div><div class="st"><b>'+pm.length+'</b> '+t('palHoy')+'<br>'+n(pzm)+' '+t('pzHoy')+'</div></div>'+
-      (items || '<div class="empty">'+t('sinCola')+'</div>')+mas+'</div>';
+  var app=document.getElementById('app');
+  if(!plan){ app.innerHTML='<div class="msg">'+t('loading')+'</div>'; return; }
+  if(!plan.colas){ app.innerHTML='<div class="msg">'+t('vacio')+'</div>'; return; }
+
+  var cola=colaDe(selMaq), run=enCurso(selMaq);
+  var esRun=function(c){ return run && c.pn===run.parte && (c.modelos||[c.sm]).indexOf(run.modelo)>=0; };
+  var filas=cola.map(function(c){
+    var prod=prodDe(selMaq,c.pn), target=(c.pendiente||0)+prod, pend=Math.max(0,target-prod);
+    return { c:c, prod:prod, target:target, pend:pend, pct: target ? Math.min(100,Math.round(prod*100/target)) : 0, cap:capDe(c), corre:esRun(c) };
+  });
+  var runL=filas.filter(function(f){ return f.pend>0 && f.c.listo; });
+  var waitL=filas.filter(function(f){ return f.pend>0 && !f.c.listo; });
+  var doneL=filas.filter(function(f){ return f.pend===0; });
+  runL.forEach(function(f,i){ f.orden=i+1; });
+
+  var tT=0,tP=0; filas.forEach(function(f){ tT+=f.target; tP+=Math.min(f.prod,f.target); });
+  var av=tT?Math.round(tP*100/tT):0;
+  var vivos=vivosDe(selMaq), pendIMS=vivos.filter(function(p){ return p.status==='PENDING'; }).length;
+  var kp=function(l,v,color){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v"'+(color?' style="color:'+color+'"':'')+'>'+v+'</div></div>'; };
+  var html='<div class="kpis">'+kp(t('target'),n(tT))+kp(t('prod'),n(tP))+kp(t('pend'),n(tT-tP))+kp(t('avance'),av+'%',av>=100?'var(--green)':'')+
+    kp(t('pallets'),vivos.length,'var(--accent)')+kp(t('pendIMS'),pendIMS,'#ffb84d')+'</div>';
+
+  if(!filas.length){ app.innerHTML=html+'<div class="msg">'+t('sinCola')+'</div>'; ajustarPantalla(); return; }
+
+  var modTxt=function(c){ var mods=c.modelos||[c.sm]; return mods.slice(0,2).join(', ')+(mods.length>2?' +'+(mods.length-2):''); };
+  var fila=function(f,tipo){
+    var c=f.c, num, est;
+    if(tipo==='run'){
+      num='<span class="num">'+f.orden+'</span>';
+      est='<span class="est" style="color:'+(f.cap>=f.pend?'var(--green)':'var(--yellow)')+'">⚡ '+t('listo')+' '+(f.cap>=f.pend?n(f.pend):n(f.cap)+' '+t('de')+' '+n(f.pend))+'</span>';
+    } else {
+      num='<span class="num wait">⏳</span>';
+      var fl=faltantes(c);
+      est='<span class="est" style="color:var(--red)">'+(fl.length?t('falta')+' '+esc(fl.join(', ')):t('sinDatos'))+'</span>';
+    }
+    return '<tr'+(f.corre?' class="run-now"':'')+'><td>'+num+'</td><td><div class="mdl">'+esc(modTxt(c))+'</div><div class="code">'+esc(c.pn)+'</div>'+
+      (f.corre?'<span class="runtag">▶ '+t('corriendo')+'</span>':'')+'</td>'+
+      '<td style="white-space:nowrap">'+fechaEnvio(c.fecha)+'</td><td class="r">'+n(f.target)+'</td><td class="r">'+n(f.prod)+'</td><td class="r" style="font-weight:800">'+n(f.pend)+'</td>'+
+      '<td style="width:14%">'+bar(f.pct,tipo==='run'?'var(--green)':'#5c6678')+'</td><td>'+chips(c)+'</td><td>'+est+'</td></tr>';
+  };
+  html+='<div class="tblwrap tblmain" id="tblMain"><table class="tbl"><thead><tr><th style="width:60px">'+t('orden')+'</th><th>'+t('modelo')+'</th><th>'+t('envio')+'</th><th class="r">'+t('target')+'</th><th class="r">'+t('prod')+
+    '</th><th class="r">'+t('pend')+'</th><th>'+t('avance')+'</th><th>'+t('material')+'</th><th>'+t('estado')+'</th></tr></thead><tbody>';
+  if(runL.length) html+='<tr class="sep"><td colspan="9">⚡ '+t('run')+'</td></tr>'+runL.map(function(f){ return fila(f,'run'); }).join('');
+  if(waitL.length) html+='<tr class="sep"><td colspan="9">⏳ '+t('wait')+'</td></tr>'+waitL.map(function(f){ return fila(f,'wait'); }).join('');
+  if(doneL.length) html+='<tr class="sep sepdone"><td colspan="9">✓ '+t('done')+'</td></tr>'+doneL.map(function(f){
+    return '<tr class="done"><td><span class="num ok">✓</span></td><td><div class="mdl">'+esc(modTxt(f.c))+'</div><div class="code">'+esc(f.c.pn)+'</div></td><td style="white-space:nowrap">'+fechaEnvio(f.c.fecha)+'</td>'+
+      '<td class="r">'+n(f.target)+'</td><td class="r"><span class="prodok">'+n(f.prod)+'</span></td><td class="r" style="color:var(--green);font-weight:800">0</td><td>'+bar(100,'var(--green)')+'</td><td></td>'+
+      '<td><span class="est" style="color:var(--green)">✓ '+t('completo')+'</span></td></tr>';
   }).join('');
-
-  document.getElementById('app').innerHTML =
-    '<div class="top"><h1>'+t('title')+'</h1>'+pintarLangs()+'</div>'+
-    '<div class="sub">'+t('sub')+' · '+subTxt+'</div>'+
-    '<div class="kpis"><div class="kpi"><div class="l">'+t('kPal')+'</div><div class="v" style="color:var(--accent)">'+vivos.length+'</div></div>'+
-    '<div class="kpi"><div class="l">'+t('kPz')+'</div><div class="v" style="color:var(--green)">'+n(pz)+'</div></div>'+
-    '<div class="kpi"><div class="l">'+t('kPend')+'</div><div class="v" style="color:#ffb84d">'+pend+'</div></div></div>'+
-    '<div class="grid">'+cards+'</div><div class="foot">'+t('foot')+'</div>';
-  ligarLangs();
+  html+='</tbody></table></div>';
+  var prev=document.getElementById('tblMain'), top0=prev?prev.scrollTop:0;
+  app.innerHTML=html; ajustarPantalla();
+  var nw=document.getElementById('tblMain'); if(nw) nw.scrollTop=top0;
 }
+
+var ZOOM_KEY='pisoZoom';
+function zoomActual(){ try{ var z=parseFloat(localStorage.getItem(ZOOM_KEY)); if(z>=0.5&&z<=3) return z; }catch(e){} return 1; }
+function ajustarPantalla(){
+  var wrap=document.querySelector('.wrap'); if(!wrap) return;
+  var z=zoomActual(); wrap.style.zoom=z;
+  var pct=document.getElementById('btnZoomPct'); if(pct){ pct.textContent=Math.round(z*100)+'%'; pct.title=t('zoomReset'); }
+  document.getElementById('btnZoomMenos').title=t('zoomMenos'); document.getElementById('btnZoomMas').title=t('zoomMas');
+  ajustarTabla();
+}
+function ajustarTabla(){
+  var w=document.getElementById('tblMain'); if(!w) return;
+  w.style.maxHeight='';
+  var r=w.getBoundingClientRect();
+  var ratio=(w.offsetHeight>0&&r.height>0)?r.height/w.offsetHeight:zoomActual();
+  var pie=document.getElementById('foot'), altoPie=pie?pie.getBoundingClientRect().height:0;
+  var libre=window.innerHeight-r.top-altoPie-30;
+  w.style.maxHeight=Math.floor(Math.max(220,libre)/(ratio||1))+'px';
+}
+function cambiarZoom(d){
+  var z=d===0?1:Math.min(3,Math.max(0.5,Math.round((zoomActual()+d)*10)/10));
+  try{localStorage.setItem(ZOOM_KEY,z);}catch(e){}
+  ajustarPantalla();
+}
+window.addEventListener('resize',ajustarPantalla);
 
 function escucharPallets(){
   var f=hoyISO(); if(f===fechaPal && unsubPal) return; fechaPal=f;
@@ -234,14 +364,14 @@ function arrancar(){
   if(arrancado) return; arrancado=true;
   unsubPlan=db.collection('bom_simulator_p4').doc('plan_piso_medio').onSnapshot(function(d){ plan=d.exists?d.data():null; pintar(); },
     function(e){ arrancado=false; console.warn('plan_piso_medio:',e); });
-  escucharPallets();
-  pintar();
+  escucharPallets(); ponerAuto(); pintar();
 }
 firebase.auth().onAuthStateChanged(function(u){
   if(!u){ arrancado=false; if(unsubPlan){unsubPlan();unsubPlan=null;} if(unsubPal){unsubPal();unsubPal=null;fechaPal='';} mostrarLogin(); return; }
   arrancar();
 });
-setInterval(function(){ escucharPallets(); pintar(); }, 60000);
+setInterval(function(){ escucharPallets(); pintar(); },60000);
+ligarLangs();
 mostrarLogin();
 </script>
 </body>

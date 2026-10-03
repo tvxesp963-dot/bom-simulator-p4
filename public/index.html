@@ -5891,7 +5891,9 @@ async function renderPlanSemanal() {
         <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">1️⃣ Plan Requerido · Modelo y partes</div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
           ${adminAuthed ? `<button class="btn btn-primary btn-sm" id="btnPublicarPiso" onclick="publicarPlanPiso()" title="Publica ASSY + Medio Proceso RGB en las pantallas del piso · ⚡ Listo · Publish to floor screen · 현장 화면에 게시" style="white-space:nowrap">📤 Publicar TV</button>` : ''}
-          <a class="btn btn-sm" href="piso.html" target="_blank" style="text-decoration:none;white-space:nowrap" title="Abrir pantalla del piso · Open floor screen · 현장 화면 열기">📺 Modo TV</a>
+          <button class="btn btn-sm" onclick="abrirPantallasPiso()" style="white-space:nowrap" title="Abrir las 2 pantallas: ASSY y RGB · Open both floor screens · 현장 화면 2개 열기">📺 Modo TV (ASSY + RGB)</button>
+          <a class="btn btn-sm" href="piso.html" target="pisoAssy" style="text-decoration:none;white-space:nowrap" title="Solo ASSY">ASSY</a>
+          <a class="btn btn-sm" href="piso-medio.html" target="pisoRGB" style="text-decoration:none;white-space:nowrap" title="Solo RGB / Medio proceso">RGB</a>
         </div>
       </div>
       <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" es manual — o usa el botón para traer de ShipQR lo que sigue disponible en piso de P4 (pallets aún no marcados como SHIPPED).</div>
@@ -6660,6 +6662,7 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
       orden: i + 1, sm: it.modelos[0], modelos: it.modelos, pn: it.pn,
       desc: it.desc || descDe(it.tipo === 'Bot' ? 'Bot' : 'Top', it.modelos),
       pendiente: Math.round(it.pendiente), listo: !!it.listo,
+      fecha: it.modelos.map(sm => (window.simFechaEntregaPorModelo || {})[sm]).filter(Boolean).sort()[0] || '',
       materiales: it.tipo === 'VC'
         ? [{ k: it.vc.k, pn: it.vc.pn, disp: Math.max(0, Math.round(it.vc.inv)), req: Math.round(it.pendiente), e: estadoMat(it.vc.inv, it.pendiente) }]
         : matsDe(it.tipo, it.modelos[0], it.pendiente),
@@ -6682,6 +6685,14 @@ async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionRea
 // componentes Strip/Top/Bot/Bundle) en bom_simulator_p4/plan_piso, para que la
 // pantalla piso.html la muestre. No cambia ningún cálculo: usa las mismas
 // funciones que pintan la tabla 1 (calcularFaltantesPorModeloPlan + calcularPlanSemanal).
+// Abre las 2 pantallas de piso (ASSY y RGB) en pestañas con nombre: si ya están abiertas solo se enfocan
+function abrirPantallasPiso() {
+  const a = window.open('piso.html', 'pisoAssy');
+  const b = window.open('piso-medio.html', 'pisoRGB');
+  if (!a || !b) window.alert('El navegador bloqueó una ventana. Permite ventanas emergentes para este sitio, o usa los botones ASSY y RGB.');
+}
+window.abrirPantallasPiso = abrirPantallasPiso;
+
 async function publicarPlanPiso(auto) {
   auto = auto === true;
   // Modo automático: sin ventanas ni cambios en el botón. Si el Autochequeo detecta
@@ -6693,6 +6704,7 @@ async function publicarPlanPiso(auto) {
   else if (!confirmarSiHayAlertas()) return;
   if (!db) { alert('Firebase no disponible — no se pudo publicar'); return; }
   window._publicandoPiso = true;
+  if (!auto) abrirPantallasPiso();
   const btn = auto ? null : document.getElementById('btnPublicarPiso');
   const txt0 = btn ? btn.textContent : '';
   if (btn) { btn.textContent = '⏳ Publicando...'; btn.disabled = true; }

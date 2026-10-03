@@ -47,6 +47,12 @@ h1{font-size:26px;margin:0}
 .tag.ok{background:var(--yellow);color:#241c00}
 .tag.run{background:var(--accent);color:#04203f}
 .tag.no{background:#3a2a0f;color:#ffb84d;border:1px solid #6b4a14}
+.mats{display:flex;flex-direction:column;gap:3px;min-width:170px;max-width:230px}
+.mt{font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:6px;display:flex;justify-content:space-between;gap:8px;white-space:nowrap}
+.mt.ok{background:rgba(0,230,118,.16);color:var(--green)}
+.mt.parcial{background:rgba(241,196,15,.18);color:var(--yellow)}
+.mt.no{background:rgba(255,77,77,.18);color:var(--red)}
+.nx.run{color:var(--accent)}
 .empty{color:var(--text3);font-size:14px;padding:10px 2px}
 .more{color:var(--text3);font-size:13px;text-align:center}
 .foot{color:var(--text3);font-size:12px;margin-top:14px}
@@ -107,6 +113,11 @@ var T = {
       rstB:'링크 보내기',rstC:'취소',rstOk:'완료. 이메일과 스팸 폴더도 확인하세요.',rstErr:'전송하지 못했습니다. 입력한 이메일을 확인하세요.',
       foot:'순서 = BOM Simulator 반제품 계획 (엑셀 우선순위 + 가용 자재) · MES 팔레트 실시간',loc:'ko-KR'}
 };
+var MATL={
+ es:{SHEET_TOP:'Sheet Top',CB_TOP_R:'Chip Board Top Ranurado',CB_TOP_V:'Chip Board Top Virgen',SHEET_LOW:'Sheet Lower Box',CB_BOT_R:'Chip Board Bot Ranurado',CB_BOT_V:'Chip Board Bot Virgen',PULP:'Pulp Tray',SETPAD:'Set Pad',GALLETA:'Galleta',STICKER:'Sticker'},
+ en:{SHEET_TOP:'Sheet Top',CB_TOP_R:'Chip Board Top Slotted',CB_TOP_V:'Chip Board Top Virgin',SHEET_LOW:'Sheet Lower Box',CB_BOT_R:'Chip Board Bot Slotted',CB_BOT_V:'Chip Board Bot Virgin',PULP:'Pulp Tray',SETPAD:'Set Pad',GALLETA:'Galleta',STICKER:'Sticker'},
+ ko:{SHEET_TOP:'시트 상단',CB_TOP_R:'칩보드 상단(슬롯)',CB_TOP_V:'칩보드 상단(원지)',SHEET_LOW:'시트 하단',CB_BOT_R:'칩보드 하단(슬롯)',CB_BOT_V:'칩보드 하단(원지)',PULP:'펄프 트레이',SETPAD:'세트 패드',GALLETA:'갈레타',STICKER:'스티커'}};
+function matLabel(k){ return (MATL[lang]&&MATL[lang][k]) || k; }
 var lang='es'; try{ lang=localStorage.getItem('pisoLang')||'es'; }catch(e){} if(!T[lang]) lang='es';
 function t(k){ return T[lang][k]; }
 function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
@@ -181,8 +192,17 @@ function pintar(){
     var items = cola.slice(0,MAX_ITEMS).map(function(c,i){
       var isRun=esRun(c), isNext=(i===nextIdx);
       var mods=(c.modelos||[c.sm]); var modTxt=mods.slice(0,2).join(', ')+(mods.length>2?' +'+(mods.length-2):'');
-      var tag = isRun ? '<span class="tag run">'+t('run')+'</span>' : (c.listo ? '<span class="tag ok">'+t('listo')+'</span>' : '<span class="tag no">'+t('nomat')+'</span>');
+      var tag;
+      if (c.materiales && c.materiales.length) {
+        tag = '<div class="mats">'+c.materiales.map(function(x){
+          var q = x.e==='ok' ? '✓' : (x.e==='parcial' ? n(x.disp)+'/'+n(x.req) : '✗ 0');
+          return '<div class="mt '+x.e+'" title="'+esc(x.pn)+' · '+n(x.disp)+' / '+n(x.req)+'"><span>'+esc(matLabel(x.k))+'</span><span>'+q+'</span></div>';
+        }).join('')+'</div>';
+      } else {
+        tag = isRun ? '<span class="tag run">'+t('run')+'</span>' : (c.listo ? '<span class="tag ok">'+t('listo')+'</span>' : '<span class="tag no">'+t('nomat')+'</span>');
+      }
       return '<div class="it '+(isRun?'run':isNext?'next':'')+'"><div class="num">'+(c.orden||i+1)+'</div><div class="t">'+
+        (isRun?'<div class="nx run">▶ '+t('run').toUpperCase()+'</div>':'')+
         (isNext?'<div class="nx">'+t('next')+'</div>':'')+
         '<div class="mdl">'+esc(modTxt)+'</div><div class="code">'+esc(c.pn)+'</div>'+
         '<div class="d">'+t('pend')+' '+n(c.pendiente)+(c.dias?' · ~'+c.dias+' '+t('dias'):'')+'</div></div>'+tag+'</div>';

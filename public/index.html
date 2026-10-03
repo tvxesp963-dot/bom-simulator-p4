@@ -863,6 +863,9 @@ window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
 // Default si el código no tiene override guardado: todas menos Zhongke (Zhongke por
 // definición solo corre el 625A y casos puntuales, se activa a mano).
 window.simMaquinasElegiblesPorCodigo = window.simMaquinasElegiblesPorCodigo || {};
+// MASTER modelo→máquinas (se carga desde Excel). Llave 'Top|SM-XXXX' / 'Bot|SM-XXXX' → {Zhongke,S1..S5:true/false}
+window.simMasterMaquinas = window.simMasterMaquinas || {};
+window.simMasterInfo = window.simMasterInfo || null;
 // Si el panel "Máquinas por código" está colapsado (una vez que ya lo configuraste,
 // para no hacer scroll largo cada vez que entras al Plan de Asignación).
 window.simPanelMaquinasColapsado = window.simPanelMaquinasColapsado || false;
@@ -883,6 +886,8 @@ try {
     if (d.planCargadoEn) window.simPlanCargadoEn = d.planCargadoEn;
     if (d.maquinasElegiblesPorCodigo) window.simMaquinasElegiblesPorCodigo = Object.assign(window.simMaquinasElegiblesPorCodigo, d.maquinasElegiblesPorCodigo);
     if (d.panelMaquinasColapsado !== undefined) window.simPanelMaquinasColapsado = d.panelMaquinasColapsado;
+    if (d.masterMaquinas) window.simMasterMaquinas = d.masterMaquinas;
+    if (d.masterInfo) window.simMasterInfo = d.masterInfo;
     // Migración del ajuste anterior (solo Zhongke por código) al esquema nuevo (todas las máquinas).
     if (d.zhongkeElegiblePorCodigo) {
       Object.keys(d.zhongkeElegiblePorCodigo).forEach(codigo => {
@@ -904,7 +909,9 @@ function guardarPlanCompleto() {
       poBalance: window.simPOBalancePorModelo || {},
       planCargadoEn: window.simPlanCargadoEn || null,
       maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {},
-      panelMaquinasColapsado: !!window.simPanelMaquinasColapsado
+      panelMaquinasColapsado: !!window.simPanelMaquinasColapsado,
+      masterMaquinas: window.simMasterMaquinas || {},
+      masterInfo: window.simMasterInfo || null
     }));
   } catch (e) {}
 }
@@ -926,6 +933,108 @@ function actualizarMaquinaElegibleCodigo(codeHijo, maquina, checked) {
   }
 }
 window.actualizarMaquinaElegibleCodigo = actualizarMaquinaElegibleCodigo;
+
+
+// ── MASTER modelo → máquinas (Excel) ──
+const MASTER_MAQS = ['Zhongke', 'S1', 'S2', 'S3', 'S4', 'S5'];
+function masterRepintar() {
+  const divRGB = document.getElementById('planSubRGB');
+  if (divRGB) divRGB.innerHTML = construirTablaRGB(); else if (typeof renderPlanSemanal === 'function') renderPlanSemanal();
+}
+async function cargarMasterFirestore() {
+  try {
+    if (!db) return;
+    const d = await db.collection('bom_simulator_p4').doc('master_maquinas').get();
+    if (d.exists && d.data().filas) {
+      window.simMasterMaquinas = d.data().filas;
+      window.simMasterInfo = { cargadoEn: d.data().cargadoEn || '', por: d.data().cargadoPor || '', n: Object.keys(d.data().filas).length };
+      guardarPlanCompleto();
+    }
+  } catch (e) { console.warn('[master maquinas]', e); }
+}
+window.cargarMasterFirestore = cargarMasterFirestore;
+
+function descargarPlantillaMaster() {
+  const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
+  const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+  modelos.sort((a, b) => prio(a) - prio(b) || String(a).localeCompare(String(b)));
+  const aoa = [['Modelo', 'Tipo', ...MASTER_MAQS]];
+  modelos.forEach(sm => {
+    const mats = obtenerMaterialesRGB(sm);
+    [['Top', 'Tapa'], ['Bot', 'Base']].forEach(([tipo, grupo]) => {
+      if (!mats.some(m => m.grupo === grupo && m.row)) return;
+      const f = window.simMasterMaquinas[tipo + '|' + String(sm).trim().toUpperCase()];
+      aoa.push([sm, tipo, ...MASTER_MAQS.map(mq => (f ? (f[mq] ? 1 : '') : (mq === 'Zhongke' || (tipo === 'Bot' && mq === 'Zhongke') ? '' : 1)))]);
+    });
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 20 }, { wch: 7 }, ...MASTER_MAQS.map(() => ({ wch: 9 }))];
+  const ins = XLSX.utils.aoa_to_sheet([
+    ['ES: Pon 1 en las máquinas donde SÍ corre cada modelo (Top = tapa, Bot = base). Vacío = no corre. Zhongke solo aplica a Top. No cambies Modelo ni Tipo. Guarda y súbelo con "Cargar master".'],
+    ['EN: Put 1 on the machines where each model DOES run (Top = lid, Bot = base). Blank = does not run. Zhongke applies to Top only. Do not edit Model or Type. Save and upload with "Cargar master".'],
+    ['KO: 각 모델이 가동되는 설비에 1을 입력하세요 (Top = 뚜껑, Bot = 바닥). 빈칸 = 가동 안 함. Zhongke는 Top에만 적용됩니다. 모델/유형은 수정하지 마세요. 저장 후 "Cargar master"로 업로드하세요.']
+  ]);
+  ins['!cols'] = [{ wch: 130 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Master');
+  XLSX.utils.book_append_sheet(wb, ins, 'Instrucciones');
+  XLSX.writeFile(wb, 'MASTER_Modelos_Maquinas_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx');
+}
+window.descargarPlantillaMaster = descargarPlantillaMaster;
+
+function cargarMasterExcel(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets['Master'] || wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const hi = rows.findIndex(r => String(r[0]).trim().toLowerCase() === 'modelo');
+      if (hi < 0) { alert('No encontré la columna "Modelo". Usa la plantilla descargada.'); return; }
+      const head = rows[hi].map(h => String(h).trim());
+      const idx = {}; MASTER_MAQS.forEach(mq => { idx[mq] = head.findIndex(h => h.toLowerCase() === mq.toLowerCase()); });
+      const iTipo = head.findIndex(h => h.toLowerCase() === 'tipo');
+      if (iTipo < 0) { alert('Falta la columna "Tipo".'); return; }
+      const si = (v) => { const t = String(v).trim().toLowerCase(); return !(t === '' || t === '0' || t === 'no' || t === 'n' || t === 'false'); };
+      const filas = {};
+      for (let i = hi + 1; i < rows.length; i++) {
+        const r = rows[i]; const sm = String(r[0]).trim().toUpperCase(); if (!sm) continue;
+        const t = String(r[iTipo]).trim().toLowerCase();
+        const tipo = t.startsWith('top') ? 'Top' : (t.startsWith('bot') ? 'Bot' : '');
+        if (!tipo) continue;
+        const o = {};
+        MASTER_MAQS.forEach(mq => { o[mq] = (idx[mq] >= 0) ? si(r[idx[mq]]) : false; });
+        if (tipo === 'Bot') o.Zhongke = false;
+        filas[tipo + '|' + sm] = o;
+      }
+      const n = Object.keys(filas).length;
+      if (!n) { alert('No encontré filas válidas en el Excel.'); return; }
+      window.simMasterMaquinas = filas;
+      const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
+      window.simMasterInfo = { cargadoEn: new Date().toISOString(), por: u, n };
+      guardarPlanCompleto();
+      let aviso = '';
+      try { if (db) await db.collection('bom_simulator_p4').doc('master_maquinas').set({ filas, cargadoEn: window.simMasterInfo.cargadoEn, cargadoPor: u }); }
+      catch (er) { aviso = '\n⚠️ Quedó solo en este navegador (no se pudo subir a Firebase).'; }
+      const manual = Object.keys(window.simMaquinasElegiblesPorCodigo || {}).length;
+      masterRepintar();
+      alert('✅ Master cargado: ' + n + ' filas.' + (manual ? '\nHay ' + manual + ' códigos con ajuste manual de checkbox (mandan sobre el master). Usa "↺ Quitar ajustes manuales" si quieres que mande solo el master.' : '') + aviso + '\nPresiona "Publicar TV" para aplicarlo al piso.');
+    } catch (er) { alert('Error leyendo el master: ' + er.message); }
+    input.value = '';
+  };
+  rd.readAsArrayBuffer(f);
+}
+window.cargarMasterExcel = cargarMasterExcel;
+
+function quitarAjustesManualesMaquinas() {
+  if (!confirm('¿Quitar los ajustes manuales de checkbox? Quedará solo el master (o el default si no hay master).')) return;
+  window.simMaquinasElegiblesPorCodigo = {};
+  guardarPlanCompleto();
+  masterRepintar();
+}
+window.quitarAjustesManualesMaquinas = quitarAjustesManualesMaquinas;
 
 // Colapsa/expande el panel "Máquinas por código" — se queda recordado en este
 // navegador para no hacer scroll largo cada vez que ya lo dejaste configurado.
@@ -3798,6 +3907,7 @@ function initIMS() {
     db = firebase.firestore();
     auth = firebase.auth();
     iniciarAuthListener();
+    setTimeout(function(){ if (typeof cargarMasterFirestore === 'function') cargarMasterFirestore(); }, 1500);
     return true;
   } catch(e) { return false; }
 }
@@ -4724,8 +4834,21 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
 // guardado: todas las máquinas lo aceptan MENOS Zhongke (por definición solo corre
 // el 625A y casos puntuales que se activan a mano).
 function esElegibleParaMaquina(codeHijo, maquina) {
+  // 1) Ajuste manual (checkbox) por código = manda sobre todo
   const overrides = window.simMaquinasElegiblesPorCodigo && window.simMaquinasElegiblesPorCodigo[codeHijo];
   if (overrides && Object.prototype.hasOwnProperty.call(overrides, maquina)) return !!overrides[maquina];
+  // 2) Master modelo→máquinas (Excel cargado): une las máquinas de todos los modelos que usan ese código
+  const master = window.simMasterMaquinas;
+  if (master && Object.keys(master).length) {
+    let hay = false, ok = false;
+    (window._planPickList || []).forEach(p => {
+      if (p.pn !== codeHijo || (p.etiqueta !== 'Top' && p.etiqueta !== 'Bot')) return;
+      const f = master[p.etiqueta + '|' + String(p.modelo || '').trim().toUpperCase()];
+      if (f) { hay = true; if (f[maquina]) ok = true; }
+    });
+    if (hay) return ok;
+  }
+  // 3) Default: todas menos Zhongke
   return maquina !== 'Zhongke';
 }
 
@@ -5007,7 +5130,14 @@ function construirTablaRGB() {
         <span style="font-size:11px;color:var(--text2)">${window.simPanelMaquinasColapsado ? '▼ Mostrar' : '▲ Ocultar'}</span>
       </div>
       ${window.simPanelMaquinasColapsado ? '' : `
-      <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">Marca qué máquinas pueden correr cada código de medio proceso (GH69) — cubre a todos los modelos que lo comparten. Por default todas están marcadas menos Zhongke (por definición solo corre el 625A y casos puntuales). Desmarcada = esa máquina no lo toma en el reparto de abajo.</div>
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .6rem">Master (Excel modelo→máquinas) + checkbox: el master define qué máquinas corre cada modelo; el checkbox es un ajuste manual por código y manda sobre el master. Sin master: todas menos Zhongke. · Master + manual override · 마스터 + 수동 조정</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 .9rem">
+        <button class="btn btn-sm" onclick="descargarPlantillaMaster()" title="Descargar plantilla / Download template / 템플릿 다운로드">⬇ Plantilla master</button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('inpMasterMaq').click()" title="Cargar master / Upload master / 마스터 업로드">⬆ Cargar master</button>
+        <input type="file" id="inpMasterMaq" accept=".xlsx,.xls" style="display:none" onchange="cargarMasterExcel(this)">
+        <button class="btn btn-sm" onclick="quitarAjustesManualesMaquinas()" title="Quitar ajustes manuales / Clear manual overrides / 수동 조정 삭제">↺ Quitar ajustes manuales</button>
+        <span style="font-size:11px;color:var(--text2)">${window.simMasterInfo ? ('Master: ' + window.simMasterInfo.n + ' filas · ' + String(window.simMasterInfo.cargadoEn || '').slice(0, 10)) : 'Sin master cargado'}</span>
+      </div>
       <div style="margin-bottom:.4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Top</div>
       ${construirTablaMaquinasPorCodigo(codigosTopMap, maquinasTop)}
       <div style="margin:1rem 0 .4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Bottom</div>
@@ -5760,7 +5890,7 @@ async function renderPlanSemanal() {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.2rem">
         <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">1️⃣ Plan Requerido · Modelo y partes</div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-          ${adminAuthed ? `<button class="btn btn-primary btn-sm" id="btnPublicarPiso" onclick="publicarPlanPiso()" title="Publica el orden ⚡ Listo en la pantalla del piso · Publish to floor screen · 현장 화면에 게시" style="white-space:nowrap">📤 Publicar TV</button>` : ''}
+          ${adminAuthed ? `<button class="btn btn-primary btn-sm" id="btnPublicarPiso" onclick="publicarPlanPiso()" title="Publica ASSY + Medio Proceso RGB en las pantallas del piso · ⚡ Listo · Publish to floor screen · 현장 화면에 게시" style="white-space:nowrap">📤 Publicar TV</button>` : ''}
           <a class="btn btn-sm" href="piso.html" target="_blank" style="text-decoration:none;white-space:nowrap" title="Abrir pantalla del piso · Open floor screen · 현장 화면 열기">📺 Modo TV</a>
         </div>
       </div>
@@ -6460,6 +6590,27 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
     const pick = (pickPorModelo[sm] || {})[tipo];
     return (pick && pick.desc) || (tipo === 'Top' ? 'Gift box (Top)' : 'Lower box (Bottom)');
   };
+  // Materiales que necesita cada item (para mostrarlos en la pantalla de piso)
+  const estadoMat = (disp, req) => (disp >= req ? 'ok' : (disp > 0 ? 'parcial' : 'no'));
+  const matsDe = (tipo, sm, req) => {
+    const defs = tipo === 'Top'
+      ? [['SHEET_TOP', ['SHEET TOP']], ['CB_TOP_R', ['CHIP BOARD TOP', 'RANURADO']], ['CB_TOP_V', ['CHIP BOARD TOP', 'VIRGEN']]]
+      : [['SHEET_LOW', ['SHEET LOWER']], ['CB_BOT_R', ['CHIP BOARD BOTTOM', 'RANURADO']], ['CB_BOT_V', ['CHIP BOARD BOTTOM', 'VIRGEN']],
+         ['PULP', ['PULP TRAY']], ['SETPAD', ['SET PAD']], ['STICKER', ['BACK STICKER']]];
+    const out = [];
+    defs.forEach(([k, kws]) => {
+      let row = getComp(sm, kws);
+      if (!row && k === 'SETPAD') row = getComp(sm, ['PHONE PAD']);
+      if (!row) return;
+      const disp = Math.max(0, Math.round(row.inv || 0));
+      out.push({ k, pn: String(row.pn || '').toUpperCase(), disp, req: Math.round(req), e: estadoMat(disp, req) });
+    });
+    if (tipo === 'Bot') {
+      const gal = BOM.find(r => r.sm === sm && (r.pn || '').trim().toUpperCase() === 'GH69-46113G');
+      if (gal) { const disp = Math.max(0, Math.round(gal.inv || 0)); out.push({ k: 'GALLETA', pn: 'GH69-46113G', disp, req: Math.round(req), e: estadoMat(disp, req) }); }
+    }
+    return out;
+  };
   const colas = {};
   const agregar = (maq, tipo, plan) => {
     const porCodigo = {};
@@ -6496,7 +6647,7 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
       const lista = colas[maq] = colas[maq] || [];
       const ex = lista.find(x => x.pn === String(ranur.pn).toUpperCase());
       if (ex) { ex.pendiente += falta; ex.modelos.push(sm); if (ok > 0) ex.listo = true; return; }
-      lista.push({ tipo: 'VC', pn: String(ranur.pn).toUpperCase(), desc: ranur.desc || ('Chip Board ' + txt + ' (Ranurado)'), modelos: [sm], pendiente: falta, dia0: ok > 0 ? 0 : 999, listo: ok > 0 });
+      lista.push({ tipo: 'VC', pn: String(ranur.pn).toUpperCase(), desc: ranur.desc || ('Chip Board ' + txt + ' (Ranurado)'), modelos: [sm], pendiente: falta, dia0: ok > 0 ? 0 : 999, listo: ok > 0, vc: { k: pos === 'TOP' ? 'CB_TOP_V' : 'CB_BOT_V', pn: String(virgen.pn).toUpperCase(), inv: virgen.inv || 0 } });
     });
   });
 
@@ -6509,6 +6660,9 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
       orden: i + 1, sm: it.modelos[0], modelos: it.modelos, pn: it.pn,
       desc: it.desc || descDe(it.tipo === 'Bot' ? 'Bot' : 'Top', it.modelos),
       pendiente: Math.round(it.pendiente), listo: !!it.listo,
+      materiales: it.tipo === 'VC'
+        ? [{ k: it.vc.k, pn: it.vc.pn, disp: Math.max(0, Math.round(it.vc.inv)), req: Math.round(it.pendiente), e: estadoMat(it.vc.inv, it.pendiente) }]
+        : matsDe(it.tipo, it.modelos[0], it.pendiente),
       dias: (cap > 0 && it.pendiente > 0) ? Math.round(it.pendiente / cap * 10) / 10 : null
     }));
   });
@@ -6545,6 +6699,7 @@ async function publicarPlanPiso(auto) {
   const regresar = (t) => { if (!btn) return; btn.textContent = t || txt0; if (t) setTimeout(() => { btn.textContent = txt0; btn.disabled = false; }, 3000); else btn.disabled = false; };
   try {
     await sincIMSFresco();
+    await cargarMasterFirestore();
     const produccionReal = { ...(window.simProducidoManualPorModelo || {}) };
     const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
@@ -6615,7 +6770,7 @@ async function publicarPlanPiso(auto) {
     try { localStorage.setItem('pisoAutoOn_p4', String(Date.now())); } catch (e) {}
     if (!auto) latidoPisoAuto();
     if (avisoMedio && !auto) window.alert('ASSY publicado, pero el plan de medio proceso falló: ' + avisoMedio);
-    regresar(auto ? '' : '✅ Publicado · auto 5 min');
+    regresar(auto ? '' : (avisoMedio ? '⚠️ Solo ASSY' : '✅ ASSY + RGB · auto 5 min'));
   } catch (e) {
     alert('Error: ' + e.message);
     regresar();

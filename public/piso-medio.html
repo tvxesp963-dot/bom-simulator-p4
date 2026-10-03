@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Medio proceso · Piso P4</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
@@ -88,6 +89,33 @@ h1{font-size:26px;margin:0}
 .modal .box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;max-width:380px;width:100%}
 .modal .box button.sec{background:transparent;border:1px solid var(--border);color:var(--text2);margin-top:6px}
 .hide{display:none!important}
+#pick{display:none}
+#pick{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;color:#000;background:#fff}
+#pick .ph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:6px}
+#pick h2{font-size:18px;margin:0}
+#pick .pinfo{font-size:10px}
+#pick .firmas{font-size:10px;line-height:2}
+#pick .mh{display:flex;justify-content:space-between;align-items:center;border:1.5px solid #000;padding:4px 8px;margin-top:8px;font-size:12px;font-weight:800;page-break-after:avoid}
+#pick .pn{display:inline-flex;width:20px;height:20px;border:1.5px solid #000;border-radius:50%;align-items:center;justify-content:center;margin-right:6px;font-size:11px}
+#pick table{width:100%;border-collapse:collapse;margin:2px 0 4px;page-break-inside:avoid}
+#pick th{font-size:9px;text-align:left;border-bottom:1.5px solid #000;padding:3px 4px;text-transform:uppercase}
+#pick td{font-size:11px;border-bottom:0.5px solid #aaa;padding:4px}
+#pick .r{text-align:right}
+#pick .box{display:inline-block;width:13px;height:13px;border:1.5px solid #000;border-radius:2px}
+#pick .nota{font-size:10px;font-weight:700;text-decoration:underline}
+#pick .res{margin-top:10px;border-top:2px solid #000;padding-top:4px;page-break-inside:avoid}
+#pick .res h3{font-size:12px;margin:2px 0 4px}
+#pick .pfoot{font-size:9px;color:#444;margin-top:6px}
+#pickBar{display:none}
+body.vista-pick,body.vista-pick.fit{overflow:auto!important;height:auto!important;padding:0!important}
+body.vista-pick .wrap{display:none!important}
+body.vista-pick #pickBar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:10;padding:10px 16px;background:#0d1220;border-bottom:1px solid #334}
+body.vista-pick #pickBar .pbt{font-weight:800;color:#fff;font-size:15px}
+body.vista-pick #pickBar button{font-size:14px;font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid #556;background:#1b2436;color:#fff}
+body.vista-pick #pickBar button.imp{background:#00bcd4;border-color:#00bcd4;color:#001}
+body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;padding:24px;border-radius:6px}
+@media print{#pickBar{display:none!important}body.vista-pick #pick{margin:0;padding:0;max-width:none;border-radius:0}}
+@media print{body.modo-pick .wrap{display:none!important}body.modo-pick #pick{display:block!important}#pick th,#pick td{color:#000!important}}
 </style>
 </head>
 <body>
@@ -98,6 +126,8 @@ h1{font-size:26px;margin:0}
     <div class="acciones">
       <button id="btnZoomMenos" onclick="cambiarZoom(-0.1)">A−</button><button id="btnZoomPct" onclick="cambiarZoom(0)">100%</button><button id="btnZoomMas" onclick="cambiarZoom(0.1)">A+</button>
       <button id="btnPdf" onclick="window.print()">🖨️ PDF</button>
+      <button id="btnXls" onclick="exportarExcel()">📊 Excel</button>
+      <button id="btnPick" onclick="imprimirPickList()">📋 Pick List</button>
     </div>
     <div class="langs">
       <button data-l="es" title="Español"><img src="https://flagcdn.com/w40/mx.png" alt="MX"></button><button data-l="en" title="English"><img src="https://flagcdn.com/w40/us.png" alt="US"></button><button data-l="ko" title="한국어"><img src="https://flagcdn.com/w40/kr.png" alt="KR"></button>
@@ -109,6 +139,8 @@ h1{font-size:26px;margin:0}
   <div id="app"><div class="msg" id="loading"></div></div>
   <div class="foot" id="foot"></div>
 </div>
+<div id="pickBar"><span class="pbt" id="pbTitulo"></span><span><button class="imp" id="pbImprimir" onclick="window.print()"></button> <button id="pbCerrar" onclick="cerrarVistaPick()"></button></span></div>
+<div id="pick"></div>
 <div class="modal hide" id="rst"><div class="box">
   <div style="font-weight:800;margin-bottom:6px" id="rstT"></div>
   <div style="font-size:13px;color:var(--text2);margin-bottom:8px" id="rstS"></div>
@@ -123,7 +155,7 @@ h1{font-size:26px;margin:0}
 
 <script>
 var T = {
-  es:{title:'Medio proceso · Piso P4',loading:'Cargando plan...',publicado:'Publicado',viejo:'(plan de hace más de 12 h)',matViejo:'Plan de hace',
+  es:{impreso:'Generado',codigo:'Número de parte',seccion:'Sección',hojaPlan:'Orden',maq:'Máquina',sinDatosExp:'Sin datos para exportar',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → Medio proceso',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkMaqs:'Máquinas',pkNada:'No hay items listos para correr.',pkEstim:'Fecha estimada según días de cola por máquina',pkPlan:'Plan publicado',pkVC:'Pasar por VC (ranurar) primero',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],title:'Medio proceso · Piso P4',loading:'Cargando plan...',publicado:'Publicado',viejo:'(plan de hace más de 12 h)',matViejo:'Plan de hace',
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay plan de medio proceso. Publícalo desde el BOM Simulator (Publicar TV).',sinCola:'Sin cola para esta máquina en el plan publicado',
@@ -133,7 +165,7 @@ var T = {
       forgot:'¿Olvidaste tu contraseña? Da clic aquí para restablecerla',rstT:'Restablecer contraseña',rstS:'Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.',
       rstB:'Enviar enlace',rstC:'Cancelar',rstOk:'Listo. Revisa tu correo y también la carpeta de SPAM.',rstErr:'No se pudo enviar. Revisa el correo escrito.',
       foot:'Orden = plan de medio proceso del BOM Simulator (prioridad del Excel + material + máquinas del master) · Producido = pallets del MES de hoy · Se republica cada 5 min',loc:'es-MX'},
-  en:{title:'In-process · P4 Floor',loading:'Loading plan...',publicado:'Published',viejo:'(plan older than 12 h)',matViejo:'Plan from',
+  en:{impreso:'Generated',codigo:'Part number',seccion:'Section',hojaPlan:'Order',maq:'Machine',sinDatosExp:'No data to export',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → In-process',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkMaqs:'Machines',pkNada:'No items ready to run.',pkEstim:'Estimated date from queue days per machine',pkPlan:'Plan published',pkVC:'Send through VC (slotting) first',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],title:'In-process · P4 Floor',loading:'Loading plan...',publicado:'Published',viejo:'(plan older than 12 h)',matViejo:'Plan from',
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No in-process plan yet. Publish it from the BOM Simulator (Publish TV).',sinCola:'No queue for this machine in the published plan',
@@ -143,7 +175,7 @@ var T = {
       forgot:'Forgot your password? Click here to reset it',rstT:'Reset password',rstS:'Enter your email and we will send you a link to create a new password.',
       rstB:'Send link',rstC:'Cancel',rstOk:'Done. Check your email and also your SPAM folder.',rstErr:'Could not send. Check the email you typed.',
       foot:'Order = in-process plan from the BOM Simulator (Excel priority + material + master machines) · Produced = today\'s MES pallets · Republished every 5 min',loc:'en-US'},
-  ko:{title:'반제품 · P4 현장',loading:'계획 불러오는 중...',publicado:'게시',viejo:'(12시간 이상 지난 계획)',matViejo:'계획 경과',
+  ko:{impreso:'생성',codigo:'부품 번호',seccion:'구분',hojaPlan:'순서',maq:'설비',sinDatosExp:'내보낼 데이터가 없습니다',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → 반제품',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkMaqs:'설비',pkNada:'생산 가능한 항목이 없습니다.',pkEstim:'설비별 작업일수 기준 예상일',pkPlan:'계획 게시',pkVC:'먼저 VC(슬롯 가공) 통과',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],title:'반제품 · P4 현장',loading:'계획 불러오는 중...',publicado:'게시',viejo:'(12시간 이상 지난 계획)',matViejo:'계획 경과',
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 반제품 계획이 없습니다. BOM Simulator에서 게시하세요 (TV 게시).',sinCola:'게시된 계획에 이 설비의 작업 없음',
@@ -162,6 +194,7 @@ function matLabel(k){ return (MATL[lang]&&MATL[lang][k]) || k; }
 var lang='es'; try{ lang=localStorage.getItem('pisoLang')||'es'; }catch(e){} if(!T[lang]) lang='es';
 function t(k){ return T[lang][k]; }
 function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
+function fechaCorta(d){ return d.toLocaleDateString(t('loc'),{day:'2-digit',month:'short'}); }
 function n(x){ return Math.round(x||0).toLocaleString('en-US'); }
 function fechaEnvio(f){ if(!f) return '—'; var d=new Date(f+'T00:00:00'); return isNaN(d)?'—':d.toLocaleDateString(t('loc'),{day:'2-digit',month:'short'}); }
 var FLAGS={es:'mx',en:'us',ko:'kr'};
@@ -278,6 +311,19 @@ function chips(c,maq){
 })();
 function bar(pct,color){ return '<div class="bar"><div style="width:'+pct+'%;background:'+color+'"></div></div><div class="code">'+pct+'%</div>'; }
 
+function calcMaq(m){
+  var cola=colaDe(m), run=enCurso(m);
+  var esRun=function(c){ return run && c.pn===run.parte && (c.modelos||[c.sm]).indexOf(run.modelo)>=0; };
+  var filas=cola.map(function(c){
+    var prod=prodDe(m,c.pn), target=(c.pendiente||0)+prod, pend=Math.max(0,target-prod);
+    return { c:c, prod:prod, target:target, pend:pend, pct: target ? Math.min(100,Math.round(prod*100/target)) : 0, cap:capDe(c), corre:esRun(c) };
+  });
+  var runL=filas.filter(function(f){ return f.pend>0 && f.c.listo; });
+  var waitL=filas.filter(function(f){ return f.pend>0 && !f.c.listo; });
+  var doneL=filas.filter(function(f){ return f.pend===0; });
+  runL.forEach(function(f,i){ f.orden=i+1; });
+  return { m:m, filas:filas, runL:runL, waitL:waitL, doneL:doneL };
+}
 function pintarTabs(){
   var h=MAQS.map(function(m){
     var c=colaDe(m).length;
@@ -314,16 +360,7 @@ function pintar(){
   if(!plan){ app.innerHTML='<div class="msg">'+t('loading')+'</div>'; return; }
   if(!plan.colas){ app.innerHTML='<div class="msg">'+t('vacio')+'</div>'; return; }
 
-  var cola=colaDe(selMaq), run=enCurso(selMaq);
-  var esRun=function(c){ return run && c.pn===run.parte && (c.modelos||[c.sm]).indexOf(run.modelo)>=0; };
-  var filas=cola.map(function(c){
-    var prod=prodDe(selMaq,c.pn), target=(c.pendiente||0)+prod, pend=Math.max(0,target-prod);
-    return { c:c, prod:prod, target:target, pend:pend, pct: target ? Math.min(100,Math.round(prod*100/target)) : 0, cap:capDe(c), corre:esRun(c) };
-  });
-  var runL=filas.filter(function(f){ return f.pend>0 && f.c.listo; });
-  var waitL=filas.filter(function(f){ return f.pend>0 && !f.c.listo; });
-  var doneL=filas.filter(function(f){ return f.pend===0; });
-  runL.forEach(function(f,i){ f.orden=i+1; });
+  var cm=calcMaq(selMaq), filas=cm.filas, runL=cm.runL, waitL=cm.waitL, doneL=cm.doneL;
 
   var tT=0,tP=0; filas.forEach(function(f){ tT+=f.target; tP+=Math.min(f.prod,f.target); });
   var av=tT?Math.round(tP*100/tT):0;
@@ -389,6 +426,141 @@ function cambiarZoom(d){
   ajustarPantalla();
 }
 window.addEventListener('resize',ajustarPantalla);
+
+
+// ===== PICK LIST (almacén) — todas las máquinas =====
+// Solo lo que se puede correr (⚡), cantidad = lo que alcanza el material. 1 pieza = 1 de cada material.
+// Chip Board: primero el ranurado que ya hay; lo que falte sale de virgen (que pasa por VC a ranurarse).
+function entregaTxt(dias){
+  if(dias<=0) return t('pkYa');
+  var dd=Math.round(dias), d=new Date(); d.setDate(d.getDate()+dd);
+  return '≈ '+(dd===0?t('pkHoy'):(dd===1?t('pkManana'):t('dias')[d.getDay()]+' '+fechaCorta(d)));
+}
+function datosPick(){
+  var maqs=[], resumen={};
+  MAQS.forEach(function(m){
+    var cm=calcMaq(m), acum=0, items=[];
+    cm.runL.forEach(function(f){
+      var c=f.c, cant=Math.min(f.cap,f.pend), antes=acum; acum+=(c.dias||0);
+      if(cant<=0) return;
+      var mats=[], ms=c.materiales||[];
+      ms.filter(function(x){ return !esCB(x); }).forEach(function(x){ mats.push({k:x.k,pn:x.pn,cant:cant,nota:''}); });
+      var resto=cant;
+      ms.filter(esCB).sort(function(a,b){ return /_R$/.test(b.k)-/_R$/.test(a.k); }).forEach(function(x){
+        var q=Math.min(x.disp||0,resto); if(q<=0) return; resto-=q;
+        mats.push({k:x.k,pn:x.pn,cant:q,nota:(/_V$/.test(x.k)&&m.indexOf('VC')!==0)?t('pkVC'):''});
+      });
+      var mods=c.modelos||[c.sm];
+      mats.forEach(function(x){
+        var key=x.pn||x.k, r=resumen[key]||(resumen[key]={pn:x.pn||'—',desc:matLabel(x.k),cant:0,modelos:[],maqs:[]});
+        r.cant+=x.cant; mods.forEach(function(md){ if(r.modelos.indexOf(md)<0) r.modelos.push(md); }); if(r.maqs.indexOf(m)<0) r.maqs.push(m);
+      });
+      items.push({orden:f.orden,modelos:mods,pn:c.pn,fecha:c.fecha,cant:cant,pend:f.pend,entrega:entregaTxt(antes),mats:mats});
+    });
+    if(items.length) maqs.push({m:m,items:items});
+  });
+  return { maqs:maqs, resumen:Object.keys(resumen).sort().map(function(k){ return resumen[k]; }) };
+}
+function imprimirPickList(){
+  if(!plan||!plan.colas){ alert(t('sinDatosExp')); return; }
+  var dp=datosPick(), ahora=new Date();
+  var pubMs=plan.publicadoMs||Date.parse(plan.publicadoEn);
+  var pub=pubMs?new Date(pubMs).toLocaleString(t('loc')):'—';
+  var h='<div class="ph"><div><h2>'+t('pkTitulo')+'</h2><div class="pinfo">'+t('pkPlan')+': '+pub+' · '+t('impreso')+': '+ahora.toLocaleString(t('loc'))+'</div></div>'+
+    '<div class="firmas">'+t('pkPreparo')+': ________________<br>'+t('pkEntrego')+': ________________<br>'+t('pkRecibio')+': ________________</div></div>';
+  if(!dp.maqs.length) h+='<p>'+t('pkNada')+'</p>';
+  dp.maqs.forEach(function(g){
+    h+='<div class="mh" style="background:#eee"><span>'+esc(g.m)+'</span></div>';
+    g.items.forEach(function(it){
+      h+='<div class="mh"><span><span class="pn">'+it.orden+'</span>'+esc(it.modelos.slice(0,3).join(', '))+(it.modelos.length>3?' +'+(it.modelos.length-3):'')+' · '+esc(it.pn)+(it.fecha?' · '+t('envio')+' '+fechaEnvio(it.fecha):'')+'</span>'+
+        '<span>'+t('pkPrep')+': '+n(it.cant)+' '+t('pzas')+' · '+t('pkEntregar')+': '+it.entrega+'</span></div>';
+      h+='<table><tr><th style="width:20%">'+t('pkMaterial')+'</th><th style="width:15%">'+t('pkPN')+'</th><th class="r" style="width:10%">'+t('pkCant')+'</th><th>'+t('pkNota')+'</th><th style="width:5%">'+t('pkPrepChk')+'</th><th style="width:5%">'+t('pkEntrChk')+'</th></tr>';
+      it.mats.forEach(function(x){ h+='<tr><td>'+esc(matLabel(x.k))+'</td><td><b>'+esc(x.pn||'—')+'</b></td><td class="r"><b>'+n(x.cant)+'</b></td><td class="nota">'+esc(x.nota)+'</td><td><span class="box"></span></td><td><span class="box"></span></td></tr>'; });
+      h+='</table>';
+    });
+  });
+  if(dp.resumen.length){
+    h+='<div class="res"><h3>'+t('pkResumen')+'</h3><table><tr><th style="width:16%">'+t('pkPN')+'</th><th>'+t('pkDesc')+'</th><th class="r" style="width:10%">'+t('pkCant')+'</th><th>'+t('pkMaqs')+'</th><th>'+t('pkModelos')+'</th></tr>';
+    dp.resumen.forEach(function(r){ h+='<tr><td><b>'+esc(r.pn)+'</b></td><td>'+esc(r.desc)+'</td><td class="r"><b>'+n(r.cant)+'</b></td><td>'+esc(r.maqs.join(', '))+'</td><td>'+esc(r.modelos.join(', '))+'</td></tr>'; });
+    h+='</table></div>';
+  }
+  h+='<div class="pfoot">'+t('pkEstim')+'</div>';
+  document.getElementById('pick').innerHTML=h;
+  document.getElementById('pbTitulo').textContent=t('pkVista');
+  document.getElementById('pbImprimir').textContent=t('pkImprimir');
+  document.getElementById('pbCerrar').textContent=t('pkCerrar');
+  document.body.classList.add('modo-pick','vista-pick');
+  window.scrollTo(0,0);
+}
+function cerrarVistaPick(){ document.body.classList.remove('modo-pick','vista-pick'); }
+window.addEventListener('afterprint',function(){ if(!document.body.classList.contains('vista-pick')) document.body.classList.remove('modo-pick'); });
+
+// ===== EXCEL (todas las máquinas) =====
+function exportarExcel(){
+  if(!plan||!plan.colas||typeof XLSX==='undefined'){ alert(t('sinDatosExp')); return; }
+  var ahora=new Date();
+  var head=[t('maq'),t('orden'),t('modelo'),t('codigo'),t('envio'),t('target'),t('prod'),t('pend'),t('avance')+' %',t('material'),t('estado'),t('seccion')];
+  var matTxt=function(c){ return (c.materiales||[]).map(function(x){ return matLabel(x.k)+' '+(x.e==='ok'?'✓':(x.e==='parcial'?n(x.disp)+'/'+n(x.req):'✗ 0')); }).join(' · '); };
+  var filas=[], tipos=[];
+  MAQS.forEach(function(m){
+    var cm=calcMaq(m);
+    [['run',cm.runL],['wait',cm.waitL],['done',cm.doneL]].forEach(function(g){
+      g[1].forEach(function(f){
+        var c=f.c, est;
+        if(g[0]==='run') est=t('listo')+' '+(f.cap>=f.pend?f.pend:f.cap+' '+t('de')+' '+f.pend);
+        else if(g[0]==='wait'){ var fl=faltantes(c); est=fl.length?t('falta')+' '+fl.join(', '):t('sinDatos'); }
+        else est=t('completo');
+        filas.push([m,g[0]==='run'?f.orden:(g[0]==='done'?'✓':'—'),(c.modelos||[c.sm]).join(', '),c.pn,fechaEnvio(c.fecha),f.target,f.prod,f.pend,f.pct,matTxt(c),est,t(g[0])]);
+        tipos.push(g[0]);
+      });
+    });
+  });
+  var pubMs=plan.publicadoMs||Date.parse(plan.publicadoEn);
+  var titulo=[[t('title')],[t('pkPlan')+': '+(pubMs?new Date(pubMs).toLocaleString(t('loc')):'—')],[t('impreso')+': '+ahora.toLocaleString(t('loc'))],[]];
+  var ws=XLSX.utils.aoa_to_sheet(titulo.concat([head]).concat(filas));
+  var r0=titulo.length;
+  var borde={top:{style:'thin',color:{rgb:'BBBBBB'}},bottom:{style:'thin',color:{rgb:'BBBBBB'}},left:{style:'thin',color:{rgb:'BBBBBB'}},right:{style:'thin',color:{rgb:'BBBBBB'}}};
+  var set=function(r,c,st){ var ref=XLSX.utils.encode_cell({r:r,c:c}); if(ws[ref]) ws[ref].s=st; };
+  set(0,0,{font:{bold:true,sz:16}});
+  head.forEach(function(_,c){ set(r0,c,{font:{bold:true},fill:{fgColor:{rgb:'EEEEEE'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:borde}); });
+  filas.forEach(function(fila,i){
+    var r=r0+1+i, tipo=tipos[i];
+    fila.forEach(function(v,c){
+      var st={border:borde,alignment:{vertical:'center',horizontal:(c>=5&&c<=8)?'right':(c===1?'center':'left'),wrapText:c===9}};
+      if(c>=5&&c<=7) st.numFmt='#,##0';
+      if(c===0) st.font={bold:true,color:{rgb:'0B4FA3'}};
+      if(c===7) st.font={bold:true};
+      if(c===10) st.font={bold:true,color:{rgb:tipo==='wait'?'C00000':'0A7A3A'}};
+      set(r,c,st);
+    });
+  });
+  ws['!cols']=[10,6,26,16,10,10,11,11,10,60,28,18].map(function(w){ return {wch:w}; });
+  ws['!merges']=[0,1,2].map(function(r){ return {s:{r:r,c:0},e:{r:r,c:11}}; });
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:r0,c:0},e:{r:r0+filas.length,c:11}})};
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,t('hojaPlan'));
+  var dp=datosPick();
+  if(dp.maqs.length){
+    var ph=[t('maq'),t('orden'),t('modelo'),t('pkEntregar'),t('pkMaterial'),t('pkPN'),t('pkCant'),t('pkNota'),t('pkPrepChk'),t('pkEntrChk')];
+    var pf=[];
+    dp.maqs.forEach(function(g){ g.items.forEach(function(it){ it.mats.forEach(function(x){
+      pf.push([g.m,it.orden,it.modelos.join(', '),it.entrega,matLabel(x.k),x.pn||'—',x.cant,x.nota,'','']);
+    }); }); });
+    var ws2=XLSX.utils.aoa_to_sheet([[t('pkTitulo')],[t('impreso')+': '+ahora.toLocaleString(t('loc'))],[],ph].concat(pf).concat([[],[t('pkResumen')],[t('pkPN'),t('pkDesc'),t('pkCant'),t('pkMaqs'),t('pkModelos')]])
+      .concat(dp.resumen.map(function(r){ return [r.pn,r.desc,r.cant,r.maqs.join(', '),r.modelos.join(', ')]; })));
+    var hs={font:{bold:true},fill:{fgColor:{rgb:'EEEEEE'}},border:borde,alignment:{horizontal:'center',wrapText:true}};
+    ws2['A1'].s={font:{bold:true,sz:14}};
+    ph.forEach(function(_,c){ ws2[XLSX.utils.encode_cell({r:3,c:c})].s=hs; });
+    pf.forEach(function(fila,i){ fila.forEach(function(_,c){ var ref=XLSX.utils.encode_cell({r:4+i,c:c}); if(!ws2[ref]) ws2[ref]={t:'s',v:''}; ws2[ref].s={border:borde,font:{bold:c===5||c===6},numFmt:c===6?'#,##0':undefined}; }); });
+    var rr=4+pf.length+1;
+    var refT=XLSX.utils.encode_cell({r:rr,c:0}); if(ws2[refT]) ws2[refT].s={font:{bold:true,sz:12}};
+    [0,1,2,3,4].forEach(function(c){ var ref=XLSX.utils.encode_cell({r:rr+1,c:c}); if(ws2[ref]) ws2[ref].s=hs; });
+    ws2['!cols']=[10,7,26,28,26,16,10,30,7,7].map(function(w){ return {wch:w}; });
+    XLSX.utils.book_append_sheet(wb,ws2,'Pick List');
+  }
+  var f=ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0')+'-'+String(ahora.getDate()).padStart(2,'0')+'_'+String(ahora.getHours()).padStart(2,'0')+String(ahora.getMinutes()).padStart(2,'0');
+  XLSX.writeFile(wb,'Medio_Proceso_P4_'+f+'.xlsx');
+}
 
 function escucharPallets(){
   var f=hoyISO(); if(f===fechaPal && unsubPal) return; fechaPal=f;

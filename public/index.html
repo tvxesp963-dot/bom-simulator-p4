@@ -925,6 +925,7 @@ function actualizarMaquinaElegibleCodigo(codeHijo, maquina, checked) {
   window.simMaquinasElegiblesPorCodigo[codeHijo] = window.simMaquinasElegiblesPorCodigo[codeHijo] || {};
   window.simMaquinasElegiblesPorCodigo[codeHijo][maquina] = !!checked;
   guardarPlanCompleto();
+  guardarAjustesFirestore();
   const divRGB = document.getElementById('planSubRGB');
   if (divRGB) {
     divRGB.innerHTML = construirTablaRGB();
@@ -944,14 +945,26 @@ function masterRepintar() {
 async function cargarMasterFirestore() {
   try {
     if (!db) return;
-    const d = await db.collection('bom_simulator_p4').doc('master_maquinas').get();
-    if (d.exists && d.data().filas) {
-      window.simMasterMaquinas = d.data().filas;
-      window.simMasterInfo = { cargadoEn: d.data().cargadoEn || '', por: d.data().cargadoPor || '', n: Object.keys(d.data().filas).length };
+    const ref = db.collection('bom_simulator_p4').doc('master_maquinas');
+    const d = await ref.get();
+    if (d.exists) {
+      const dd = d.data();
+      if (dd.filas) {
+        window.simMasterMaquinas = dd.filas;
+        window.simMasterInfo = { cargadoEn: dd.cargadoEn || '', por: dd.cargadoPor || '', n: Object.keys(dd.filas).length };
+      }
+      // Ajustes manuales (checkbox) COMPARTIDOS: todas las PCs usan los mismos (antes solo vivían en cada navegador)
+      if (dd.ajustes && typeof dd.ajustes === 'object') window.simMaquinasElegiblesPorCodigo = dd.ajustes;
+      else if (Object.keys(window.simMaquinasElegiblesPorCodigo || {}).length) guardarAjustesFirestore();
       guardarPlanCompleto();
     }
   } catch (e) { console.warn('[master maquinas]', e); }
 }
+async function guardarAjustesFirestore() {
+  try { if (db) await db.collection('bom_simulator_p4').doc('master_maquinas').set({ ajustes: window.simMaquinasElegiblesPorCodigo || {} }, { merge: true }); }
+  catch (e) { console.warn('[ajustes maquinas]', e); }
+}
+window.guardarAjustesFirestore = guardarAjustesFirestore;
 window.cargarMasterFirestore = cargarMasterFirestore;
 
 function descargarPlantillaMaster() {
@@ -1016,7 +1029,7 @@ function cargarMasterExcel(input) {
       window.simMasterInfo = { cargadoEn: new Date().toISOString(), por: u, n };
       guardarPlanCompleto();
       let aviso = '';
-      try { if (db) await db.collection('bom_simulator_p4').doc('master_maquinas').set({ filas, cargadoEn: window.simMasterInfo.cargadoEn, cargadoPor: u }); }
+      try { if (db) await db.collection('bom_simulator_p4').doc('master_maquinas').set({ filas, cargadoEn: window.simMasterInfo.cargadoEn, cargadoPor: u, ajustes: window.simMaquinasElegiblesPorCodigo || {} }, { merge: true }); }
       catch (er) { aviso = '\n⚠️ Quedó solo en este navegador (no se pudo subir a Firebase).'; }
       const manual = Object.keys(window.simMaquinasElegiblesPorCodigo || {}).length;
       masterRepintar();
@@ -1032,6 +1045,7 @@ function quitarAjustesManualesMaquinas() {
   if (!confirm('¿Quitar los ajustes manuales de checkbox? Quedará solo el master (o el default si no hay master).')) return;
   window.simMaquinasElegiblesPorCodigo = {};
   guardarPlanCompleto();
+  guardarAjustesFirestore();
   masterRepintar();
 }
 window.quitarAjustesManualesMaquinas = quitarAjustesManualesMaquinas;
@@ -5138,6 +5152,13 @@ function construirTablaRGB() {
         <button class="btn btn-sm" onclick="quitarAjustesManualesMaquinas()" title="Quitar ajustes manuales / Clear manual overrides / 수동 조정 삭제">↺ Quitar ajustes manuales</button>
         <span style="font-size:11px;color:var(--text2)">${window.simMasterInfo ? ('Master: ' + window.simMasterInfo.n + ' filas · ' + String(window.simMasterInfo.cargadoEn || '').slice(0, 10)) : 'Sin master cargado'}</span>
       </div>
+      ${(() => {
+        const sin = [];
+        [['Top', codigosTopMap, maquinasTop], ['Bot', codigosBotMap, maquinasBot]].forEach(([tp, mapa, maqs]) => {
+          maqs.forEach(mq => { if (mq === 'Zhongke') return; const n = Object.keys(mapa).filter(c => esElegibleParaMaquina(c, mq)).length; if (!n) sin.push(tp + ' ' + mq); });
+        });
+        return sin.length ? '<div style="font-size:12px;color:var(--yellow);margin:0 0 .8rem">⚠ Sin ningún código asignado (no tendrán plan): <b>' + sin.join(', ') + '</b> — revisa el master o los checkbox.</div>' : '';
+      })()}
       <div style="margin-bottom:.4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Top</div>
       ${construirTablaMaquinasPorCodigo(codigosTopMap, maquinasTop)}
       <div style="margin:1rem 0 .4rem;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase">Bottom</div>

@@ -46,6 +46,9 @@ h1{font-size:26px;margin:0}
 .ok{background:rgba(0,230,118,.15);color:var(--green)}
 .par{background:rgba(241,196,15,.18);color:var(--yellow)}
 .no{background:rgba(255,77,77,.18);color:var(--red)}
+.chip[data-tip]{cursor:help}
+#chipTip{position:fixed;z-index:9999;display:none;pointer-events:none;background:#0b1220;color:#fff;border:1px solid #3a4a66;border-radius:8px;padding:8px 12px;font-size:14px;line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.5);max-width:360px}
+#chipTip b{color:#4da6ff}#chipTip .f{color:#ff4d4d;font-weight:800}#chipTip .ok{color:#00e676;font-weight:800;background:none}#chipTip .pp{color:#f1c40f;font-weight:800}
 .bar{background:#1f2a3d;height:12px;border-radius:6px;min-width:90px}
 .bar div{height:12px;border-radius:6px}
 .est{font-weight:800;font-size:18px}
@@ -124,7 +127,7 @@ var T = {
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay plan de medio proceso. Publícalo desde el BOM Simulator (Publicar TV).',sinCola:'Sin cola para esta máquina en el plan publicado',
-      corriendo:'CORRIENDO',pallets:'Pallets hoy',pendIMS:'Por recibir en IMS',auto:'Auto',autoT:'Rotar máquinas automáticamente',items:'items',
+      tipDisp:'Disponible en almacén',tipReq:'Requerido',tipFalta:'Falta para completar',tipOk:'✓ Completo',tipMods:'Modelos',tipCB:'Ranurado + virgen se suman (el virgen se ranura en VC)',corriendo:'CORRIENDO',pallets:'Pallets hoy',pendIMS:'Por recibir en IMS',auto:'Auto',autoT:'Rotar máquinas automáticamente',items:'items',
       zoomMenos:'Hacer más chico',zoomMas:'Hacer más grande',zoomReset:'Tamaño normal (100%)',pzas:'pzas',d:'d',h:'h',m:'min',
       login:'Inicia sesión para ver el plan',correo:'Correo',pass:'Contraseña',entrar:'Entrar',errLogin:'Correo o contraseña incorrectos',
       forgot:'¿Olvidaste tu contraseña? Da clic aquí para restablecerla',rstT:'Restablecer contraseña',rstS:'Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.',
@@ -134,7 +137,7 @@ var T = {
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No in-process plan yet. Publish it from the BOM Simulator (Publish TV).',sinCola:'No queue for this machine in the published plan',
-      corriendo:'RUNNING',pallets:'Pallets today',pendIMS:'Pending receipt in IMS',auto:'Auto',autoT:'Rotate machines automatically',items:'items',
+      tipDisp:'Available in warehouse',tipReq:'Required',tipFalta:'Short to complete',tipOk:'✓ Complete',tipMods:'Models',tipCB:'Slotted + virgin add up (virgin gets slotted in VC)',corriendo:'RUNNING',pallets:'Pallets today',pendIMS:'Pending receipt in IMS',auto:'Auto',autoT:'Rotate machines automatically',items:'items',
       zoomMenos:'Smaller',zoomMas:'Larger',zoomReset:'Normal size (100%)',pzas:'pcs',d:'d',h:'h',m:'min',
       login:'Sign in to view the plan',correo:'Email',pass:'Password',entrar:'Sign in',errLogin:'Wrong email or password',
       forgot:'Forgot your password? Click here to reset it',rstT:'Reset password',rstS:'Enter your email and we will send you a link to create a new password.',
@@ -144,7 +147,7 @@ var T = {
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 반제품 계획이 없습니다. BOM Simulator에서 게시하세요 (TV 게시).',sinCola:'게시된 계획에 이 설비의 작업 없음',
-      corriendo:'작업 중',pallets:'오늘 팔레트',pendIMS:'IMS 입고 대기',auto:'자동',autoT:'설비 자동 전환',items:'건',
+      tipDisp:'창고 가용 수량',tipReq:'필요 수량',tipFalta:'부족 수량',tipOk:'✓ 충분',tipMods:'모델',tipCB:'슬롯 + 원지 합산 (원지는 VC에서 슬롯 가공)',corriendo:'작업 중',pallets:'오늘 팔레트',pendIMS:'IMS 입고 대기',auto:'자동',autoT:'설비 자동 전환',items:'건',
       zoomMenos:'작게',zoomMas:'크게',zoomReset:'기본 크기 (100%)',pzas:'개',d:'일',h:'시간',m:'분',
       login:'계획을 보려면 로그인하세요',correo:'이메일',pass:'비밀번호',entrar:'로그인',errLogin:'이메일 또는 비밀번호가 올바르지 않습니다',
       forgot:'비밀번호를 잊으셨나요? 여기를 눌러 재설정하세요',rstT:'비밀번호 재설정',rstS:'이메일을 입력하면 새 비밀번호를 만들 수 있는 링크를 보내드립니다.',
@@ -230,14 +233,49 @@ function faltantes(c){
   if(cb.length && cb.every(function(x){ return !x.disp; })) out.push(matLabel(cb[0].k));
   return out;
 }
-function chips(c){
+function chips(c,maq){
   if(!c.materiales || !c.materiales.length) return '';
   return c.materiales.map(function(x){
     var cls = x.e==='ok' ? 'ok' : (x.e==='parcial' ? 'par' : 'no');
     var q = x.e==='ok' ? '' : ' '+(x.e==='parcial' ? n(x.disp)+'/'+n(x.req) : '0');
-    return '<span class="chip '+cls+'" title="'+esc(x.pn)+' · '+n(x.disp)+' / '+n(x.req)+'">'+esc(matLabel(x.k))+q+'</span>';
+    return '<span class="chip '+cls+'" data-tip="'+esc(maq)+'|'+esc(c.pn)+'|'+esc(x.k)+'">'+esc(matLabel(x.k))+q+'</span>';
   }).join('');
 }
+// Etiqueta al pasar el mouse (o tocar) sobre un material: inventario, requerido y falta — igual que en el piso de ASSY
+(function(){
+  var tip=null;
+  function datos(maq,pn,k){
+    var c=colaDe(maq).filter(function(x){ return x.pn===pn; })[0]; if(!c) return null;
+    var x=(c.materiales||[]).filter(function(y){ return y.k===k; })[0]; if(!x) return null;
+    return {c:c,x:x};
+  }
+  function html(d){
+    var x=d.x, falta=Math.max(0,(x.req||0)-(x.disp||0));
+    var h='<div><b>'+esc(matLabel(x.k))+' · '+esc(x.pn||'—')+'</b></div>';
+    h+='<div>'+t('tipDisp')+': <b style="color:#fff">'+n(x.disp)+'</b></div>';
+    h+='<div>'+t('tipReq')+': <b style="color:#fff">'+n(x.req)+'</b></div>';
+    h+= falta>0 ? '<div class="'+(x.e==='parcial'?'pp':'f')+'">'+t('tipFalta')+': '+n(falta)+'</div>' : '<div class="ok">'+t('tipOk')+'</div>';
+    if(/^CB_/.test(x.k)) h+='<div style="color:#9aa7c0;font-size:12px;margin-top:3px">'+t('tipCB')+'</div>';
+    var mods=d.c.modelos||[d.c.sm];
+    h+='<div style="color:#9aa7c0;font-size:12px;margin-top:3px">'+t('tipMods')+': '+esc(mods.join(', '))+'</div>';
+    return h;
+  }
+  function mostrar(e){
+    var c=e.target.closest ? e.target.closest('.chip[data-tip]') : null;
+    if(!tip){ tip=document.createElement('div'); tip.id='chipTip'; document.body.appendChild(tip); }
+    if(!c){ tip.style.display='none'; return; }
+    var par=c.getAttribute('data-tip').split('|'), d=datos(par[0],par[1],par[2]);
+    if(!d){ tip.style.display='none'; return; }
+    tip.innerHTML=html(d); tip.style.display='block';
+    var r=c.getBoundingClientRect(), w=tip.offsetWidth, hh=tip.offsetHeight;
+    var xx=Math.min(Math.max(8,r.left+r.width/2-w/2),window.innerWidth-w-8);
+    var yy=r.top-hh-8; if(yy<8) yy=r.bottom+8;
+    tip.style.left=xx+'px'; tip.style.top=yy+'px';
+  }
+  document.addEventListener('mouseover',mostrar);
+  document.addEventListener('click',mostrar);
+  window.addEventListener('scroll',function(){ if(tip) tip.style.display='none'; },true);
+})();
 function bar(pct,color){ return '<div class="bar"><div style="width:'+pct+'%;background:'+color+'"></div></div><div class="code">'+pct+'%</div>'; }
 
 function pintarTabs(){
@@ -310,7 +348,7 @@ function pintar(){
     return '<tr'+(f.corre?' class="run-now"':'')+'><td>'+num+'</td><td><div class="mdl">'+esc(modTxt(c))+'</div><div class="code">'+esc(c.pn)+'</div>'+
       (f.corre?'<span class="runtag">▶ '+t('corriendo')+'</span>':'')+'</td>'+
       '<td style="white-space:nowrap">'+fechaEnvio(c.fecha)+'</td><td class="r">'+n(f.target)+'</td><td class="r">'+n(f.prod)+'</td><td class="r" style="font-weight:800">'+n(f.pend)+'</td>'+
-      '<td style="width:14%">'+bar(f.pct,tipo==='run'?'var(--green)':'#5c6678')+'</td><td>'+chips(c)+'</td><td>'+est+'</td></tr>';
+      '<td style="width:14%">'+bar(f.pct,tipo==='run'?'var(--green)':'#5c6678')+'</td><td>'+chips(c,selMaq)+'</td><td>'+est+'</td></tr>';
   };
   html+='<div class="tblwrap tblmain" id="tblMain"><table class="tbl"><thead><tr><th style="width:60px">'+t('orden')+'</th><th>'+t('modelo')+'</th><th>'+t('envio')+'</th><th class="r">'+t('target')+'</th><th class="r">'+t('prod')+
     '</th><th class="r">'+t('pend')+'</th><th>'+t('avance')+'</th><th>'+t('material')+'</th><th>'+t('estado')+'</th></tr></thead><tbody>';

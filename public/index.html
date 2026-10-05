@@ -6626,7 +6626,7 @@ function calcularFaltantesPorModeloPlan(modelosOrdenados, produccionReal) {
       // Lo que YA se produjo (manual o traído de ShipQR) ya no requiere más de
       // este material — se resta al final, sobre el resultado ya calculado por
       // el motor, para no interferir con su lógica interna de pool/header.
-      const requerido = Math.max(0, requeridoBase - producidoSm);
+      const requerido = (m.row._reqReal !== undefined) ? Math.max(0, requeridoBase) : Math.max(0, requeridoBase - producidoSm); // FIX 2026-10-05: _reqReal ya viene NETO de Producido (renderSimTable); restarlo otra vez daba 0 cuando Producido > mitad del target
       const disponible = m.row.inv || 0;
       const falta = requerido - disponible;
       const ok = falta <= 0;

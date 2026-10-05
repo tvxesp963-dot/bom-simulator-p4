@@ -182,6 +182,10 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
 .swtot td{background:#151d2e;font-weight:800;border-top:2px solid var(--border)}.swtot td.l{color:var(--text2);font-size:14px;text-transform:uppercase}
 .swbar{background:#1f2a3d;height:9px;border-radius:5px;margin:4px 6px 0}.swbar div{height:9px;border-radius:5px;background:var(--green)}
 .swenv{white-space:nowrap}
+.swq.par{background:rgba(241,196,15,.2);color:var(--yellow)}.swq.no{background:rgba(255,184,77,.2);color:#ffb84d}
+.swsub{font-size:11px;font-weight:700;color:var(--green);margin-top:2px}
+.swrun{display:inline-block;margin-top:4px;margin-right:6px;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px;background:rgba(0,230,118,.18);color:var(--green)}
+.swley{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-top:8px}.swley i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
 .swfal{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;margin:3px 4px 0 0}.swfal b{letter-spacing:.3px}
 .swfal.no{background:rgba(255,77,77,.18);color:var(--red)}.swfal.par{background:rgba(241,196,15,.18);color:var(--yellow)}
 .swmat{display:inline-block;margin-top:4px;margin-right:6px;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px}
@@ -254,9 +258,9 @@ function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c
 function fechaCorta(d){ return d.toLocaleDateString(t('loc'), {day:'2-digit', month:'short'}); }
 /* ===== VISTA SEMANA (plan por día) ===== */
 var SEMT={
- es:{hoy:'Hoy',sem:'📅 Semana',planSem:'Plan de la semana',capSem:'Capacidad semana',despues:'Después de la semana',fuera:'Fuera de fecha',total:'Total',orden:'Orden',modelo:'Modelo',envio:'Envío',diaCap:'Plan del día / capacidad',tarde:'Termina',envioL:'envío',sinPlan:'Nada programado por día en esta línea. Si falta material no se programa; en Bundle define también la capacidad por línea en el BOM Simulator y publica.',sinProg:'Sin programar (falta material o capacidad)',matNo:'⏳ Falta material',matPar:'Material parcial',falt:'falta',semDe:'Semana del',nota:'Plan por día = capacidad diaria × calendario (L–V; sábado opcional) · se republica cada 5 min',sabOff:'Sábado no se considera',pzs:'pzas'},
- en:{hoy:'Today',sem:'📅 Week',planSem:'Week plan',capSem:'Week capacity',despues:'After this week',fuera:'Past ship date',total:'Total',orden:'Order',modelo:'Model',envio:'Ship date',diaCap:'Day plan / capacity',tarde:'Ends',envioL:'ship',sinPlan:'Nothing scheduled by day on this line. Missing material is not scheduled; for Bundle also set each line capacity in the BOM Simulator and publish.',sinProg:'Not scheduled (missing material or capacity)',matNo:'⏳ Missing material',matPar:'Partial material',falt:'short',semDe:'Week of',nota:'Daily plan = daily capacity × calendar (Mon–Fri; Saturday optional) · republished every 5 min',sabOff:'Saturday not considered',pzs:'pcs'},
- ko:{hoy:'오늘',sem:'📅 주간',planSem:'주간 계획',capSem:'주간 용량',despues:'이번 주 이후',fuera:'출하일 초과',total:'합계',orden:'순서',modelo:'모델',envio:'출하일',diaCap:'일 계획 / 용량',tarde:'종료',envioL:'출하',sinPlan:'이 라인에 일별 계획이 없습니다. 자재가 부족하면 배정되지 않으며, 번들은 BOM Simulator에서 라인별 용량도 설정하고 게시하세요.',sinProg:'미배정 (자재 또는 용량 부족)',matNo:'⏳ 자재 부족',matPar:'자재 일부',falt:'부족',semDe:'주간 시작',nota:'일별 계획 = 일일 용량 × 달력 (월–금, 토요일 선택) · 5분마다 재게시',sabOff:'토요일 제외',pzs:'개'}
+ es:{hoy:'Hoy',sem:'📅 Semana',planSem:'Plan de la semana',capSem:'Capacidad semana',despues:'Después de la semana',fuera:'Fuera de fecha',total:'Total',orden:'Orden',modelo:'Modelo',envio:'Envío',diaCap:'Plan del día / capacidad',tarde:'Termina',envioL:'envío',sinPlan:'Nada programado por día en esta línea. Si falta material no se programa; en Bundle define también la capacidad por línea en el BOM Simulator y publica.',sinProg:'Sin programar (falta material o capacidad)',matNo:'⏳ Falta material',matPar:'Material parcial',falt:'falta',corre:'▶ Se puede correr',de:'de',kCorre:'Corrible con material',leyOk:'Con material',leyPar:'Material parcial',leyNo:'Sin material',semDe:'Semana del',nota:'Plan por día = capacidad diaria × calendario (L–V; sábado opcional) · se republica cada 5 min',sabOff:'Sábado no se considera',pzs:'pzas'},
+ en:{hoy:'Today',sem:'📅 Week',planSem:'Week plan',capSem:'Week capacity',despues:'After this week',fuera:'Past ship date',total:'Total',orden:'Order',modelo:'Model',envio:'Ship date',diaCap:'Day plan / capacity',tarde:'Ends',envioL:'ship',sinPlan:'Nothing scheduled by day on this line. Missing material is not scheduled; for Bundle also set each line capacity in the BOM Simulator and publish.',sinProg:'Not scheduled (missing material or capacity)',matNo:'⏳ Missing material',matPar:'Partial material',falt:'short',corre:'▶ Can run',de:'of',kCorre:'Runnable with material',leyOk:'Material OK',leyPar:'Partial material',leyNo:'No material',semDe:'Week of',nota:'Daily plan = daily capacity × calendar (Mon–Fri; Saturday optional) · republished every 5 min',sabOff:'Saturday not considered',pzs:'pcs'},
+ ko:{hoy:'오늘',sem:'📅 주간',planSem:'주간 계획',capSem:'주간 용량',despues:'이번 주 이후',fuera:'출하일 초과',total:'합계',orden:'순서',modelo:'모델',envio:'출하일',diaCap:'일 계획 / 용량',tarde:'종료',envioL:'출하',sinPlan:'이 라인에 일별 계획이 없습니다. 자재가 부족하면 배정되지 않으며, 번들은 BOM Simulator에서 라인별 용량도 설정하고 게시하세요.',sinProg:'미배정 (자재 또는 용량 부족)',matNo:'⏳ 자재 부족',matPar:'자재 일부',falt:'부족',corre:'▶ 생산 가능',de:'/',kCorre:'자재 기준 생산 가능',leyOk:'자재 있음',leyPar:'자재 일부',leyNo:'자재 없음',semDe:'주간 시작',nota:'일별 계획 = 일일 용량 × 달력 (월–금, 토요일 선택) · 5분마다 재게시',sabOff:'토요일 제외',pzs:'개'}
 };
 function ts(k){ return (SEMT[lang]||SEMT.es)[k]; }
 var vistaSem=false; try{ vistaSem=localStorage.getItem('pisoVista')==='sem'; }catch(e){}
@@ -280,12 +284,15 @@ function semHtml(rows, capDia, cal){
     var o={}; for(var k in r) o[k]=r[k];
     o.porDia=r.porDia.slice().sort(function(x,y){ return x.f<y.f?-1:(x.f>y.f?1:0); }); o._i=i; return o;
   }).sort(function(a,b){ return a.porDia[0].f<b.porDia[0].f?-1:(a.porDia[0].f>b.porDia[0].f?1:(a._i-b._i)); });
-  var tot=cols.map(function(){return 0;}), despuesTot=0, tarde=0, planSem=0;
+  var tot=cols.map(function(){return 0;}), despuesTot=0, tarde=0, planSem=0, corrSem=0;
   var cuerpo=rr.map(function(r,ri){
     var cel=cols.map(function(c,ci){
       var q=r.porDia.filter(function(x){ return x.f===c.iso; }).reduce(function(s,x){ return s+x.q; },0);
-      tot[ci]+=q; planSem+=q;
-      return '<td class="'+(c.iso===hoy?'swhoy':'')+'">'+(q?'<span class="swq'+(c.iso===hoy?' h':'')+'">'+_num(q)+'</span>':'<span class="swz">—</span>')+'</td>';
+      var antes=r.porDia.filter(function(x){ return x.f<c.iso; }).reduce(function(s,x){ return s+x.q; },0);
+      var hasCap=(r.cap!=null), cov=hasCap?Math.max(0,Math.min(q,r.cap-antes)):q;
+      tot[ci]+=q; planSem+=q; corrSem+=cov;
+      var cls=(!q||cov>=q)?(c.iso===hoy?' h':''):(cov>0?' par':' no');
+      return '<td class="'+(c.iso===hoy?'swhoy':'')+'">'+(q?'<span class="swq'+cls+'">'+_num(q)+'</span>'+((cov>0&&cov<q)?'<div class="swsub">✓ '+_num(cov)+'</div>':''):'<span class="swz">—</span>')+'</td>';
     }).join('');
     var desp=r.porDia.filter(function(x){ return x.f>ultimo; }).reduce(function(s,x){ return s+x.q; },0); despuesTot+=desp;
     var tot0=r.porDia.reduce(function(s,x){ return s+x.q; },0);
@@ -293,14 +300,16 @@ function semHtml(rows, capDia, cal){
     if(late) tarde++;
     var matTxt=r.mat==='no'?'<div><span class="swmat no">'+ts('matNo')+'</span></div>':(r.mat==='par'?'<div><span class="swmat par">'+ts('matPar')+'</span></div>':'');
     var falTxt=(r.faltan||[]).map(function(x){ var d=x.disp||0, q=x.req||0; return '<div><span class="swfal '+(d>0?'par':'no')+'">'+esc(x.k)+' · <b>'+esc(x.pn||'—')+'</b>'+(q?' · '+_num(d)+'/'+_num(q)+' · '+ts('falt')+' '+_num(Math.max(0,q-d)):'')+'</span></div>'; }).join('');
+    var tot0r=r.porDia.reduce(function(s,x){ return s+x.q; },0);
+    var runTxt=(r.cap!=null && tot0r>0)?'<div><span class="swrun">'+ts('corre')+' '+_num(Math.min(r.cap,tot0r))+' '+ts('de')+' '+_num(tot0r)+'</span></div>':'';
     var finTxt=''; if(late){ var fd=new Date(fin+'T00:00:00'); finTxt='<div><span class="swlate">⚠ '+ts('tarde')+' '+fd.toLocaleDateString(loc,{weekday:'short',day:'2-digit'})+' · '+ts('envioL')+' '+(function(f){ var q=new Date(f+'T00:00:00'); return q.toLocaleDateString(loc,{weekday:'short',day:'2-digit'}); })(r.fecha)+'</span></div>'; }
-    return '<tr><td class="l"><span class="num">'+(ri+1)+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+matTxt+falTxt+finTxt+'</td>'+
+    return '<tr><td class="l"><span class="num">'+(ri+1)+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+runTxt+matTxt+falTxt+finTxt+'</td>'+
       '<td class="swenv">'+fechaEnvio(r.fecha)+'</td><td><b>'+_num(tot0)+'</b></td>'+cel+'<td>'+(desp?'<span class="swq">'+_num(desp)+'</span>':'<span class="swz">—</span>')+'</td></tr>';
   }).join('');
   var capCol=cols.map(function(c){ return capDia?Math.round(capDia*(c.sab?(cal.fSab||0):1)):0; });
   var capSem=capCol.reduce(function(s,x){ return s+x; },0);
   var kp=function(l,v,color){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v"'+(color?' style="color:'+color+'"':'')+'>'+v+'</div></div>'; };
-  var html='<div class="kpis">'+kp(ts('planSem'),_num(planSem))+kp(ts('capSem'),capSem?_num(capSem):'—')+kp(ts('despues'),_num(despuesTot),despuesTot?'#ffb84d':'')+kp(ts('fuera'),tarde,tarde?'var(--red)':'var(--green)')+'</div>';
+  var html='<div class="kpis">'+kp(ts('planSem'),_num(planSem))+kp(ts('capSem'),capSem?_num(capSem):'—')+kp(ts('kCorre'),_num(corrSem),corrSem<planSem?'#ffb84d':'var(--green)')+kp(ts('despues'),_num(despuesTot),despuesTot?'#ffb84d':'')+kp(ts('fuera'),tarde,tarde?'var(--red)':'var(--green)')+'</div>';
   var sinP=rows.filter(function(r){ return !(r.porDia&&r.porDia.length) && (r.pend||0)>0; });
   var sinPHtml=sinP.length?'<div class="tblwrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>'+ts('sinProg')+'</th><th>'+ts('envio')+'</th><th style="text-align:right">'+ts('total')+'</th></tr></thead><tbody>'+sinP.map(function(r){ return '<tr><td><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div></td><td style="white-space:nowrap">'+fechaEnvio(r.fecha)+'</td><td style="text-align:right;font-weight:800">'+_num(r.pend)+'</td></tr>'; }).join('')+'</tbody></table></div>':'';
   if(!rr.length) return html+'<div class="msg">'+ts('sinPlan')+'</div>'+sinPHtml;
@@ -310,7 +319,7 @@ function semHtml(rows, capDia, cal){
     return '<td class="'+(c.iso===hoy?'swhoy':'')+'"><div>'+_num(tot[ci])+(capCol[ci]?' <span class="swz" style="font-size:13px">/ '+_num(capCol[ci])+'</span>':'')+'</div>'+(capCol[ci]?'<div class="swbar"><div style="width:'+pct+'%"></div></div>':'')+'</td>';
   }).join('');
   html+='<div class="tblwrap tblmain" id="tblMain"><table class="tbl swtbl"><thead><tr><th class="l" style="width:60px">'+ts('orden')+'</th><th class="l">'+ts('modelo')+'</th><th>'+ts('envio')+'</th><th>'+ts('total')+'</th>'+enc+'<th>'+ts('despues')+'</th></tr></thead><tbody>'+cuerpo+
-    '<tr class="swtot"><td class="l" colspan="4">'+ts('diaCap')+(cal.sab?'':' · '+ts('sabOff'))+'</td>'+pie+'<td>'+(despuesTot?_num(despuesTot):'—')+'</td></tr></tbody></table></div><div class="foot" style="margin-top:8px">'+ts('semDe')+' '+cols[0].d.toLocaleDateString(loc,{day:'2-digit',month:'short'})+' · '+ts('nota')+'</div>'+sinPHtml;
+    '<tr class="swtot"><td class="l" colspan="4">'+ts('diaCap')+(cal.sab?'':' · '+ts('sabOff'))+'</td>'+pie+'<td>'+(despuesTot?_num(despuesTot):'—')+'</td></tr></tbody></table></div><div class="foot" style="margin-top:8px">'+ts('semDe')+' '+cols[0].d.toLocaleDateString(loc,{day:'2-digit',month:'short'})+' · '+ts('nota')+'</div><div class="swley"><span><i style="background:var(--green)"></i>'+ts('leyOk')+'</span><span><i style="background:var(--yellow)"></i>'+ts('leyPar')+'</span><span><i style="background:#ffb84d"></i>'+ts('leyNo')+'</span></div>'+sinPHtml;
   return html;
 }
 
@@ -589,7 +598,7 @@ function pintar(){
   }
   var html = '<div class="kpis">' + kpiHtml + '</div>';
   if (vistaSem) {
-    app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia, pend: f.pend, mat: ((f.m.cap||0)>=f.pend?'ok':((f.m.cap||0)>0?'par':'no')), faltan: ['Strip','Top','Bot','Bundle'].filter(function(k){ return f.m.materiales && f.m.materiales[k]===false; }).map(function(k){ return {k:k,pn:(f.m.pn&&f.m.pn[k])||'',disp:(f.m.disp&&f.m.disp[k]!=null)?f.m.disp[k]:0,req:(f.m.req&&f.m.req[k]!=null)?f.m.req[k]:0}; }) }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal);
+    app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia, pend: f.pend, cap: (f.m.cap==null?null:f.m.cap), mat: ((f.m.cap||0)>=f.pend?'ok':((f.m.cap||0)>0?'par':'no')), faltan: ['Strip','Top','Bot','Bundle'].filter(function(k){ return f.m.materiales && f.m.materiales[k]===false; }).map(function(k){ return {k:k,pn:(f.m.pn&&f.m.pn[k])||'',disp:(f.m.disp&&f.m.disp[k]!=null)?f.m.disp[k]:0,req:(f.m.req&&f.m.req[k]!=null)?f.m.req[k]:0}; }) }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal);
     ajustarPantalla(); return;
   }
 

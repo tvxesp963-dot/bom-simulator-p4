@@ -182,6 +182,7 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
 .swtot td{background:#151d2e;font-weight:800;border-top:2px solid var(--border)}.swtot td.l{color:var(--text2);font-size:14px;text-transform:uppercase}
 .swbar{background:#1f2a3d;height:9px;border-radius:5px;margin:4px 6px 0}.swbar div{height:9px;border-radius:5px;background:var(--green)}
 .swenv{white-space:nowrap}
+.swfal{font-size:12px;font-weight:700;color:#ffb84d;margin-top:2px}.swfal b{color:#fcd34d;letter-spacing:.3px}
 .swmat{display:inline-block;margin-top:4px;margin-right:6px;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px}
 .swmat.no{background:rgba(255,184,77,.2);color:#ffb84d}.swmat.par{background:rgba(241,196,15,.18);color:var(--yellow)}
 </style>
@@ -290,8 +291,9 @@ function semHtml(rows, capDia, cal){
     var fin=r.porDia[r.porDia.length-1].f, late=r.fecha && fin>r.fecha;
     if(late) tarde++;
     var matTxt=r.mat==='no'?'<div><span class="swmat no">'+ts('matNo')+'</span></div>':(r.mat==='par'?'<div><span class="swmat par">'+ts('matPar')+'</span></div>':'');
+    var falTxt=(r.faltan||[]).map(function(x){ return '<div class="swfal">'+esc(x.k)+' · <b>'+esc(x.pn||'—')+'</b></div>'; }).join('');
     var finTxt=''; if(late){ var fd=new Date(fin+'T00:00:00'); finTxt='<div><span class="swlate">⚠ '+ts('tarde')+' '+fd.toLocaleDateString(loc,{weekday:'short',day:'2-digit'})+' · '+ts('envioL')+' '+(function(f){ var q=new Date(f+'T00:00:00'); return q.toLocaleDateString(loc,{weekday:'short',day:'2-digit'}); })(r.fecha)+'</span></div>'; }
-    return '<tr><td class="l"><span class="num">'+(ri+1)+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+matTxt+finTxt+'</td>'+
+    return '<tr><td class="l"><span class="num">'+(ri+1)+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+matTxt+falTxt+finTxt+'</td>'+
       '<td class="swenv">'+fechaEnvio(r.fecha)+'</td><td><b>'+_num(tot0)+'</b></td>'+cel+'<td>'+(desp?'<span class="swq">'+_num(desp)+'</span>':'<span class="swz">—</span>')+'</td></tr>';
   }).join('');
   var capCol=cols.map(function(c){ return capDia?Math.round(capDia*(c.sab?(cal.fSab||0):1)):0; });
@@ -586,7 +588,7 @@ function pintar(){
   }
   var html = '<div class="kpis">' + kpiHtml + '</div>';
   if (vistaSem) {
-    app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia, pend: f.pend, mat: ((f.m.cap||0)>=f.pend?'ok':((f.m.cap||0)>0?'par':'no')) }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal);
+    app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia, pend: f.pend, mat: ((f.m.cap||0)>=f.pend?'ok':((f.m.cap||0)>0?'par':'no')), faltan: ['Strip','Top','Bot','Bundle'].filter(function(k){ return f.m.materiales && f.m.materiales[k]===false; }).map(function(k){ return {k:k,pn:(f.m.pn&&f.m.pn[k])||''}; }) }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal);
     ajustarPantalla(); return;
   }
 

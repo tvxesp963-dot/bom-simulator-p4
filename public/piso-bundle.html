@@ -128,6 +128,7 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
 .swtot td{background:#151d2e;font-weight:800;border-top:2px solid var(--border)}.swtot td.l{color:var(--text2);font-size:14px;text-transform:uppercase}
 .swbar{background:#1f2a3d;height:9px;border-radius:5px;margin:4px 6px 0}.swbar div{height:9px;border-radius:5px;background:var(--green)}
 .swenv{white-space:nowrap}
+.swfal{font-size:12px;font-weight:700;color:#ffb84d;margin-top:2px}.swfal b{color:#fcd34d;letter-spacing:.3px}
 .swmat{display:inline-block;margin-top:4px;margin-right:6px;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px}
 .swmat.no{background:rgba(255,184,77,.2);color:#ffb84d}.swmat.par{background:rgba(241,196,15,.18);color:var(--yellow)}
 </style>
@@ -250,8 +251,9 @@ function semHtml(rows, capDia, cal){
     var fin=r.porDia[r.porDia.length-1].f, late=r.fecha && fin>r.fecha;
     if(late) tarde++;
     var matTxt=r.mat==='no'?'<div><span class="swmat no">'+ts('matNo')+'</span></div>':(r.mat==='par'?'<div><span class="swmat par">'+ts('matPar')+'</span></div>':'');
+    var falTxt=(r.faltan||[]).map(function(x){ return '<div class="swfal">'+esc(x.k)+' · <b>'+esc(x.pn||'—')+'</b></div>'; }).join('');
     var finTxt=''; if(late){ var fd=new Date(fin+'T00:00:00'); finTxt='<div><span class="swlate">⚠ '+ts('tarde')+' '+fd.toLocaleDateString(loc,{weekday:'short',day:'2-digit'})+' · '+ts('envioL')+' '+(function(f){ var q=new Date(f+'T00:00:00'); return q.toLocaleDateString(loc,{weekday:'short',day:'2-digit'}); })(r.fecha)+'</span></div>'; }
-    return '<tr><td class="l"><span class="num">'+(ri+1)+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+matTxt+finTxt+'</td>'+
+    return '<tr><td class="l"><span class="num">'+(ri+1)+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+matTxt+falTxt+finTxt+'</td>'+
       '<td class="swenv">'+fechaEnvio(r.fecha)+'</td><td><b>'+_num(tot0)+'</b></td>'+cel+'<td>'+(desp?'<span class="swq">'+_num(desp)+'</span>':'<span class="swz">—</span>')+'</td></tr>';
   }).join('');
   var capCol=cols.map(function(c){ return capDia?Math.round(capDia*(c.sab?(cal.fSab||0):1)):0; });
@@ -435,6 +437,13 @@ function ponerAuto(){
   if(autoRot) autoTimer=setInterval(function(){ selMaq=MAQS[(MAQS.indexOf(selMaq)+1)%MAQS.length]; try{localStorage.setItem('pisoBundleMaq',selMaq);}catch(e){} pintar(); },20000);
 }
 
+function semFalt(c){
+  var ms=c.materiales||[], out=[];
+  var cb=ms.filter(function(x){ return /^CB_/.test(x.k); }), otros=ms.filter(function(x){ return !/^CB_/.test(x.k); });
+  otros.forEach(function(x){ if(x.e!=='ok') out.push({k:matLabel(x.k),pn:x.pn}); });
+  if(cb.length){ var sum=cb.reduce(function(s,x){ return s+(x.disp||0); },0), req=Math.max.apply(null,cb.map(function(x){ return x.req||0; })); if(sum<req) cb.forEach(function(x){ if(x.e!=='ok') out.push({k:matLabel(x.k),pn:x.pn}); }); }
+  return out;
+}
 function pintar(){
   if(!firebase.auth().currentUser) return;
   document.documentElement.lang=lang; document.title=t('title');
@@ -472,7 +481,7 @@ function pintar(){
 
   if(vistaSem){
     var colaSem=colaDe(selMaq);
-    app.innerHTML=semHtml(filas.map(function(f){ return {n:f.orden,mdl:((f.c.modelos||[f.c.sm])[0]||'')+((f.c.modelos||[]).length>1?' +'+((f.c.modelos||[]).length-1):''),code:f.c.pn,fecha:f.c.fecha,porDia:f.c.porDia,pend:f.pend,mat:(f.cap>=f.pend?'ok':(f.cap>0?'par':'no'))}; }), (colaSem[0]&&colaSem[0].capDia)||0, plan.cal); ajustarPantalla(); return;
+    app.innerHTML=semHtml(filas.map(function(f){ return {n:f.orden,mdl:((f.c.modelos||[f.c.sm])[0]||'')+((f.c.modelos||[]).length>1?' +'+((f.c.modelos||[]).length-1):''),code:f.c.pn,fecha:f.c.fecha,porDia:f.c.porDia,pend:f.pend,mat:(f.cap>=f.pend?'ok':(f.cap>0?'par':'no')),faltan:semFalt(f.c)}; }), (colaSem[0]&&colaSem[0].capDia)||0, plan.cal); ajustarPantalla(); return;
   }
   if(!filas.length){ app.innerHTML=html+'<div class="msg">'+t('sinCola')+'</div>'; ajustarPantalla(); return; }
 

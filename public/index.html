@@ -5181,7 +5181,10 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
         modelos: [],
         restante: 0,
         prioridad: prioridadModelo,
-        materialCap: isFinite(materialCapRaw) ? materialCapRaw : 0,
+        // El plan por día se programa IDEAL (como ASSY1): solo mandan prioridad + capacidad de máquina.
+        // El material real se guarda aparte (matReal) para marcar Listo / Esperando material en la pantalla.
+        materialCap: Infinity,
+        matReal: isFinite(materialCapRaw) ? materialCapRaw : 0,
         materialUsado: 0
       };
     }
@@ -5242,7 +5245,8 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
   // "Sin material" se calcula al final con lo que de verdad quedó sin cubrir —
   // así avisa tanto al código que nunca tuvo nada de material (restante = inicial)
   // como al que se le acabó a medias (restante > 0 después de repartir todos los días).
-  return { dias: diasGenerados, sinMaterial: items.filter(it => it.restante > 0) };
+  const matReal = {}; items.forEach(it => { matReal[it.codeHijo] = it.matReal; });
+  return { dias: diasGenerados, sinMaterial: items.filter(it => it.restante > 0), matReal };
 }
 
 function construirTablaRGB() {
@@ -6925,7 +6929,7 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
     const porCodigo = {};
     plan.dias.forEach((d, di) => (d.asignacionesPorMaquina[maq] || []).forEach(a => {
       const k = tipo + '|' + a.codeHijo;
-      if (!porCodigo[k]) porCodigo[k] = { tipo, pn: String(a.codeHijo).toUpperCase(), modelos: a.modelos.slice(), pendiente: 0, dia0: di, listo: true, porDia: [] };
+      if (!porCodigo[k]) porCodigo[k] = { tipo, pn: String(a.codeHijo).toUpperCase(), modelos: a.modelos.slice(), pendiente: 0, dia0: di, listo: !plan.matReal || (plan.matReal[a.codeHijo] || 0) > 0, porDia: [] };
       porCodigo[k].pendiente += a.qty;
       // Plan por día (según la capacidad diaria de la máquina): lunes lo que cabe, el resto al siguiente día laboral
       const fIso = d.fecha.getFullYear() + '-' + String(d.fecha.getMonth() + 1).padStart(2, '0') + '-' + String(d.fecha.getDate()).padStart(2, '0');

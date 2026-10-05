@@ -1050,6 +1050,212 @@ function quitarAjustesManualesMaquinas() {
 }
 window.quitarAjustesManualesMaquinas = quitarAjustesManualesMaquinas;
 
+
+// ══════════════════════════════════════════════════════════════
+// BUNDLE P3 — líneas B1, B2, Pre kit (misma idea que "Máquinas por código" de medio proceso)
+// El Bundle de P3 sale del plan principal de P4: por cada modelo, lo que falta del Bundle
+// (target − producido − Bundle terminado en inventario) con sus insumos (nivel 2).
+// Qué modelo corre en qué línea: MASTER (Excel modelo × línea) + CHECKBOX (manda sobre el master).
+// Default sin master: B1 y B2 sí, Pre kit no (se usa ocasionalmente).
+// ══════════════════════════════════════════════════════════════
+const BUNDLE_LINEAS = ['B1', 'B2', 'PRE'];
+const BUNDLE_LINEA_TXT = { B1: 'B1', B2: 'B2', PRE: 'Pre kit' };
+window.simMasterBundle = window.simMasterBundle || {};            // 'SM-XXXX' → {B1,B2,PRE}
+window.simBundleLineasPorModelo = window.simBundleLineasPorModelo || {}; // ajustes checkbox: sm → {B1,B2,PRE}
+window.simMasterBundleInfo = window.simMasterBundleInfo || null;
+window.simPanelBundleColapsado = window.simPanelBundleColapsado || false;
+
+function bundleLineaOk(sm, linea) {
+  const ov = window.simBundleLineasPorModelo[sm];
+  if (ov && Object.prototype.hasOwnProperty.call(ov, linea)) return !!ov[linea];
+  const f = window.simMasterBundle[String(sm).trim().toUpperCase()];
+  if (f) return !!f[linea];
+  return linea !== 'PRE';
+}
+function bundleGrupoDe(sm) {
+  let cur = null, out = null;
+  BOM.filter(r => r.sm === sm).forEach(r => {
+    const isL1 = r.isLevel1 || (r.level === 1) || (r.groupNo !== null && r.level !== 2);
+    if (isL1) { cur = { header: r, subs: [], section: getSectionByRow(r) }; if (cur.section === 'BUNDLE' && !out) out = cur; }
+    else if (cur) cur.subs.push(r);
+  });
+  return out;
+}
+function bundleModelosPlan() {
+  const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+  return [...new Set(BOM.map(r => r.sm))].filter(sm => sm && multiModelosActivos.includes(sm) && (simTargetsPorModelo[sm] || 0) > 0 && bundleGrupoDe(sm))
+    .sort((a, b) => prio(a) - prio(b) || String(a).localeCompare(String(b)));
+}
+function bundleRepintar() { masterRepintar(); }
+function guardarBundleLocal() { try { localStorage.setItem('masterBundle_p4', JSON.stringify({ filas: window.simMasterBundle, ajustes: window.simBundleLineasPorModelo, info: window.simMasterBundleInfo, col: !!window.simPanelBundleColapsado })); } catch (e) {} }
+try { const sb = JSON.parse(localStorage.getItem('masterBundle_p4') || 'null'); if (sb) { window.simMasterBundle = sb.filas || {}; window.simBundleLineasPorModelo = sb.ajustes || {}; window.simMasterBundleInfo = sb.info || null; window.simPanelBundleColapsado = !!sb.col; } } catch (e) {}
+async function cargarMasterBundleFirestore() {
+  try {
+    if (!db) return;
+    const d = await db.collection('bom_simulator_p4').doc('master_bundle').get();
+    if (d.exists) {
+      const dd = d.data();
+      if (dd.filas) { window.simMasterBundle = dd.filas; window.simMasterBundleInfo = { cargadoEn: dd.cargadoEn || '', por: dd.cargadoPor || '', n: Object.keys(dd.filas).length }; }
+      if (dd.ajustes && typeof dd.ajustes === 'object') window.simBundleLineasPorModelo = dd.ajustes;
+      guardarBundleLocal();
+    }
+  } catch (e) { console.warn('[master bundle]', e); }
+}
+async function guardarAjustesBundleFirestore() {
+  try { if (db) await db.collection('bom_simulator_p4').doc('master_bundle').set({ ajustes: window.simBundleLineasPorModelo || {} }, { merge: true }); }
+  catch (e) { console.warn('[ajustes bundle]', e); }
+}
+function actualizarBundleLinea(sm, linea, checked) {
+  window.simBundleLineasPorModelo[sm] = window.simBundleLineasPorModelo[sm] || {};
+  window.simBundleLineasPorModelo[sm][linea] = !!checked;
+  guardarBundleLocal(); guardarAjustesBundleFirestore(); bundleRepintar();
+}
+window.actualizarBundleLinea = actualizarBundleLinea;
+function quitarAjustesBundle() {
+  if (!confirm('¿Quitar los ajustes manuales de Bundle? Quedará solo el master (o el default si no hay master).')) return;
+  window.simBundleLineasPorModelo = {};
+  guardarBundleLocal(); guardarAjustesBundleFirestore(); bundleRepintar();
+}
+window.quitarAjustesBundle = quitarAjustesBundle;
+function toggleColapsoPanelBundle() { window.simPanelBundleColapsado = !window.simPanelBundleColapsado; guardarBundleLocal(); bundleRepintar(); }
+window.toggleColapsoPanelBundle = toggleColapsoPanelBundle;
+
+function descargarPlantillaBundle() {
+  const aoa = [['Modelo', 'B1', 'B2', 'Pre kit']];
+  bundleModelosPlan().concat([...new Set(BOM.map(r => r.sm))].filter(sm => sm && bundleGrupoDe(sm) && !bundleModelosPlan().includes(sm))).forEach(sm => {
+    const f = window.simMasterBundle[String(sm).trim().toUpperCase()];
+    aoa.push([sm, ...BUNDLE_LINEAS.map(l => (f ? (f[l] ? 1 : '') : (l === 'PRE' ? '' : 1)))]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 9 }];
+  const ins = XLSX.utils.aoa_to_sheet([
+    ['ES: Pon 1 en las líneas donde SÍ corre el Bundle de cada modelo (B1, B2, Pre kit). Vacío = no corre. No cambies la columna Modelo. Guarda y súbelo con "Cargar master Bundle".'],
+    ['EN: Put 1 on the lines where each model\'s Bundle DOES run (B1, B2, Pre kit). Blank = does not run. Do not edit the Model column. Save and upload with "Cargar master Bundle".'],
+    ['KO: 각 모델의 번들이 가동되는 라인(B1, B2, Pre kit)에 1을 입력하세요. 빈칸 = 가동 안 함. 모델 열은 수정하지 마세요. 저장 후 "Cargar master Bundle"로 업로드하세요.']
+  ]);
+  ins['!cols'] = [{ wch: 130 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Master');
+  XLSX.utils.book_append_sheet(wb, ins, 'Instrucciones');
+  XLSX.writeFile(wb, 'MASTER_Bundle_Lineas_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx');
+}
+window.descargarPlantillaBundle = descargarPlantillaBundle;
+
+function cargarMasterBundleExcel(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets['Master'] || wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const hi = rows.findIndex(r => String(r[0]).trim().toLowerCase() === 'modelo');
+      if (hi < 0) { alert('No encontré la columna "Modelo". Usa la plantilla descargada.'); return; }
+      const head = rows[hi].map(h => String(h).trim().toLowerCase().replace(/\s+/g, ''));
+      const idx = { B1: head.indexOf('b1'), B2: head.indexOf('b2'), PRE: Math.max(head.indexOf('prekit'), head.indexOf('pre')) };
+      const si = (v) => { const t = String(v).trim().toLowerCase(); return !(t === '' || t === '0' || t === 'no' || t === 'n' || t === 'false'); };
+      const filas = {};
+      for (let i = hi + 1; i < rows.length; i++) {
+        const r = rows[i]; const sm = String(r[0]).trim().toUpperCase(); if (!sm) continue;
+        const o = {}; BUNDLE_LINEAS.forEach(l => { o[l] = idx[l] >= 0 ? si(r[idx[l]]) : false; });
+        filas[sm] = o;
+      }
+      const n = Object.keys(filas).length;
+      if (!n) { alert('No encontré filas válidas en el Excel.'); return; }
+      window.simMasterBundle = filas;
+      const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
+      window.simMasterBundleInfo = { cargadoEn: new Date().toISOString(), por: u, n };
+      guardarBundleLocal();
+      let aviso = '';
+      try { if (db) await db.collection('bom_simulator_p4').doc('master_bundle').set({ filas, cargadoEn: window.simMasterBundleInfo.cargadoEn, cargadoPor: u, ajustes: window.simBundleLineasPorModelo || {} }, { merge: true }); }
+      catch (er) { aviso = '\n⚠️ Quedó solo en este navegador (no se pudo subir a Firebase).'; }
+      bundleRepintar();
+      alert('✅ Master Bundle cargado: ' + n + ' modelos.' + aviso + '\nPresiona "Publicar TV" para actualizar la pantalla de Bundle.');
+    } catch (er) { alert('Error leyendo el master: ' + er.message); }
+    input.value = '';
+  };
+  rd.readAsArrayBuffer(f);
+}
+window.cargarMasterBundleExcel = cargarMasterBundleExcel;
+
+function construirPanelBundle() {
+  const modelos = bundleModelosPlan();
+  if (!modelos.length) return '';
+  const col = window.simPanelBundleColapsado;
+  const th = 'text-align:center;padding:8px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text2);border-bottom:2px solid var(--border)';
+  const filas = modelos.map(sm => {
+    const g = bundleGrupoDe(sm);
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;font-weight:700;color:var(--accent)">${sm}</td>
+      <td style="padding:6px 8px;color:var(--text2);font-size:11px">${g.header.pn}</td>
+      ${BUNDLE_LINEAS.map(l => `<td style="padding:6px 8px;text-align:center"><input type="checkbox" ${bundleLineaOk(sm, l) ? 'checked' : ''} onchange="actualizarBundleLinea('${sm}','${l}',this.checked)"></td>`).join('')}
+    </tr>`;
+  }).join('');
+  return `
+    <div class="card" style="margin-top:1rem;background:#0d1220;border:1px solid var(--border);border-radius:12px;padding:1.2rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:${col ? '0' : '.2rem'}" onclick="toggleColapsoPanelBundle()">
+        <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">📦 Bundle P3 · líneas por modelo (B1 / B2 / Pre kit)</div>
+        <span style="font-size:11px;color:var(--text2)">${col ? '▼ Mostrar' : '▲ Ocultar'}</span>
+      </div>
+      ${col ? '' : `
+      <div style="font-size:11px;color:var(--text3);margin:0 0 .6rem">Master (Excel modelo→línea) + checkbox: el master define en qué línea corre el Bundle de cada modelo; el checkbox es un ajuste manual y manda sobre el master. Sin master: B1 y B2 sí, Pre kit no. · Master + manual override · 마스터 + 수동 조정</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 .9rem">
+        <button class="btn btn-sm" onclick="descargarPlantillaBundle()">⬇ Plantilla master Bundle</button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('inpMasterBundle').click()">⬆ Cargar master Bundle</button>
+        <input type="file" id="inpMasterBundle" accept=".xlsx,.xls" style="display:none" onchange="cargarMasterBundleExcel(this)">
+        <button class="btn btn-sm" onclick="quitarAjustesBundle()">↺ Quitar ajustes manuales</button>
+        <span style="font-size:11px;color:var(--text2)">${window.simMasterBundleInfo ? ('Master: ' + window.simMasterBundleInfo.n + ' modelos · ' + String(window.simMasterBundleInfo.cargadoEn || '').slice(0, 10)) : 'Sin master cargado'}</span>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr><th style="${th};text-align:left">Modelo</th><th style="${th};text-align:left">Bundle</th>${BUNDLE_LINEAS.map(l => `<th style="${th}">${BUNDLE_LINEA_TXT[l]}</th>`).join('')}</tr></thead>
+        <tbody>${filas}</tbody>
+      </table></div>`}
+    </div>`;
+}
+
+// Cola de Bundle por línea (B1, B2, Pre kit) — misma estructura que las colas de medio proceso
+function calcularColasBundle(conTargetOrdenado, produccionReal) {
+  const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+  const estadoMat = (disp, req) => (disp >= req ? 'ok' : (disp > 0 ? 'parcial' : 'no'));
+  const pool = {};
+  const tomar = (pn, inv, cant) => { if (pool[pn] === undefined) pool[pn] = Math.max(0, inv || 0); const disp = pool[pn]; pool[pn] = Math.max(0, disp - cant); return disp; };
+  const items = [];
+  conTargetOrdenado.slice().sort((a, b) => prio(a) - prio(b)).forEach(sm => {
+    const g = bundleGrupoDe(sm); if (!g) return;
+    const target = simTargetsPorModelo[sm] || 0;
+    const pendiente = Math.max(0, target - (produccionReal[sm] || 0) - Math.max(0, g.header.inv || 0));
+    if (pendiente <= 0) return;
+    const usados = {};
+    const materiales = g.subs.filter(s => s.pn).map(s => {
+      const pn = String(s.pn).toUpperCase();
+      const disp = Math.round(tomar(pn, s.inv, pendiente));
+      let k = String(s.desc || pn).trim().slice(0, 26) || pn;
+      if (usados[k]) k = k + ' ' + pn; usados[k] = true;
+      return { k, pn, disp, req: Math.round(pendiente), e: estadoMat(disp, pendiente) };
+    });
+    const cap = materiales.length ? Math.min(...materiales.map(m => m.disp)) : pendiente;
+    items.push({
+      sm, modelos: [sm], pn: String(g.header.pn).toUpperCase(), desc: g.header.desc || 'Bundle',
+      pendiente: Math.round(pendiente), listo: cap > 0, materiales,
+      fecha: (window.simFechaEntregaPorModelo || {})[sm] || '', prioridad: prio(sm), dias: null
+    });
+  });
+  const colas = {};
+  BUNDLE_LINEAS.forEach(l => {
+    const lista = items.filter(it => bundleLineaOk(it.sm, l)).sort((a, b) => (b.listo - a.listo) || (a.prioridad - b.prioridad));
+    colas[l] = lista.map((it, i) => Object.assign({ orden: i + 1 }, it));
+  });
+  return colas;
+}
+async function publicarPlanBundle(auto, usuario, conTargetOrdenado, produccionReal) {
+  await cargarMasterBundleFirestore();
+  const colas = calcularColasBundle(conTargetOrdenado, produccionReal);
+  await db.collection('bom_simulator_p4').doc('plan_piso_bundle').set({
+    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto, colas
+  });
+}
+
 // Colapsa/expande el panel "Máquinas por código" — se queda recordado en este
 // navegador para no hacer scroll largo cada vez que ya lo dejaste configurado.
 function toggleColapsoPanelMaquinas() {
@@ -3922,6 +4128,7 @@ function initIMS() {
     auth = firebase.auth();
     iniciarAuthListener();
     setTimeout(function(){ if (typeof cargarMasterFirestore === 'function') cargarMasterFirestore(); }, 1500);
+    setTimeout(function(){ if (typeof cargarMasterBundleFirestore === 'function') cargarMasterBundleFirestore(); }, 1700);
     return true;
   } catch(e) { return false; }
 }
@@ -5179,7 +5386,7 @@ function construirTablaRGB() {
       'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
       maquinasBot, planBot
     );
-  return tablaRGBHtml;
+  return tablaRGBHtml + construirPanelBundle();
 }
 
 // Sincroniza IMS (P4 + P3) fresco desde Firestore y actualiza BOM.inv — reutilizable
@@ -5912,9 +6119,10 @@ async function renderPlanSemanal() {
         <div style="font-size:13px;font-weight:700;letter-spacing:.4px;color:var(--text2);text-transform:uppercase">1️⃣ Plan Requerido · Modelo y partes</div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
           ${adminAuthed ? `<button class="btn btn-primary btn-sm" id="btnPublicarPiso" onclick="publicarPlanPiso()" title="Publica ASSY + Medio Proceso RGB en las pantallas del piso · ⚡ Listo · Publish to floor screen · 현장 화면에 게시" style="white-space:nowrap">📤 Publicar TV</button>` : ''}
-          <button class="btn btn-sm" onclick="abrirPantallasPiso()" style="white-space:nowrap" title="Abrir las 2 pantallas: ASSY y RGB · Open both floor screens · 현장 화면 2개 열기">📺 Modo TV (ASSY + RGB)</button>
+          <button class="btn btn-sm" onclick="abrirPantallasPiso()" style="white-space:nowrap" title="Abrir las 3 pantallas: ASSY, RGB y Bundle · Open all floor screens · 현장 화면 3개 열기">📺 Modo TV (ASSY + RGB + Bundle)</button>
           <a class="btn btn-sm" href="piso.html" target="pisoAssy" style="text-decoration:none;white-space:nowrap" title="Solo ASSY">ASSY</a>
           <a class="btn btn-sm" href="piso-medio.html" target="pisoRGB" style="text-decoration:none;white-space:nowrap" title="Solo RGB / Medio proceso">RGB</a>
+          <a class="btn btn-sm" href="piso-bundle.html" target="pisoBundle" style="text-decoration:none;white-space:nowrap" title="Solo Bundle P3">Bundle</a>
         </div>
       </div>
       <div style="font-size:11px;color:var(--text3);margin:0 0 .8rem">"Producido" es manual — o usa el botón para traer de ShipQR lo que sigue disponible en piso de P4 (pallets aún no marcados como SHIPPED).</div>
@@ -6684,6 +6892,7 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
       desc: it.desc || descDe(it.tipo === 'Bot' ? 'Bot' : 'Top', it.modelos),
       pendiente: Math.round(it.pendiente), listo: !!it.listo,
       fecha: it.modelos.map(sm => (window.simFechaEntregaPorModelo || {})[sm]).filter(Boolean).sort()[0] || '',
+      prioridad: Math.min(...it.modelos.map(prio)),
       materiales: it.tipo === 'VC'
         ? [{ k: it.vc.k, pn: it.vc.pn, disp: Math.max(0, Math.round(it.vc.inv)), req: Math.round(it.pendiente), e: estadoMat(it.vc.inv, it.pendiente) }]
         : matsDe(it.tipo, it.modelos[0], it.pendiente),
@@ -6710,7 +6919,8 @@ async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionRea
 function abrirPantallasPiso() {
   const a = window.open('piso.html', 'pisoAssy');
   const b = window.open('piso-medio.html', 'pisoRGB');
-  if (!a || !b) window.alert('El navegador bloqueó una ventana. Permite ventanas emergentes para este sitio, o usa los botones ASSY y RGB.');
+  const c = window.open('piso-bundle.html', 'pisoBundle');
+  if (!a || !b || !c) window.alert('El navegador bloqueó una ventana. Permite ventanas emergentes para este sitio, o usa los botones ASSY y RGB.');
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
@@ -6798,12 +7008,16 @@ async function publicarPlanPiso(auto) {
     let avisoMedio = '';
     try { await publicarPlanMedio(auto, u, conTarget, produccionReal); }
     catch (eMedio) { console.warn('[Publicar medio proceso]', eMedio); avisoMedio = eMedio.message || 'error'; }
+    let avisoBundle = '';
+    try { await publicarPlanBundle(auto, u, conTarget, produccionReal); }
+    catch (eBundle) { console.warn('[Publicar bundle]', eBundle); avisoBundle = eBundle.message || 'error'; }
     if (!auto) { window._pisoAutoOn = true; window._pisoAutoTick = 0; window._pisoAutoTick2 = 0; }
     window._pisoAutoEstado = { estado: 'OK', alertas: 0 };
     try { localStorage.setItem('pisoAutoOn_p4', String(Date.now())); } catch (e) {}
     if (!auto) latidoPisoAuto();
     if (avisoMedio && !auto) window.alert('ASSY publicado, pero el plan de medio proceso falló: ' + avisoMedio);
-    regresar(auto ? '' : (avisoMedio ? '⚠️ Solo ASSY' : '✅ ASSY + RGB · auto 5 min'));
+    if (avisoBundle && !auto) window.alert('El plan de Bundle P3 falló: ' + avisoBundle);
+    regresar(auto ? '' : ((avisoMedio || avisoBundle) ? '⚠️ Revisar publicación' : '✅ ASSY + RGB + Bundle · auto 5 min'));
   } catch (e) {
     alert('Error: ' + e.message);
     regresar();

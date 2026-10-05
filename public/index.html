@@ -4182,6 +4182,7 @@ function initIMS() {
     var cfg = {apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"};
     if (!firebase.apps.length) firebase.initializeApp(cfg);
     db = firebase.firestore();
+    try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
     auth = firebase.auth();
     iniciarAuthListener();
     setTimeout(function(){ if (typeof cargarMasterFirestore === 'function') cargarMasterFirestore(); }, 1500);
@@ -5476,7 +5477,8 @@ function construirTablaRGB() {
 // usuario le dé clic manual a "Sync IMS" antes de revisar disponibilidad de material.
 function sincIMSFresco() {
   return new Promise((resolve) => {
-    if (!db) { resolve(); return; }
+    window._imsSyncErr = null; window._imsDocs = 0; window._imsSyncOk = false;
+    if (!db) { window._imsSyncErr = 'sin-firebase'; resolve(); return; }
     imsInventario = {};
     var colsSync = [
       {col: 'planta4_inventario', planta: 'P4'},
@@ -5484,6 +5486,7 @@ function sincIMSFresco() {
     ];
     Promise.all(colsSync.map(function(c) {
       return db.collection(c.col).get().then(function(snap) {
+        window._imsDocs += snap.size || 0;
         snap.forEach(function(doc) {
           var d = doc.data();
           if (!d.pn) return;
@@ -5502,8 +5505,9 @@ function sincIMSFresco() {
             imsInventario[pn+'||'+desc+'||PLANTA:'+c.planta] = actual;
           }
         });
-      }).catch(function(){});
+      }).catch(function(e){ window._imsSyncErr = (e && (e.code || e.message)) || 'error'; });
     })).then(function() {
+      window._imsSyncOk = !window._imsSyncErr && window._imsDocs > 0;
       window._ultimoSyncIMS = Date.now();
       actualizarInvBOM();
       // El inventario nuevo se refleja en TODAS las pantallas, no solo en el Plan.
@@ -7040,6 +7044,13 @@ async function publicarPlanPiso(auto) {
   const regresar = (t) => { if (!btn) return; btn.textContent = t || txt0; if (t) setTimeout(() => { btn.textContent = txt0; btn.disabled = false; }, 3000); else btn.disabled = false; };
   try {
     await sincIMSFresco();
+    // Si el IMS no se pudo leer (cuota, permisos, red), NO se publica: el piso conserva el último plan bueno
+    // en vez de mostrar "Falta todo" con inventario en cero.
+    if (!window._imsSyncOk) {
+      window._pisoAutoEstado = { estado: 'IMS', alertas: 1 };
+      alert('No se pudo leer el inventario del IMS (' + (window._imsSyncErr || 'sin datos') + '). No se publicó para no mostrar faltantes falsos al piso.');
+      regresar(); return;
+    }
     await cargarMasterFirestore();
     const produccionReal = { ...(window.simProducidoManualPorModelo || {}) };
     const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;

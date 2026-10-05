@@ -274,7 +274,7 @@ var selMaq='S1', autoRot=false, autoTimer=null;
 try{ var sm0=localStorage.getItem('pisoMedioMaq'); if(MAQS.indexOf(sm0)>=0) selMaq=sm0; autoRot=localStorage.getItem('pisoMedioAuto')==='1'; }catch(e){}
 
 firebase.initializeApp({apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"});
-var db=firebase.firestore();
+var db=firebase.firestore(); try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
 var lineaConf={}, plan=null, pallets=[], unsubPlan=null, unsubPal=null, fechaPal='';
 function hoyISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 

@@ -250,9 +250,9 @@ function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c
 function fechaCorta(d){ return d.toLocaleDateString(t('loc'), {day:'2-digit', month:'short'}); }
 /* ===== VISTA SEMANA (plan por día) ===== */
 var SEMT={
- es:{hoy:'Hoy',sem:'📅 Semana',planSem:'Plan de la semana',capSem:'Capacidad semana',despues:'Después de la semana',fuera:'Fuera de fecha',total:'Total',orden:'Orden',modelo:'Modelo',envio:'Envío',diaCap:'Plan del día / capacidad',tarde:'Termina',envioL:'envío',sinPlan:'Sin plan por día. Si es Bundle, define la capacidad por línea en el BOM Simulator y publica.',semDe:'Semana del',nota:'Plan por día = capacidad diaria × calendario (L–V; sábado opcional) · se republica cada 5 min',sabOff:'Sábado no se considera',pzs:'pzas'},
- en:{hoy:'Today',sem:'📅 Week',planSem:'Week plan',capSem:'Week capacity',despues:'After this week',fuera:'Past ship date',total:'Total',orden:'Order',modelo:'Model',envio:'Ship date',diaCap:'Day plan / capacity',tarde:'Ends',envioL:'ship',sinPlan:'No daily plan. For Bundle, set each line capacity in the BOM Simulator and publish.',semDe:'Week of',nota:'Daily plan = daily capacity × calendar (Mon–Fri; Saturday optional) · republished every 5 min',sabOff:'Saturday not considered',pzs:'pcs'},
- ko:{hoy:'오늘',sem:'📅 주간',planSem:'주간 계획',capSem:'주간 용량',despues:'이번 주 이후',fuera:'출하일 초과',total:'합계',orden:'순서',modelo:'모델',envio:'출하일',diaCap:'일 계획 / 용량',tarde:'종료',envioL:'출하',sinPlan:'일별 계획 없음. 번들은 BOM Simulator에서 라인별 용량을 설정하고 게시하세요.',semDe:'주간 시작',nota:'일별 계획 = 일일 용량 × 달력 (월–금, 토요일 선택) · 5분마다 재게시',sabOff:'토요일 제외',pzs:'개'}
+ es:{hoy:'Hoy',sem:'📅 Semana',planSem:'Plan de la semana',capSem:'Capacidad semana',despues:'Después de la semana',fuera:'Fuera de fecha',total:'Total',orden:'Orden',modelo:'Modelo',envio:'Envío',diaCap:'Plan del día / capacidad',tarde:'Termina',envioL:'envío',sinPlan:'Nada programado por día en esta línea. Si falta material no se programa; en Bundle define también la capacidad por línea en el BOM Simulator y publica.',sinProg:'Sin programar (falta material o capacidad)',semDe:'Semana del',nota:'Plan por día = capacidad diaria × calendario (L–V; sábado opcional) · se republica cada 5 min',sabOff:'Sábado no se considera',pzs:'pzas'},
+ en:{hoy:'Today',sem:'📅 Week',planSem:'Week plan',capSem:'Week capacity',despues:'After this week',fuera:'Past ship date',total:'Total',orden:'Order',modelo:'Model',envio:'Ship date',diaCap:'Day plan / capacity',tarde:'Ends',envioL:'ship',sinPlan:'Nothing scheduled by day on this line. Missing material is not scheduled; for Bundle also set each line capacity in the BOM Simulator and publish.',sinProg:'Not scheduled (missing material or capacity)',semDe:'Week of',nota:'Daily plan = daily capacity × calendar (Mon–Fri; Saturday optional) · republished every 5 min',sabOff:'Saturday not considered',pzs:'pcs'},
+ ko:{hoy:'오늘',sem:'📅 주간',planSem:'주간 계획',capSem:'주간 용량',despues:'이번 주 이후',fuera:'출하일 초과',total:'합계',orden:'순서',modelo:'모델',envio:'출하일',diaCap:'일 계획 / 용량',tarde:'종료',envioL:'출하',sinPlan:'이 라인에 일별 계획이 없습니다. 자재가 부족하면 배정되지 않으며, 번들은 BOM Simulator에서 라인별 용량도 설정하고 게시하세요.',sinProg:'미배정 (자재 또는 용량 부족)',semDe:'주간 시작',nota:'일별 계획 = 일일 용량 × 달력 (월–금, 토요일 선택) · 5분마다 재게시',sabOff:'토요일 제외',pzs:'개'}
 };
 function ts(k){ return (SEMT[lang]||SEMT.es)[k]; }
 var vistaSem=false; try{ vistaSem=localStorage.getItem('pisoVista')==='sem'; }catch(e){}
@@ -292,14 +292,16 @@ function semHtml(rows, capDia, cal){
   var capSem=capCol.reduce(function(s,x){ return s+x; },0);
   var kp=function(l,v,color){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v"'+(color?' style="color:'+color+'"':'')+'>'+v+'</div></div>'; };
   var html='<div class="kpis">'+kp(ts('planSem'),_num(planSem))+kp(ts('capSem'),capSem?_num(capSem):'—')+kp(ts('despues'),_num(despuesTot),despuesTot?'#ffb84d':'')+kp(ts('fuera'),tarde,tarde?'var(--red)':'var(--green)')+'</div>';
-  if(!rr.length) return html+'<div class="msg">'+ts('sinPlan')+'</div>';
+  var sinP=rows.filter(function(r){ return !(r.porDia&&r.porDia.length) && (r.pend||0)>0; });
+  var sinPHtml=sinP.length?'<div class="tblwrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>'+ts('sinProg')+'</th><th>'+ts('envio')+'</th><th style="text-align:right">'+ts('total')+'</th></tr></thead><tbody>'+sinP.map(function(r){ return '<tr><td><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div></td><td style="white-space:nowrap">'+fechaEnvio(r.fecha)+'</td><td style="text-align:right;font-weight:800">'+_num(r.pend)+'</td></tr>'; }).join('')+'</tbody></table></div>':'';
+  if(!rr.length) return html+'<div class="msg">'+ts('sinPlan')+'</div>'+sinPHtml;
   var enc=cols.map(function(c){ return '<th class="'+(c.iso===hoy?'swhoy':'')+'">'+c.d.toLocaleDateString(loc,{weekday:'short'})+'<small>'+c.d.toLocaleDateString(loc,{day:'2-digit',month:'short'})+(c.iso===hoy?' · '+ts('hoy').toLowerCase():'')+'</small></th>'; }).join('');
   var pie=cols.map(function(c,ci){
     var pct=capCol[ci]?Math.min(100,Math.round(tot[ci]*100/capCol[ci])):0;
     return '<td class="'+(c.iso===hoy?'swhoy':'')+'"><div>'+_num(tot[ci])+(capCol[ci]?' <span class="swz" style="font-size:13px">/ '+_num(capCol[ci])+'</span>':'')+'</div>'+(capCol[ci]?'<div class="swbar"><div style="width:'+pct+'%"></div></div>':'')+'</td>';
   }).join('');
   html+='<div class="tblwrap tblmain" id="tblMain"><table class="tbl swtbl"><thead><tr><th class="l" style="width:60px">'+ts('orden')+'</th><th class="l">'+ts('modelo')+'</th><th>'+ts('envio')+'</th><th>'+ts('total')+'</th>'+enc+'<th>'+ts('despues')+'</th></tr></thead><tbody>'+cuerpo+
-    '<tr class="swtot"><td class="l" colspan="4">'+ts('diaCap')+(cal.sab?'':' · '+ts('sabOff'))+'</td>'+pie+'<td>'+(despuesTot?_num(despuesTot):'—')+'</td></tr></tbody></table></div><div class="foot" style="margin-top:8px">'+ts('semDe')+' '+cols[0].d.toLocaleDateString(loc,{day:'2-digit',month:'short'})+' · '+ts('nota')+'</div>';
+    '<tr class="swtot"><td class="l" colspan="4">'+ts('diaCap')+(cal.sab?'':' · '+ts('sabOff'))+'</td>'+pie+'<td>'+(despuesTot?_num(despuesTot):'—')+'</td></tr></tbody></table></div><div class="foot" style="margin-top:8px">'+ts('semDe')+' '+cols[0].d.toLocaleDateString(loc,{day:'2-digit',month:'short'})+' · '+ts('nota')+'</div>'+sinPHtml;
   return html;
 }
 
@@ -578,7 +580,7 @@ function pintar(){
   }
   var html = '<div class="kpis">' + kpiHtml + '</div>';
   if (vistaSem) {
-    app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal);
+    app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia, pend: f.pend }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal);
     ajustarPantalla(); return;
   }
 

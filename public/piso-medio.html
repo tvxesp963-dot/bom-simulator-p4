@@ -236,7 +236,7 @@ function semHtml(rows, capDia, cal){
   var ultimo=cols[cols.length-1].iso, loc=t('loc');
   var rr=rows.filter(function(r){ return r.porDia && r.porDia.length; });
   var tot=cols.map(function(){return 0;}), despuesTot=0, tarde=0, planSem=0;
-  var cuerpo=rr.map(function(r){
+  var cuerpo=rr.map(function(r,ri){
     var cel=cols.map(function(c,ci){
       var q=r.porDia.filter(function(x){ return x.f===c.iso; }).reduce(function(s,x){ return s+x.q; },0);
       tot[ci]+=q; planSem+=q;
@@ -247,7 +247,7 @@ function semHtml(rows, capDia, cal){
     var fin=r.porDia[r.porDia.length-1].f, late=r.fecha && fin>r.fecha;
     if(late) tarde++;
     var finTxt=''; if(late){ var fd=new Date(fin+'T00:00:00'); finTxt='<div><span class="swlate">⚠ '+ts('tarde')+' '+fd.toLocaleDateString(loc,{weekday:'short',day:'2-digit'})+' · '+ts('envioL')+' '+(function(f){ var q=new Date(f+'T00:00:00'); return q.toLocaleDateString(loc,{weekday:'short',day:'2-digit'}); })(r.fecha)+'</span></div>'; }
-    return '<tr><td class="l"><span class="num">'+esc(r.n||'')+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+finTxt+'</td>'+
+    return '<tr><td class="l"><span class="num">'+esc(r.n||(ri+1))+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+finTxt+'</td>'+
       '<td class="swenv">'+fechaEnvio(r.fecha)+'</td><td><b>'+_num(tot0)+'</b></td>'+cel+'<td>'+(desp?'<span class="swq">'+_num(desp)+'</span>':'<span class="swz">—</span>')+'</td></tr>';
   }).join('');
   var capCol=cols.map(function(c){ return capDia?Math.round(capDia*(c.sab?(cal.fSab||0):1)):0; });

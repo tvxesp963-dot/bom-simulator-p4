@@ -6923,10 +6923,20 @@ async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionRea
 // funciones que pintan la tabla 1 (calcularFaltantesPorModeloPlan + calcularPlanSemanal).
 // Abre las 2 pantallas de piso (ASSY y RGB) en pestañas con nombre: si ya están abiertas solo se enfocan
 function abrirPantallasPiso() {
-  const a = window.open('piso.html', 'pisoAssy');
-  const b = window.open('piso-medio.html', 'pisoRGB');
-  const c = window.open('piso-bundle.html', 'pisoBundle');
-  if (!a || !b || !c) window.alert('El navegador bloqueó una ventana. Permite ventanas emergentes para este sitio, o usa los botones ASSY y RGB.');
+  const lista = [['piso.html', 'pisoAssy', 'ASSY1'], ['piso-medio.html', 'pisoRGB', 'Medio Proceso'], ['piso-bundle.html', 'pisoBundle', 'Bundle P3']];
+  const bloq = [];
+  lista.forEach(x => { let w = null; try { w = window.open(x[0], x[1]); } catch (e) {} if (!w) bloq.push(x); });
+  const viejo = document.getElementById('panelPopPiso'); if (viejo) viejo.remove();
+  if (!bloq.length) return;
+  // El navegador bloquea varias ventanas de un solo clic: se ofrecen botones (cada clic abre una)
+  const d = document.createElement('div');
+  d.id = 'panelPopPiso';
+  d.style.cssText = 'position:fixed;top:70px;right:20px;z-index:99999;background:#111827;border:2px solid #4da6ff;border-radius:12px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.6);color:#e8edf5;font-family:system-ui,sans-serif;max-width:320px';
+  d.innerHTML = '<div style="font-weight:800;margin-bottom:6px">📺 El navegador bloqueó ' + bloq.length + ' ventana(s)</div>' +
+    '<div style="font-size:12px;color:#8b96a8;margin-bottom:10px">Da clic en cada botón para abrirla. Tip: permite ventanas emergentes para este sitio (icono en la barra de dirección) y no volverá a pasar.<br>Popup blocked: click each button · 팝업 차단됨: 버튼을 누르세요</div>' +
+    bloq.map(x => '<a href="' + x[0] + '" target="' + x[1] + '" style="display:block;margin:6px 0;padding:8px 12px;background:#102238;border:1px solid #4da6ff;border-radius:8px;color:#4da6ff;font-weight:800;text-decoration:none" onclick="this.style.opacity=.4">▶ ' + x[2] + '</a>').join('') +
+    '<button onclick="this.parentNode.remove()" style="margin-top:6px;background:none;border:1px solid #1f2a3d;color:#8b96a8;border-radius:6px;padding:4px 10px;cursor:pointer">✕</button>';
+  document.body.appendChild(d);
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 

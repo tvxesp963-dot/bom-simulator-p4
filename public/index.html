@@ -6847,8 +6847,12 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
     const porCodigo = {};
     plan.dias.forEach((d, di) => (d.asignacionesPorMaquina[maq] || []).forEach(a => {
       const k = tipo + '|' + a.codeHijo;
-      if (!porCodigo[k]) porCodigo[k] = { tipo, pn: String(a.codeHijo).toUpperCase(), modelos: a.modelos.slice(), pendiente: 0, dia0: di, listo: true };
+      if (!porCodigo[k]) porCodigo[k] = { tipo, pn: String(a.codeHijo).toUpperCase(), modelos: a.modelos.slice(), pendiente: 0, dia0: di, listo: true, porDia: [] };
       porCodigo[k].pendiente += a.qty;
+      // Plan por día (según la capacidad diaria de la máquina): lunes lo que cabe, el resto al siguiente día laboral
+      const fIso = d.fecha.getFullYear() + '-' + String(d.fecha.getMonth() + 1).padStart(2, '0') + '-' + String(d.fecha.getDate()).padStart(2, '0');
+      const ult = porCodigo[k].porDia[porCodigo[k].porDia.length - 1];
+      if (ult && ult.f === fIso) ult.q += a.qty; else porCodigo[k].porDia.push({ f: fIso, q: a.qty });
     }));
     // Códigos sin material suficiente: van al final de la cola de las máquinas elegibles
     plan.sinMaterial.forEach(it => {
@@ -6896,7 +6900,9 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
       materiales: it.tipo === 'VC'
         ? [{ k: it.vc.k, pn: it.vc.pn, disp: Math.max(0, Math.round(it.vc.inv)), req: Math.round(it.pendiente), e: estadoMat(it.vc.inv, it.pendiente) }]
         : matsDe(it.tipo, it.modelos[0], it.pendiente),
-      dias: (cap > 0 && it.pendiente > 0) ? Math.round(it.pendiente / cap * 10) / 10 : null
+      dias: (cap > 0 && it.pendiente > 0) ? Math.round(it.pendiente / cap * 10) / 10 : null,
+      capDia: cap || 0,
+      porDia: (it.porDia || []).map(x => ({ f: x.f, q: Math.round(x.q) }))
     }));
   });
   return salida;

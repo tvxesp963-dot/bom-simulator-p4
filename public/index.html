@@ -1179,6 +1179,36 @@ function cargarMasterBundleExcel(input) {
 }
 window.cargarMasterBundleExcel = cargarMasterBundleExcel;
 
+function actualizarCal(campo, valor) {
+  const c = window.simCal;
+  if (campo === 'sab') c.sab = !!valor;
+  else if (campo.indexOf('b_') === 0) c.bcap[campo.slice(2)] = Math.max(0, parseInt(valor) || 0);
+  else c[campo] = Math.max(0, Number(valor) || 0);
+  try { localStorage.setItem('calendario_p4', JSON.stringify(c)); } catch (e) {}
+  const divRGB = document.getElementById('planSubRGB'); if (divRGB) divRGB.innerHTML = construirTablaRGB();
+  if (typeof renderPlanSemanal === 'function') { try { renderPlanSemanal(); } catch (e) {} }
+}
+window.actualizarCal = actualizarCal;
+function construirPanelCalendario() {
+  const c = window.simCal, inp = 'style="width:64px;padding:3px 6px;background:#0d1220;border:1px solid var(--border);border-radius:6px;color:var(--text)"';
+  const pct = Math.round(factorDiaCal(new Date(2026, 9, 10)) * 100);
+  return `<div style="margin:1rem 0;padding:.8rem 1rem;background:var(--bg2);border:1px solid var(--border);border-radius:10px">
+    <div style="font-weight:800;margin-bottom:.5rem">📅 Calendario del plan semanal · Weekly plan calendar · 주간 계획 달력</div>
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:12px;color:var(--text2)">
+      <span>Lun-Vie: día completo · Mon-Fri: full day · 월–금</span>
+      <label style="display:flex;gap:.4rem;align-items:center"><input type="checkbox" ${c.sab ? 'checked' : ''} onchange="actualizarCal('sab',this.checked)"> Considerar sábado · Include Saturday · 토요일 포함</label>
+      <label>De · From <input ${inp} type="number" min="0" max="24" value="${c.ini}" onchange="actualizarCal('ini',this.value)"> h</label>
+      <label>a · to <input ${inp} type="number" min="0" max="24" value="${c.fin}" onchange="actualizarCal('fin',this.value)"> h</label>
+      <label title="Horas de un día completo L-V · Hours of a full Mon-Fri day">Horas día completo · Full-day hours <input ${inp} type="number" min="1" max="24" value="${c.horas}" onchange="actualizarCal('horas',this.value)"></label>
+      <span style="color:var(--yellow)">${c.sab ? 'Sábado = ' + pct + '% de la capacidad · Sat = ' + pct + '% capacity' : 'Sábado apagado · Saturday off'}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:12px;color:var(--text2);margin-top:.6rem">
+      <b>📦 Capacidad Bundle P3 (pzas/día) · Capacity · 용량:</b>
+      ${BUNDLE_LINEAS.map(l => `<label>${BUNDLE_LINEA_TXT[l] || l} <input ${inp} type="number" min="0" value="${c.bcap[l] || 0}" onchange="actualizarCal('b_${l}',this.value)"></label>`).join('')}
+      <span>0 = sin plan por día · 0 = no daily plan</span>
+    </div>
+  </div>`;
+}
 function construirPanelBundle() {
   const modelos = bundleModelosPlan();
   if (!modelos.length) return '';
@@ -1241,9 +1271,36 @@ function calcularColasBundle(conTargetOrdenado, produccionReal) {
       fecha: (window.simFechaEntregaPorModelo || {})[sm] || '', prioridad: prio(sm), dias: null
     });
   });
+  // Plan por día: reparte por prioridad según capacidad diaria de cada línea (Master de capacidades) y el calendario.
+  const porDiaLinea = {}; BUNDLE_LINEAS.forEach(l => { porDiaLinea[l] = {}; });
+  const bcap = (window.simCal && window.simCal.bcap) || {};
+  if (BUNDLE_LINEAS.some(l => Number(bcap[l]) > 0)) {
+    const rest = {}; items.forEach(it => { rest[it.sm] = it.materiales.length ? Math.min(it.pendiente, Math.min(...it.materiales.map(m => m.disp))) : it.pendiente; });
+    const ord = items.slice().sort((a, b) => a.prioridad - b.prioridad);
+    const cur = new Date(); cur.setHours(0, 0, 0, 0);
+    let sinAvance = 0;
+    for (let i = 0; i < 60 && ord.some(it => rest[it.sm] > 0); i++) {
+      const fct = factorDiaCal(cur);
+      if (fct > 0) {
+        const fIso = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
+        let uso = 0;
+        BUNDLE_LINEAS.forEach(l => {
+          let room = Math.round((Number(bcap[l]) || 0) * fct);
+          ord.forEach(it => {
+            if (room <= 0 || rest[it.sm] <= 0 || !bundleLineaOk(it.sm, l)) return;
+            const toma = Math.min(rest[it.sm], room);
+            (porDiaLinea[l][it.sm] = porDiaLinea[l][it.sm] || []).push({ f: fIso, q: Math.round(toma) });
+            rest[it.sm] -= toma; room -= toma; uso += toma;
+          });
+        });
+        sinAvance = uso > 0 ? 0 : sinAvance + 1; if (sinAvance > 14) break;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
   const colas = {};
   BUNDLE_LINEAS.forEach(l => {
-    const lista = items.filter(it => bundleLineaOk(it.sm, l)).sort((a, b) => (b.listo - a.listo) || (a.prioridad - b.prioridad));
+    const lista = items.filter(it => bundleLineaOk(it.sm, l)).map(it => Object.assign({}, it, { porDia: porDiaLinea[l][it.sm] || [], capDia: Number(bcap[l]) || 0 })).sort((a, b) => (b.listo - a.listo) || (a.prioridad - b.prioridad));
     colas[l] = lista.map((it, i) => Object.assign({ orden: i + 1 }, it));
   });
   return colas;
@@ -1252,7 +1309,7 @@ async function publicarPlanBundle(auto, usuario, conTargetOrdenado, produccionRe
   await cargarMasterBundleFirestore();
   const colas = calcularColasBundle(conTargetOrdenado, produccionReal);
   await db.collection('bom_simulator_p4').doc('plan_piso_bundle').set({
-    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto, colas
+    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto, colas, cal: calSnapshot()
   });
 }
 
@@ -4642,6 +4699,26 @@ window.publicarPlan = publicarPlan;
 // ══════════════════════════════════════════
 const CAPACIDAD_DIARIA_ASSY1 = 13000;
 const CAPACIDAD_SABADO_ASSY1 = 4000; // medio turno, antes del corte de las 11:00am
+// ── CALENDARIO DE PRODUCCIÓN (plan semanal) ──
+// Lun-Vie = día completo. Sábado = opcional (apagado por defecto): produce de 'ini' a 'fin' hrs,
+// y su capacidad es proporcional: (fin-ini) / horas del día completo. Domingo nunca produce.
+window.simCal = { sab: false, ini: 7, fin: 13, horas: 10, bcap: { B1: 0, B2: 0, PRE: 0 } };
+try { const _c = JSON.parse(localStorage.getItem('calendario_p4') || 'null'); if (_c) { Object.assign(window.simCal, _c); window.simCal.bcap = Object.assign({ B1: 0, B2: 0, PRE: 0 }, _c.bcap || {}); } } catch (e) {}
+function factorDiaCal(fecha) {
+  const dow = fecha.getDay();
+  if (dow === 0) return 0;
+  if (dow === 6) {
+    const c = window.simCal;
+    if (!c.sab) return 0;
+    const h = Math.max(0, (Number(c.fin) || 0) - (Number(c.ini) || 0)), hd = Number(c.horas) || 10;
+    return Math.max(0, Math.min(1, h / hd));
+  }
+  return 1;
+}
+function calSnapshot() {
+  const c = window.simCal;
+  return { sab: !!c.sab, ini: Number(c.ini), fin: Number(c.fin), horas: Number(c.horas), fSab: Math.round(factorDiaCal(new Date(2026, 9, 10)) * 1000) / 1000, bcap: Object.assign({}, c.bcap) };
+}
 const DIAS_SEMANA_LABORAL = 5; // Lunes a Viernes (referencia general, ya no se usa para el loop de días)
 
 function lunesDeSemana(fecha) {
@@ -4669,7 +4746,7 @@ function numeroSemanaISO(d) {
 function capacidadDelDia(fecha) {
   const dow = fecha.getDay(); // 0=Domingo..6=Sábado
   if (dow === 0) return 0;
-  if (dow === 6) return CAPACIDAD_SABADO_ASSY1;
+  if (dow === 6) return Math.round(CAPACIDAD_DIARIA_ASSY1 * factorDiaCal(fecha));
   return CAPACIDAD_DIARIA_ASSY1;
 }
 
@@ -4969,7 +5046,7 @@ function calcularPlanSemanal(produccionReal, materialCapPorModelo) {
     const quedaAlgo = items.some(it => it.restante > 0);
     if (!quedaAlgo) break;
 
-    if (cursor.getDay() !== 0) { // domingo: no se produce, se salta directo
+    if (factorDiaCal(cursor) > 0) { // domingo (y sábado si no se considera): no se produce, se salta directo
       const esPasado = cursor < hoy;
       const capacidadDia = esPasado ? 0 : capacidadDelDia(cursor);
       // Ya no se espera a la fecha de entrega para empezar a producir — se adelanta
@@ -5127,14 +5204,15 @@ function calcularPlanMedioProceso(tipo, maquinas, modelosOrdenados, pickPorModel
     const quedaAlgo = items.some(it => it.restante > 0 && it.materialUsado < it.materialCap);
     if (!quedaAlgo) break;
 
-    if (cursor.getDay() !== 0) {
+    const _fct = factorDiaCal(cursor);
+    if (_fct > 0) {
       const asignacionesPorMaquina = {};
 
       // Cada máquina toma su propia cola filtrada y ordenada por prioridad —
       // así Zhongke solo ve los códigos marcados como elegibles (625A y las
       // excepciones que se marquen a mano), mientras S1-S5 ven todos.
       maquinas.forEach(maquina => {
-        let capacidadRestante = targetsMaquinasObj[maquina] || 0;
+        let capacidadRestante = Math.round((targetsMaquinasObj[maquina] || 0) * _fct);
         const asignacionesMaquina = [];
         while (capacidadRestante > 0) {
           const activosMaquina = items
@@ -5386,7 +5464,7 @@ function construirTablaRGB() {
       'Reparte por prioridad qué modelo le toca a cada máquina, llenando el target diario completo de cada una antes de pasar al siguiente. El material crudo en almacén (Sheet Lower Box, Chip Board Bot Ranurado, Pulp Tray, Set Pad, Galleta, Sticker) es el tope total por modelo — Code Hijo/Pendiente salen del mismo desglose de ensamble de abajo. Solo usa las máquinas marcadas arriba para cada código.',
       maquinasBot, planBot
     );
-  return tablaRGBHtml + construirPanelBundle();
+  return tablaRGBHtml + construirPanelCalendario() + construirPanelBundle();
 }
 
 // Sincroniza IMS (P4 + P3) fresco desde Firestore y actualiza BOM.inv — reutilizable
@@ -6181,7 +6259,7 @@ async function renderPlanSemanal() {
         </tbody>
       </table>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString('en-US')} u/día · Sáb ${CAPACIDAD_SABADO_ASSY1.toLocaleString('en-US')} u (medio turno) · Cortes de envío: Miércoles 3:30pm y Sábado 11:00am</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:.6rem">Capacidad: Lun-Vie ${CAPACIDAD_DIARIA_ASSY1.toLocaleString('en-US')} u/día · Sáb ${window.simCal.sab ? Math.round(CAPACIDAD_DIARIA_ASSY1 * factorDiaCal(new Date(2026, 9, 10))).toLocaleString('en-US') + ' u (' + window.simCal.ini + ':00–' + window.simCal.fin + ':00)' : 'no se considera'} · Cortes de envío: Miércoles 3:30pm y Sábado 11:00am</div>
     </div>
     </div>
     <div id="planSubRGB" style="display:${window.simPlanSubTab === 'rgb' ? 'block' : 'none'}">
@@ -6912,7 +6990,7 @@ async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionRea
   const colas = await calcularColasMedioProceso(conTargetOrdenado, produccionReal);
   await db.collection('bom_simulator_p4').doc('plan_piso_medio').set({
     publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto,
-    colas: colas
+    colas: colas, cal: calSnapshot()
   });
 }
 
@@ -7004,7 +7082,9 @@ async function publicarPlanPiso(auto) {
       const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
       const strip = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('STRIP'));
       const fecha = (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
-      return { sm, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, poBalance: (window.simPOBalancePorModelo && window.simPOBalancePorModelo[sm] != null) ? window.simPOBalancePorModelo[sm] : null, producido, pendiente, cap, materiales, pn, desc, req, falta, disp, invTotal,
+      const porDiaA = [];
+      semanas.forEach(sw => (sw.dias || []).forEach(d => { (d.asignaciones || []).forEach(a => { if (a.sm !== sm || !(a.qty > 0)) return; const f = d.fecha, fIso = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0'); porDiaA.push({ f: fIso, q: Math.round(a.qty) }); }); }));
+      return { sm, porDia: porDiaA, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, poBalance: (window.simPOBalancePorModelo && window.simPOBalancePorModelo[sm] != null) ? window.simPOBalancePorModelo[sm] : null, producido, pendiente, cap, materiales, pn, desc, req, falta, disp, invTotal,
                listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
     });
     // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas
@@ -7018,7 +7098,8 @@ async function publicarPlanPiso(auto) {
       publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida, auto: auto,
       planCargadoEn: window.simPlanCargadoEn || null,
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
-      capacidadSabado: (typeof CAPACIDAD_SABADO_ASSY1 !== 'undefined') ? CAPACIDAD_SABADO_ASSY1 : 0
+      capacidadSabado: Math.round(((typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000) * factorDiaCal(new Date(2026, 9, 10))),
+      cal: calSnapshot()
     });
     // Misma publicación para el piso de medio proceso (S1-S5, Zhongke, VC1, VC2)
     let avisoMedio = '';

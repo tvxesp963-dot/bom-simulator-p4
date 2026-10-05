@@ -170,6 +170,18 @@ body.vista-pick #pickBar button{font-size:14px;font-weight:700;padding:8px 16px;
 body.vista-pick #pickBar button.imp{background:#00bcd4;border-color:#00bcd4;color:#001}
 body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;padding:24px;border-radius:6px}
 @media print{#pickBar{display:none!important}body.vista-pick #pick{margin:0;padding:0;max-width:none;border-radius:0}}
+.vistasw{display:inline-flex;margin-right:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.vistasw button{border:0!important;border-radius:0!important;background:#0d1220!important;color:var(--text2)!important;padding:6px 12px!important;font-weight:800!important}
+.vistasw button.on{background:#102238!important;color:var(--accent)!important}
+.swtbl th,.swtbl td{text-align:center}.swtbl th.l,.swtbl td.l{text-align:left}
+.swtbl th small{display:block;font-size:11px;font-weight:700;color:var(--text2);text-transform:none;letter-spacing:0}
+.swtbl .swhoy{background:rgba(77,166,255,.08)}.swtbl th.swhoy{color:var(--accent)}
+.swq{display:inline-block;min-width:70px;padding:5px 10px;border-radius:8px;font-weight:800;background:rgba(0,230,118,.15);color:var(--green)}
+.swq.h{background:rgba(77,166,255,.25);color:var(--accent)}.swz{color:#5c6678}
+.swlate{display:inline-block;margin-top:4px;font-size:12px;font-weight:800;padding:2px 10px;border-radius:999px;background:rgba(255,77,77,.2);color:var(--red)}
+.swtot td{background:#151d2e;font-weight:800;border-top:2px solid var(--border)}.swtot td.l{color:var(--text2);font-size:14px;text-transform:uppercase}
+.swbar{background:#1f2a3d;height:9px;border-radius:5px;margin:4px 6px 0}.swbar div{height:9px;border-radius:5px;background:var(--green)}
+.swenv{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -177,7 +189,7 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
   <div class="top">
     <h1 id="tTitle"></h1>
     <div class="derecha">
-    <div class="acciones">
+    <div class="acciones"><span class="vistasw" id="vistaSw"></span>
       <button id="btnZoomMenos" onclick="cambiarZoom(-0.1)">A−</button><button id="btnZoomPct" onclick="cambiarZoom(0)">100%</button><button id="btnZoomMas" onclick="cambiarZoom(0.1)">A+</button>
       <button id="btnPdf" onclick="imprimirPDF()">🖨️ PDF</button>
       <button id="btnXls" onclick="exportarExcel()">📊 Excel</button>
@@ -236,6 +248,61 @@ if (!T[lang]) lang = 'es';
 function t(k){ return T[lang][k]; }
 function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
 function fechaCorta(d){ return d.toLocaleDateString(t('loc'), {day:'2-digit', month:'short'}); }
+/* ===== VISTA SEMANA (plan por día) ===== */
+var SEMT={
+ es:{hoy:'Hoy',sem:'📅 Semana',planSem:'Plan de la semana',capSem:'Capacidad semana',despues:'Después de la semana',fuera:'Fuera de fecha',total:'Total',orden:'Orden',modelo:'Modelo',envio:'Envío',diaCap:'Plan del día / capacidad',tarde:'Termina',envioL:'envío',sinPlan:'Sin plan por día. Si es Bundle, define la capacidad por línea en el BOM Simulator y publica.',semDe:'Semana del',nota:'Plan por día = capacidad diaria × calendario (L–V; sábado opcional) · se republica cada 5 min',sabOff:'Sábado no se considera',pzs:'pzas'},
+ en:{hoy:'Today',sem:'📅 Week',planSem:'Week plan',capSem:'Week capacity',despues:'After this week',fuera:'Past ship date',total:'Total',orden:'Order',modelo:'Model',envio:'Ship date',diaCap:'Day plan / capacity',tarde:'Ends',envioL:'ship',sinPlan:'No daily plan. For Bundle, set each line capacity in the BOM Simulator and publish.',semDe:'Week of',nota:'Daily plan = daily capacity × calendar (Mon–Fri; Saturday optional) · republished every 5 min',sabOff:'Saturday not considered',pzs:'pcs'},
+ ko:{hoy:'오늘',sem:'📅 주간',planSem:'주간 계획',capSem:'주간 용량',despues:'이번 주 이후',fuera:'출하일 초과',total:'합계',orden:'순서',modelo:'모델',envio:'출하일',diaCap:'일 계획 / 용량',tarde:'종료',envioL:'출하',sinPlan:'일별 계획 없음. 번들은 BOM Simulator에서 라인별 용량을 설정하고 게시하세요.',semDe:'주간 시작',nota:'일별 계획 = 일일 용량 × 달력 (월–금, 토요일 선택) · 5분마다 재게시',sabOff:'토요일 제외',pzs:'개'}
+};
+function ts(k){ return (SEMT[lang]||SEMT.es)[k]; }
+var vistaSem=false; try{ vistaSem=localStorage.getItem('pisoVista')==='sem'; }catch(e){}
+function setVista(v){ vistaSem=(v==='sem'); try{localStorage.setItem('pisoVista',v);}catch(e){} pintar(); }
+function pintarVistaSw(){
+  var el=document.getElementById('vistaSw'); if(!el) return;
+  el.innerHTML='<button class="'+(vistaSem?'':'on')+'" onclick="setVista(\'hoy\')">'+ts('hoy')+'</button><button class="'+(vistaSem?'on':'')+'" onclick="setVista(\'sem\')">'+ts('sem')+'</button>';
+}
+function _isoD(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _num(x){ return Math.round(x||0).toLocaleString('en-US'); }
+// rows: [{n, mdl, code, fecha, porDia:[{f,q}]}] · capDia: pzas/día de la línea · cal: calendario publicado
+function semHtml(rows, capDia, cal){
+  cal=cal||{sab:false,fSab:0};
+  var base=new Date(); base.setHours(0,0,0,0);
+  if(base.getDay()===0) base.setDate(base.getDate()+1); else if(base.getDay()===6 && !cal.sab) base.setDate(base.getDate()+2);
+  var lun=new Date(base); lun.setDate(lun.getDate()-((lun.getDay()+6)%7));
+  var cols=[], nd=cal.sab?6:5, hoy=_isoD(new Date());
+  for(var i=0;i<nd;i++){ var d=new Date(lun); d.setDate(d.getDate()+i); cols.push({iso:_isoD(d),d:d,sab:d.getDay()===6}); }
+  var ultimo=cols[cols.length-1].iso, loc=t('loc');
+  var rr=rows.filter(function(r){ return r.porDia && r.porDia.length; });
+  var tot=cols.map(function(){return 0;}), despuesTot=0, tarde=0, planSem=0;
+  var cuerpo=rr.map(function(r){
+    var cel=cols.map(function(c,ci){
+      var q=r.porDia.filter(function(x){ return x.f===c.iso; }).reduce(function(s,x){ return s+x.q; },0);
+      tot[ci]+=q; planSem+=q;
+      return '<td class="'+(c.iso===hoy?'swhoy':'')+'">'+(q?'<span class="swq'+(c.iso===hoy?' h':'')+'">'+_num(q)+'</span>':'<span class="swz">—</span>')+'</td>';
+    }).join('');
+    var desp=r.porDia.filter(function(x){ return x.f>ultimo; }).reduce(function(s,x){ return s+x.q; },0); despuesTot+=desp;
+    var tot0=r.porDia.reduce(function(s,x){ return s+x.q; },0);
+    var fin=r.porDia[r.porDia.length-1].f, late=r.fecha && fin>r.fecha;
+    if(late) tarde++;
+    var finTxt=''; if(late){ var fd=new Date(fin+'T00:00:00'); finTxt='<div><span class="swlate">⚠ '+ts('tarde')+' '+fd.toLocaleDateString(loc,{weekday:'short',day:'2-digit'})+' · '+ts('envioL')+' '+(function(f){ var q=new Date(f+'T00:00:00'); return q.toLocaleDateString(loc,{weekday:'short',day:'2-digit'}); })(r.fecha)+'</span></div>'; }
+    return '<tr><td class="l"><span class="num">'+esc(r.n||'')+'</span></td><td class="l"><div class="mdl">'+esc(r.mdl)+'</div><div class="code">'+esc(r.code||'')+'</div>'+finTxt+'</td>'+
+      '<td class="swenv">'+fechaEnvio(r.fecha)+'</td><td><b>'+_num(tot0)+'</b></td>'+cel+'<td>'+(desp?'<span class="swq">'+_num(desp)+'</span>':'<span class="swz">—</span>')+'</td></tr>';
+  }).join('');
+  var capCol=cols.map(function(c){ return capDia?Math.round(capDia*(c.sab?(cal.fSab||0):1)):0; });
+  var capSem=capCol.reduce(function(s,x){ return s+x; },0);
+  var kp=function(l,v,color){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v"'+(color?' style="color:'+color+'"':'')+'>'+v+'</div></div>'; };
+  var html='<div class="kpis">'+kp(ts('planSem'),_num(planSem))+kp(ts('capSem'),capSem?_num(capSem):'—')+kp(ts('despues'),_num(despuesTot),despuesTot?'#ffb84d':'')+kp(ts('fuera'),tarde,tarde?'var(--red)':'var(--green)')+'</div>';
+  if(!rr.length) return html+'<div class="msg">'+ts('sinPlan')+'</div>';
+  var enc=cols.map(function(c){ return '<th class="'+(c.iso===hoy?'swhoy':'')+'">'+c.d.toLocaleDateString(loc,{weekday:'short'})+'<small>'+c.d.toLocaleDateString(loc,{day:'2-digit',month:'short'})+(c.iso===hoy?' · '+ts('hoy').toLowerCase():'')+'</small></th>'; }).join('');
+  var pie=cols.map(function(c,ci){
+    var pct=capCol[ci]?Math.min(100,Math.round(tot[ci]*100/capCol[ci])):0;
+    return '<td class="'+(c.iso===hoy?'swhoy':'')+'"><div>'+_num(tot[ci])+(capCol[ci]?' <span class="swz" style="font-size:13px">/ '+_num(capCol[ci])+'</span>':'')+'</div>'+(capCol[ci]?'<div class="swbar"><div style="width:'+pct+'%"></div></div>':'')+'</td>';
+  }).join('');
+  html+='<div class="tblwrap tblmain" id="tblMain"><table class="tbl swtbl"><thead><tr><th class="l" style="width:60px">'+ts('orden')+'</th><th class="l">'+ts('modelo')+'</th><th>'+ts('envio')+'</th><th>'+ts('total')+'</th>'+enc+'<th>'+ts('despues')+'</th></tr></thead><tbody>'+cuerpo+
+    '<tr class="swtot"><td class="l" colspan="4">'+ts('diaCap')+(cal.sab?'':' · '+ts('sabOff'))+'</td>'+pie+'<td>'+(despuesTot?_num(despuesTot):'—')+'</td></tr></tbody></table></div><div class="foot" style="margin-top:8px">'+ts('semDe')+' '+cols[0].d.toLocaleDateString(loc,{day:'2-digit',month:'short'})+' · '+ts('nota')+'</div>';
+  return html;
+}
+
 function fechaEnvio(f){ if (!f) return '—'; var d = new Date(f + 'T00:00:00'); return isNaN(d) ? '—' : fechaCorta(d); }
 function n(x){ return Math.round(x || 0).toLocaleString(t('loc')); }
 
@@ -400,7 +467,7 @@ function motivoViejo(ahora){
 }
 function pintar(){
   document.documentElement.lang = lang;
-  document.title = t('title');
+  document.title = t('title'); pintarVistaSw();
   document.getElementById('tTitle').textContent = t('title');
   document.querySelectorAll('.langs button').forEach(function(b){ b.classList.toggle('on', b.dataset.l === lang); });
   document.getElementById('foot').textContent = t('foot');
@@ -510,6 +577,10 @@ function pintar(){
     kpiHtml = kp(t('target'), n(tot.t)) + kp(t('prod'), n(tot.p)) + kp(t('pend'), n(tot.t - tot.p)) + kp(t('avance'), avTot + '%', avTot >= 100 ? 'var(--green)' : '');
   }
   var html = '<div class="kpis">' + kpiHtml + '</div>';
+  if (vistaSem) {
+    app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal);
+    ajustarPantalla(); return;
+  }
 
   // Cadena PO: Próximo envío → PO Balance por producir − Falta para el envío = PO Balance final,
   // y lista de próximos envíos por fecha (cada uno descuenta del PO en orden).

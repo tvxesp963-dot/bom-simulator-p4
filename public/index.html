@@ -475,12 +475,32 @@ function latidoPisoAuto() {
 }
 function tickPisoAuto() {
   if (!window._pisoAutoOn || !adminAuthed || modoSoloSimulador || typeof publicarPlanPiso !== 'function') return;
+  escucharAjustesMaquinas();
   window._pisoAutoTick2 = (window._pisoAutoTick2 || 0) + 1;
   if (window._pisoAutoTick2 % 5 !== 0) { latidoPisoAuto(); return; }
   const p = (typeof sincronizarProducidoDesdeMES === 'function') ? sincronizarProducidoDesdeMES() : null;
   Promise.resolve(p).catch(() => {}).then(() => publicarPlanPiso(true)).catch(() => { window._pisoAutoEstado = { estado: 'ERROR', alertas: 0 }; }).then(latidoPisoAuto);
 }
 if (!window._pisoAutoTimer) window._pisoAutoTimer = setInterval(tickPisoAuto, 60000);
+
+// Cuando alguien cambia máquinas desde la pantalla de piso (botón "↔ Mover"), se republica al piso en segundos
+// (solo si esta pestaña es admin y tiene la auto-publicación activa).
+function escucharAjustesMaquinas() {
+  try {
+    if (window._escuchaAjustes || typeof db === 'undefined' || !db) return;
+    window._escuchaAjustes = true;
+    let primera = true, tmr = null;
+    db.collection('bom_simulator_p4').doc('master_maquinas').onSnapshot(snap => {
+      if (primera) { primera = false; return; }
+      if (snap.metadata.hasPendingWrites || !snap.exists) return;
+      const aj = snap.data().ajustes || {};
+      if (JSON.stringify(aj) === JSON.stringify(window.simMaquinasElegiblesPorCodigo || {})) return;
+      if (!window._pisoAutoOn || !adminAuthed || modoSoloSimulador) return;
+      clearTimeout(tmr);
+      tmr = setTimeout(() => { publicarPlanPiso(true).catch(() => {}); }, 4000);
+    }, () => { window._escuchaAjustes = false; });
+  } catch (e) { window._escuchaAjustes = false; }
+}
 
 // DRAG & DROP
 const dz = document.getElementById('dropZone');

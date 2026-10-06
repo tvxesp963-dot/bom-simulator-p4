@@ -145,6 +145,12 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
 .swpt{font-size:12px;font-weight:700;color:var(--text2);margin-top:4px}.swpt b{color:var(--text)}
 .swalert{background:rgba(255,184,77,.14);border:2px solid #ffb84d;color:#ffb84d;border-radius:12px;padding:10px 14px;margin-bottom:10px;font-size:15px;font-weight:700}
 tr.swrunrow td{background:rgba(77,166,255,.08)}
+
+.mvbtn{margin-left:6px;background:transparent;border:1px solid var(--blue,#38bdf8);color:var(--blue,#38bdf8);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:700;cursor:pointer}
+.mvgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.mvm{padding:12px 4px;text-align:center;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-weight:800;background:var(--bg)}
+.mvm small{display:block;font-weight:400;font-size:11px;color:var(--text2)}
+.mvm.sel{border-color:var(--green);background:rgba(34,197,94,.12)}
 </style>
 </head>
 <body>
@@ -170,6 +176,14 @@ tr.swrunrow td{background:rgba(77,166,255,.08)}
 </div>
 <div id="pickBar"><span class="pbt" id="pbTitulo"></span><span><button class="imp" id="pbImprimir" onclick="window.print()"></button> <button id="pbCerrar" onclick="cerrarVistaPick()"></button></span></div>
 <div id="pick"></div>
+<div class="modal hide" id="mvModal"><div class="box">
+  <div style="font-weight:800;font-size:16px" id="mvT"></div>
+  <div style="font-size:13px;color:var(--text2);margin-top:2px" id="mvS"></div>
+  <div class="mvgrid" id="mvG"></div>
+  <div id="mvMsg" style="font-size:12px;color:var(--yellow);min-height:16px"></div>
+  <button id="mvOk" style="min-height:46px;width:100%;border:0;border-radius:10px;background:var(--green);color:#04140c;font-weight:800;font-size:15px;margin-top:8px"></button>
+  <button class="sec" id="mvNo" style="min-height:40px;width:100%;border-radius:10px"></button>
+</div></div>
 <div class="modal hide" id="rst"><div class="box">
   <div style="font-weight:800;margin-bottom:6px" id="rstT"></div>
   <div style="font-size:13px;color:var(--text2);margin-bottom:8px" id="rstS"></div>
@@ -231,9 +245,9 @@ var SEMT={
  en:{hoy:'Today',sem:'📅 Week',planSem:'Week plan',capSem:'Week capacity',despues:'After this week',fuera:'Past ship date',total:'Total',orden:'Order',modelo:'Model',envio:'Ship date',diaCap:'Day plan / capacity',tarde:'Ends',envioL:'ship',sinPlan:'Nothing scheduled by day on this line. Missing material is not scheduled; for Bundle also set each line capacity in the BOM Simulator and publish.',sinProg:'Not scheduled (missing material or capacity)',matNo:'⏳ Missing material',matPar:'Partial material',falt:'short',corre:'▶ Can run',de:'of',kCorre:'Runnable with material',leyOk:'Material OK',leyPar:'Partial material',leyNo:'No material',semDe:'Week of',nota:'Daily plan = daily capacity × calendar (Mon–Fri; Saturday optional) · republished every 5 min',sabOff:'Saturday not considered',pzs:'pcs'},
  ko:{hoy:'오늘',sem:'📅 주간',planSem:'주간 계획',capSem:'주간 용량',despues:'이번 주 이후',fuera:'출하일 초과',total:'합계',orden:'순서',modelo:'모델',envio:'출하일',diaCap:'일 계획 / 용량',tarde:'종료',envioL:'출하',sinPlan:'이 라인에 일별 계획이 없습니다. 자재가 부족하면 배정되지 않으며, 번들은 BOM Simulator에서 라인별 용량도 설정하고 게시하세요.',sinProg:'미배정 (자재 또는 용량 부족)',matNo:'⏳ 자재 부족',matPar:'자재 일부',falt:'부족',corre:'▶ 생산 가능',de:'/',kCorre:'자재 기준 생산 가능',leyOk:'자재 있음',leyPar:'자재 일부',leyNo:'자재 없음',semDe:'주간 시작',nota:'일별 계획 = 일일 용량 × 달력 (월–금, 토요일 선택) · 5분마다 재게시',sabOff:'토요일 제외',pzs:'개'}
 };
-Object.assign(SEMT.es,{enLineaAhora:'▶ En línea ahora',fuera2:'⚠ Fuera de secuencia',adelantado:'⏩ Adelantado',prodDe:'Producido',alertSec:'En {m}: corre {a} (orden {oa}). El plan sugiere correr primero: {b} (orden {ob}). Lo producido se abona al modelo que corre.'});
-Object.assign(SEMT.en,{enLineaAhora:'▶ Running now',fuera2:'⚠ Out of sequence',adelantado:'⏩ Ahead of plan',prodDe:'Produced',alertSec:'On {m}: running {a} (order {oa}). The plan suggests running first: {b} (order {ob}). Output is credited to the item that is running.'});
-Object.assign(SEMT.ko,{enLineaAhora:'▶ 현재 생산 중',fuera2:'⚠ 순서 이탈',adelantado:'⏩ 앞당김',prodDe:'생산',alertSec:'{m}: {a} 생산 중 (순서 {oa}). 계획상 먼저 생산할 항목: {b} (순서 {ob}). 생산량은 현재 생산 중인 항목에 반영됩니다.'});
+Object.assign(SEMT.es,{mvBtn:'↔ Mover',mvT:'Mover',mvS:'Elige en qué máquinas corre este código',mvAqui:'✓ corre aquí',mvTocar:'tocar',mvOk:'Guardar',mvNo:'Cancelar',mvAviso:'El plan se recalcula en 1-5 min en el BOM Simulator.',mvNada:'Elige al menos una máquina',mvOkMsg:'Guardado. El plan se actualizará en unos minutos.',mvErr:'No se pudo guardar (permiso o red)',enLineaAhora:'▶ En línea ahora',fuera2:'⚠ Fuera de secuencia',adelantado:'⏩ Adelantado',prodDe:'Producido',alertSec:'En {m}: corre {a} (orden {oa}). El plan sugiere correr primero: {b} (orden {ob}). Lo producido se abona al modelo que corre.'});
+Object.assign(SEMT.en,{mvBtn:'↔ Move',mvT:'Move',mvS:'Choose which machines run this part',mvAqui:'✓ runs here',mvTocar:'tap',mvOk:'Save',mvNo:'Cancel',mvAviso:'The plan is recalculated in 1-5 min in the BOM Simulator.',mvNada:'Pick at least one machine',mvOkMsg:'Saved. The plan will update in a few minutes.',mvErr:'Could not save (permission or network)',enLineaAhora:'▶ Running now',fuera2:'⚠ Out of sequence',adelantado:'⏩ Ahead of plan',prodDe:'Produced',alertSec:'On {m}: running {a} (order {oa}). The plan suggests running first: {b} (order {ob}). Output is credited to the item that is running.'});
+Object.assign(SEMT.ko,{mvBtn:'↔ 이동',mvT:'이동',mvS:'이 부품을 생산할 설비를 선택하세요',mvAqui:'✓ 여기서 생산',mvTocar:'선택',mvOk:'저장',mvNo:'취소',mvAviso:'BOM 시뮬레이터에서 1-5분 후 계획이 재계산됩니다.',mvNada:'설비를 하나 이상 선택하세요',mvOkMsg:'저장되었습니다. 몇 분 후 계획이 갱신됩니다.',mvErr:'저장할 수 없습니다 (권한 또는 네트워크)',enLineaAhora:'▶ 현재 생산 중',fuera2:'⚠ 순서 이탈',adelantado:'⏩ 앞당김',prodDe:'생산',alertSec:'{m}: {a} 생산 중 (순서 {oa}). 계획상 먼저 생산할 항목: {b} (순서 {ob}). 생산량은 현재 생산 중인 항목에 반영됩니다.'});
 function ts(k){ return (SEMT[lang]||SEMT.es)[k]; }
 var vistaSem=false; try{ vistaSem=localStorage.getItem('pisoVista')==='sem'; }catch(e){}
 function setVista(v){ vistaSem=(v==='sem'); try{localStorage.setItem('pisoVista',v);}catch(e){} pintar(); }
@@ -305,6 +319,45 @@ function fechaEnvio(f){ if(!f) return '—'; var d=new Date(f+'T00:00:00'); retu
 var FLAGS={es:'mx',en:'us',ko:'kr'};
 var MAQS=['S1','S2','S3','S4','S5','Zhongke','VC1','VC2'];
 var selMaq='S1', autoRot=false, autoTimer=null;
+/* ===== MOVER CÓDIGO ENTRE MÁQUINAS ===== */
+var MV_MAQS=['S1','S2','S3','S4','S5','Zhongke'], mvPn='', mvSel={};
+document.addEventListener('click',function(ev){
+  var b=ev.target.closest&&ev.target.closest('.mvbtn'); if(!b) return;
+  abrirMover(b.getAttribute('data-pn'), b.getAttribute('data-mdl'));
+});
+function abrirMover(pn,mdl){
+  db.collection('bom_simulator_p4').doc('master_maquinas').get().then(function(d){ window._mvAjustes=(d.exists&&d.data().ajustes)||{}; }).catch(function(){}).then(function(){ abrirMover2(pn,mdl); });
+}
+function abrirMover2(pn,mdl){
+  mvPn=pn; mvSel={};
+  var ajustes=window._mvAjustes||{}, aj=ajustes[pn]||{};
+  MV_MAQS.forEach(function(m){
+    var enCola=colaDe(m).some(function(c){ return c.pn===pn; });
+    mvSel[m]=Object.prototype.hasOwnProperty.call(aj,m)?!!aj[m]:enCola;
+  });
+  document.getElementById('mvT').textContent='↔ '+ts('mvT')+' '+mdl+' · '+pn;
+  document.getElementById('mvS').textContent=ts('mvS');
+  document.getElementById('mvOk').textContent=ts('mvOk'); document.getElementById('mvNo').textContent=ts('mvNo');
+  document.getElementById('mvMsg').textContent=ts('mvAviso');
+  pintarMover();
+  document.getElementById('mvModal').classList.remove('hide');
+}
+function pintarMover(){
+  document.getElementById('mvG').innerHTML=MV_MAQS.map(function(m){
+    return '<div class="mvm'+(mvSel[m]?' sel':'')+'" data-m="'+m+'">'+m+'<small>'+(mvSel[m]?ts('mvAqui'):ts('mvTocar'))+'</small></div>';
+  }).join('');
+  document.querySelectorAll('#mvG .mvm').forEach(function(d){ d.onclick=function(){ mvSel[d.dataset.m]=!mvSel[d.dataset.m]; pintarMover(); }; });
+}
+document.getElementById('mvNo').onclick=function(){ document.getElementById('mvModal').classList.add('hide'); };
+document.getElementById('mvOk').onclick=function(){
+  var alguna=MV_MAQS.some(function(m){ return mvSel[m]; });
+  if(!alguna){ document.getElementById('mvMsg').textContent=ts('mvNada'); return; }
+  var upd={}; MV_MAQS.forEach(function(m){ upd[m]=!!mvSel[m]; });
+  var o={}; o[mvPn]=upd;
+  db.collection('bom_simulator_p4').doc('master_maquinas').set({ajustes:o,ajusteMovPor:(firebase.auth().currentUser||{}).email||'',ajusteMovEn:new Date().toISOString()},{merge:true})
+    .then(function(){ window._mvAjustes=window._mvAjustes||{}; window._mvAjustes[mvPn]=upd; document.getElementById('mvModal').classList.add('hide'); alert(ts('mvOkMsg')); })
+    .catch(function(e){ console.warn(e); document.getElementById('mvMsg').textContent=ts('mvErr'); });
+};
 try{ var sm0=localStorage.getItem('pisoMedioMaq'); if(MAQS.indexOf(sm0)>=0) selMaq=sm0; autoRot=localStorage.getItem('pisoMedioAuto')==='1'; }catch(e){}
 
 firebase.initializeApp({apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"});
@@ -535,7 +588,7 @@ function pintar(){
       var fl=faltantes(c);
       est='<span class="est" style="color:var(--red)">'+(fl.length?t('falta')+' '+esc(fl.join(', ')):t('sinDatos'))+'</span>';
     }
-    return '<tr'+(f.corre?' class="run-now"':'')+'><td>'+num+'</td><td><div class="mdl">'+esc(modTxt(c))+'</div><div class="code">'+esc(c.pn)+'</div>'+
+    return '<tr'+(f.corre?' class="run-now"':'')+'><td>'+num+'</td><td><div class="mdl">'+esc(modTxt(c))+(MV_MAQS.indexOf(selMaq)>=0?'<button class="mvbtn" data-pn="'+esc(c.pn)+'" data-mdl="'+esc(modTxt(c))+'">'+ts('mvBtn')+'</button>':'')+'</div><div class="code">'+esc(c.pn)+'</div>'+
       (f.corre?'<span class="runtag">▶ '+(f.confirmado?t('corriendo'):t('porCorrer'))+'</span>':'')+'</td>'+
       '<td style="white-space:nowrap">'+fechaEnvio(c.fecha)+'</td><td class="r">'+n(f.target)+'</td><td class="r">'+n(f.prod)+'</td><td class="r" style="font-weight:800">'+n(f.pend)+'</td>'+
       '<td>'+planDia(c)+'</td><td style="width:14%">'+bar(f.pct,tipo==='run'?'var(--green)':'#5c6678')+'</td><td>'+chips(c,selMaq)+'</td><td>'+est+'</td></tr>';

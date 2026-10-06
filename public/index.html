@@ -1309,7 +1309,7 @@ async function publicarPlanBundle(auto, usuario, conTargetOrdenado, produccionRe
   await cargarMasterBundleFirestore();
   const colas = calcularColasBundle(conTargetOrdenado, produccionReal);
   await db.collection('bom_simulator_p4').doc('plan_piso_bundle').set({
-    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto, colas, cal: calSnapshot()
+    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto, colas, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null
   });
 }
 
@@ -6998,7 +6998,7 @@ async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionRea
   const colas = await calcularColasMedioProceso(conTargetOrdenado, produccionReal);
   await db.collection('bom_simulator_p4').doc('plan_piso_medio').set({
     publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto,
-    colas: colas, cal: calSnapshot()
+    colas: colas, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null
   });
 }
 
@@ -7043,6 +7043,18 @@ async function publicarPlanPiso(auto) {
   if (btn) { btn.textContent = '⏳ Publicando...'; btn.disabled = true; }
   const regresar = (t) => { if (!btn) return; btn.textContent = t || txt0; if (t) setTimeout(() => { btn.textContent = txt0; btn.disabled = false; }, 3000); else btn.disabled = false; };
   try {
+    // GUARDIA: no pisar un plan más nuevo con uno viejo (otra PC/pestaña con plan anterior)
+    try {
+      const gd = await db.collection('bom_simulator_p4').doc('plan_piso').get();
+      const remoto = gd.exists ? (gd.data().planCargadoEn || '') : '';
+      const local = window.simPlanCargadoEn || '';
+      if (remoto && remoto > local) {
+        window._pisoAutoEstado = { estado: 'PLAN_VIEJO', alertas: 1 };
+        const msg = 'Este navegador tiene un plan MÁS VIEJO (' + (local || 'sin fecha') + ') que el publicado en el piso (' + remoto + '). No se publicó para no pisar el plan nuevo.\n\nSolución: carga aquí el Excel del plan nuevo, o cierra esta pestaña.';
+        if (auto) { console.warn('[Auto-publicar piso]', msg); regresar(); return; }
+        if (!window.confirm(msg + '\n\n¿Publicar de todos modos y SOBREESCRIBIR el plan nuevo? (Aceptar = sobreescribir)')) { regresar(); return; }
+      }
+    } catch (eg) { console.warn('guardia plan', eg); }
     await sincIMSFresco();
     // Si el IMS no se pudo leer (cuota, permisos, red), NO se publica: el piso conserva el último plan bueno
     // en vez de mostrar "Falta todo" con inventario en cero.

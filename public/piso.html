@@ -406,7 +406,13 @@ function errorLectura(e){
 function arrancar(){
   if (arrancado) return; arrancado = true;
   unsubPlan = db.collection('bom_simulator_p4').doc('plan_piso').onSnapshot(function(doc){
-    plan = doc.exists ? doc.data() : { modelos: [] };
+    var nuevo = doc.exists ? doc.data() : { modelos: [] };
+    // GUARDIA: si llega un plan más viejo que el último visto, se ignora (no pisar el plan nuevo)
+    var pc = nuevo.planCargadoEn || '', visto = '';
+    try { visto = localStorage.getItem('piso_planVisto') || ''; } catch(e){}
+    if (visto && pc && pc < visto) { console.warn('Plan viejo ignorado', pc, '<', visto); return; }
+    if (pc && pc > visto) { try { localStorage.setItem('piso_planVisto', pc); } catch(e){} }
+    plan = nuevo;
     pintar();
   }, function(e){ arrancado = false; errorLectura(e); });
   db.collection('bom_simulator_p4').doc('cortes_especiales').onSnapshot(function(doc){

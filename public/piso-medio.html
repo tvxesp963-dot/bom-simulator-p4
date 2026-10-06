@@ -727,7 +727,14 @@ function escucharPallets(){
 var arrancado=false;
 function arrancar(){
   if(arrancado) return; arrancado=true;
-  unsubPlan=db.collection('bom_simulator_p4').doc('plan_piso_medio').onSnapshot(function(d){ plan=d.exists?d.data():null; pintar(); },
+  unsubPlan=db.collection('bom_simulator_p4').doc('plan_piso_medio').onSnapshot(function(d){
+    var nuevo=d.exists?d.data():null;
+    // GUARDIA: ignorar un plan más viejo que el último visto
+    var pc=(nuevo&&nuevo.planCargadoEn)||'', visto='';
+    try{ visto=localStorage.getItem('medio_planVisto')||''; }catch(e){}
+    if(visto && pc && pc<visto){ console.warn('Plan viejo ignorado',pc,'<',visto); return; }
+    if(pc && pc>visto){ try{ localStorage.setItem('medio_planVisto',pc); }catch(e){} }
+    plan=nuevo; pintar(); },
     function(e){ arrancado=false; console.warn('plan_piso_medio:',e); });
   db.collection('bom_simulator_p4').doc('linea_medio').onSnapshot(function(d){ lineaConf=(d.exists && d.data().maq) ? d.data().maq : {}; pintar(); }, function(e){ console.warn('linea_medio:',e); });
   escucharPallets(); ponerAuto(); pintar();

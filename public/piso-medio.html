@@ -413,6 +413,12 @@ function enCurso(m){
   var l=vivosDe(m).sort(function(a,b){ return (b.horaMs||0)-(a.horaMs||0); });
   return l.length ? l[0] : null;
 }
+// Pallets que el plan publicado todavía NO descuenta: los pendientes de escanear en IMS, y los recibidos DESPUÉS de publicar el plan
+function noContadoDe(m,pn){
+  var pub=plan?(plan.publicadoMs||Date.parse(plan.publicadoEn)||0):0;
+  return vivosDe(m).filter(function(p){ return p.parte===pn && (p.status!=='RECEIVED' || (Date.parse(p.recibidoFecha||'')||0)>pub); })
+    .reduce(function(s,p){ return s+(Number(p.qty)||0); },0);
+}
 function prodDe(m,pn){ return vivosDe(m).filter(function(p){ return p.parte===pn; }).reduce(function(s,p){ return s+(Number(p.qty)||0); },0); }
 function esCB(x){ return /^CB_/.test(x.k); }
 // Chip Board ranurado y virgen se SUMAN (el virgen se ranura en VC); los demás materiales se toman por mínimo
@@ -496,7 +502,7 @@ function razonDe(f){ return t('envio')+' '+fechaEnvio(f.c.fecha)+' · '+t('prio'
 function calcMaq(m){
   var cola=colaDe(m);
   var filas=cola.map(function(c){
-    var prod=prodDe(m,c.pn), target=(c.pendiente||0)+prod, pend=Math.max(0,target-prod);
+    var prod=prodDe(m,c.pn), pend=Math.max(0,(c.pendiente||0)-noContadoDe(m,c.pn)), target=pend+prod;
     return { c:c, prod:prod, target:target, pend:pend, pct: target ? Math.min(100,Math.round(prod*100/target)) : 0, cap:capDe(c), corre:false, confirmado:false };
   });
   var runL=filas.filter(function(f){ return f.pend>0 && f.c.listo; });

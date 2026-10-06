@@ -478,7 +478,7 @@ function tickPisoAuto() {
   escucharAjustesMaquinas();
   window._pisoAutoTick2 = (window._pisoAutoTick2 || 0) + 1;
   if (window._pisoAutoTick2 % 5 !== 0) { latidoPisoAuto(); return; }
-  const p = (typeof sincronizarProducidoDesdeMES === 'function') ? sincronizarProducidoDesdeMES() : null;
+  const p = (typeof sincronizarProducidoDesdeMES === 'function') ? sincronizarProducidoDesdeMES(true) : null;
   Promise.resolve(p).catch(() => {}).then(() => publicarPlanPiso(true)).catch(() => { window._pisoAutoEstado = { estado: 'ERROR', alertas: 0 }; }).then(latidoPisoAuto);
 }
 if (!window._pisoAutoTimer) window._pisoAutoTimer = setInterval(tickPisoAuto, 60000);
@@ -4965,9 +4965,11 @@ window.renderCortesEspeciales = renderCortesEspeciales;
 // reporta aparte como "arrastre" — visible, no oculto, para que se pueda revisar y no se acumule
 // basura sin que nadie se dé cuenta.
 // Mismo proyecto Firebase que el BOM Simulator (mes-production-esp).
-async function obtenerProduccionRealASSY1() {
+async function obtenerProduccionRealASSY1(auto) {
   const porModelo = {}; // { modelo: { total, cicloActual, arrastre } }
   if (!db) return porModelo;
+  // AHORRO DE LECTURAS: en el ciclo automático se reutiliza la última lectura si tiene menos de 20 min
+  if (auto === true && window._cacheShipqr && (Date.now() - window._cacheShipqr.t) < 20 * 60000) return window._cacheShipqr.d;
   const ahora = new Date();
   const inicioCicloActual = corteAnteriorEnvio(ahora); // corte ya pasado más reciente = inicio del ciclo en curso
   try {
@@ -4988,6 +4990,7 @@ async function obtenerProduccionRealASSY1() {
       if (esDeEsteCiclo) porModelo[modelo].cicloActual += qty;
       else porModelo[modelo].arrastre += qty;
     });
+    window._cacheShipqr = { t: Date.now(), d: porModelo };
   } catch (e) {
     console.error('Error leyendo pallets de ShipQR:', e);
   }
@@ -4999,11 +5002,12 @@ async function obtenerProduccionRealASSY1() {
 // Ya no pide rango de fechas: "Producido" siempre es el disponible real completo (sin filtrar por
 // fecha), desglosado internamente en ciclo actual vs. arrastre de ciclos anteriores para que se
 // pueda revisar el arrastre sin que se pierda del total.
-async function sincronizarProducidoDesdeMES() {
+async function sincronizarProducidoDesdeMES(auto) {
+  auto = auto === true;
   const wrap = document.getElementById('planSemanalWrap');
   if (wrap) wrap.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--text2);font-size:12px">⏳ Trayendo producción real de ASSY1 desde el MES...</div>`;
 
-  const datos = await obtenerProduccionRealASSY1();
+  const datos = await obtenerProduccionRealASSY1(auto);
   window.simProducidoDesglosePorModelo = window.simProducidoDesglosePorModelo || {};
 
   const modelosPlan = Object.keys(simTargetsPorModelo).filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
@@ -5495,8 +5499,22 @@ function construirTablaRGB() {
 // Sincroniza IMS (P4 + P3) fresco desde Firestore y actualiza BOM.inv — reutilizable
 // desde "Publicar Plan al MES" y desde el Plan Semanal, para no depender de que el
 // usuario le dé clic manual a "Sync IMS" antes de revisar disponibilidad de material.
-function sincIMSFresco() {
-  return new Promise((resolve) => {
+async function huellaMovsIMS() {
+  // 2 lecturas baratas: el último movimiento de P4 y de P3
+  const f = async (col) => { const q = await db.collection(col).orderBy('fecha', 'desc').limit(1).get(); return q.empty ? '' : (q.docs[0].id + '|' + String(q.docs[0].data().fecha)); };
+  return (await f('planta4_movimientos')) + '||' + (await f('planta3_movimientos'));
+}
+function sincIMSFresco(auto) {
+  return new Promise(async (resolve) => {
+    // AHORRO DE LECTURAS: en el ciclo automático no se relee todo el inventario si no hubo movimientos nuevos
+    if (auto === true && db && window._imsSyncOk && window._ultimoSyncIMS && (Date.now() - window._ultimoSyncIMS) < 30 * 60000) {
+      try {
+        const h = await huellaMovsIMS();
+        if (h && h === window._huellaIMS) { resolve(); return; }
+        window._huellaIMS = h;
+      } catch (e) { /* si falla la revisión, se hace la lectura completa */ }
+    }
+    if (auto === true && db && !window._huellaIMS) { try { window._huellaIMS = await huellaMovsIMS(); } catch (e) {} }
     window._imsSyncErr = null; window._imsDocs = 0; window._imsSyncOk = false;
     if (!db) { window._imsSyncErr = 'sin-firebase'; resolve(); return; }
     imsInventario = {};
@@ -7075,7 +7093,7 @@ async function publicarPlanPiso(auto) {
         if (!window.confirm(msg + '\n\n¿Publicar de todos modos y SOBREESCRIBIR el plan nuevo? (Aceptar = sobreescribir)')) { regresar(); return; }
       }
     } catch (eg) { console.warn('guardia plan', eg); }
-    await sincIMSFresco();
+    await sincIMSFresco(auto);
     // Si el IMS no se pudo leer (cuota, permisos, red), NO se publica: el piso conserva el último plan bueno
     // en vez de mostrar "Falta todo" con inventario en cero.
     if (!window._imsSyncOk) {

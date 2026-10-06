@@ -436,16 +436,19 @@ function arrancar(){
 
 // Producido = pallets GH90 en ShipQR que aún NO están SHIPPED y no son REMPLAZO
 // (misma regla que "Traer de ShipQR" en el BOM Simulator).
+var unsubShipqr = null, shipDocs = {};
 function leerProducido(){
-  db.collection('shipqr_pallets').get().then(function(snap){
+  // AHORRO DE LECTURAS: se lee la colección UNA vez y después solo llegan los pallets que cambian (antes se releía completa cada 5 min)
+  if (unsubShipqr) return;
+  unsubShipqr = db.collection('shipqr_pallets').onSnapshot(function(snap){
+    snap.docChanges().forEach(function(ch){ if (ch.type === 'removed') delete shipDocs[ch.doc.id]; else shipDocs[ch.doc.id] = ch.doc.data(); });
     var pm = {}, envs = [];
-    snap.forEach(function(doc){
-      var d = doc.data();
+    Object.keys(shipDocs).forEach(function(id){
+      var d = shipDocs[id];
       if (d.motivo === 'REMPLAZO') return;
       var modelo = (d.modelo || '').trim();
       if (!modelo || !(d.part_number || '').toUpperCase().startsWith('GH90')) return;
       if (d.status === 'SHIPPED') {
-        // Enviado: se guarda con su fecha para sumarlo al Producido si salió después de cargar el Excel del plan
         var tx = d.updated_at || d.created_at;
         envs.push({ sm: modelo, q: Number(d.quantity) || 0, ts: (tx && tx.seconds) ? tx.seconds * 1000 : 0 });
         return;
@@ -455,7 +458,7 @@ function leerProducido(){
     enviosVivo = envs;
     producidoVivo = pm;
     pintar();
-  }).catch(function(e){ console.warn('No se pudo leer ShipQR, se usa el Producido publicado:', e); });
+  }, function(e){ unsubShipqr = null; shipDocs = {}; console.warn('No se pudo leer ShipQR, se usa el Producido publicado:', e); });
 }
 
 // ===== Modelo corriendo en ASSY1 =====

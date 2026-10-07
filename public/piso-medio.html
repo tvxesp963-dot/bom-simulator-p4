@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Medio proceso · Piso P4</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
@@ -250,9 +251,9 @@ var SEMT={
 Object.assign(SEMT.es,{cutSin:'🟡 En cortes sin paletizar: ',plAll:'🖨️ Plan todas',plTit:'Plan de producción · Medio proceso · Todas las líneas',plPub:'Plan publicado',plGen:'Generado',plNada:'Sin líneas con plan',plMaq:'Línea',plEst:'Estado',plListo:'Listo',plFalta:'Falta',plSinD:'Sin datos de material',plNoCola:'(sin cola)',mvBtn:'↔ Mover',mvT:'Mover',mvS:'Elige en qué máquinas corre este código',mvAqui:'✓ corre aquí',mvTocar:'tocar',mvOk:'Guardar',mvNo:'Cancelar',mvAviso:'El plan se recalcula en 1-5 min en el BOM Simulator.',mvNada:'Elige al menos una máquina',mvOkMsg:'Guardado. El plan se actualizará en unos minutos.',mvErr:'No se pudo guardar (permiso o red)',enLineaAhora:'▶ En línea ahora',fuera2:'⚠ Fuera de secuencia',adelantado:'⏩ Adelantado',prodDe:'Producido',alertSec:'En {m}: corre {a} (orden {oa}). El plan sugiere correr primero: {b} (orden {ob}). Lo producido se abona al modelo que corre.'});
 Object.assign(SEMT.en,{cutSin:'🟡 In cuts, not palletized: ',plAll:'🖨️ All lines plan',plTit:'Production plan · Mid process · All lines',plPub:'Published plan',plGen:'Generated',plNada:'No lines with a plan',plMaq:'Line',plEst:'Status',plListo:'Ready',plFalta:'Missing',plSinD:'No material data',plNoCola:'(empty queue)',mvBtn:'↔ Move',mvT:'Move',mvS:'Choose which machines run this part',mvAqui:'✓ runs here',mvTocar:'tap',mvOk:'Save',mvNo:'Cancel',mvAviso:'The plan is recalculated in 1-5 min in the BOM Simulator.',mvNada:'Pick at least one machine',mvOkMsg:'Saved. The plan will update in a few minutes.',mvErr:'Could not save (permission or network)',enLineaAhora:'▶ Running now',fuera2:'⚠ Out of sequence',adelantado:'⏩ Ahead of plan',prodDe:'Produced',alertSec:'On {m}: running {a} (order {oa}). The plan suggests running first: {b} (order {ob}). Output is credited to the item that is running.'});
 Object.assign(SEMT.ko,{cutSin:'🟡 컷 생산, 미적재: ',plAll:'🖨️ 전체 라인 계획',plTit:'생산 계획 · 중간 공정 · 전체 라인',plPub:'게시된 계획',plGen:'생성',plNada:'계획이 있는 라인 없음',plMaq:'라인',plEst:'상태',plListo:'가능',plFalta:'부족',plSinD:'자재 데이터 없음',plNoCola:'(대기 없음)',mvBtn:'↔ 이동',mvT:'이동',mvS:'이 부품을 생산할 설비를 선택하세요',mvAqui:'✓ 여기서 생산',mvTocar:'선택',mvOk:'저장',mvNo:'취소',mvAviso:'BOM 시뮬레이터에서 1-5분 후 계획이 재계산됩니다.',mvNada:'설비를 하나 이상 선택하세요',mvOkMsg:'저장되었습니다. 몇 분 후 계획이 갱신됩니다.',mvErr:'저장할 수 없습니다 (권한 또는 네트워크)',enLineaAhora:'▶ 현재 생산 중',fuera2:'⚠ 순서 이탈',adelantado:'⏩ 앞당김',prodDe:'생산',alertSec:'{m}: {a} 생산 중 (순서 {oa}). 계획상 먼저 생산할 항목: {b} (순서 {ob}). 생산량은 현재 생산 중인 항목에 반영됩니다.'});
-Object.assign(SEMT.es,{resBtn:'📝 Resumen del día',resTit:'Resumen del día · Medio proceso',resS1:'1. Etiquetas por cerrar (cortes sin pallet)',resS2:'2. Pallets por escanear en IMS',resS3:'3. Avance por línea (hoy)',resFecha:'Fecha',resCortes:'Cortes',resPals:'Pallets',resFalta:'Falta etiquetar',resPallet:'Pallet',resCant:'Cant.',resHora:'Hora',resItems:'Partes',resOk:'✓ Nada pendiente',resCarga:'Cargando días anteriores…',resErr:'No se pudieron leer los días anteriores',resNota:'Cortes = capturas del MES. Pallets = etiquetas cerradas (sin anular). Falta etiquetar = Cortes − Pallets. Últimos 3 días. Solo S1–S5 y Zhongke (VC y ASSY1 no llevan etiqueta de pallet).',resAnt:'⚠ día anterior',resTotal:'Total'});
-Object.assign(SEMT.en,{resBtn:'📝 Daily summary',resTit:'Daily summary · Mid process',resS1:'1. Labels to close (cuts without pallet)',resS2:'2. Pallets to scan in IMS',resS3:'3. Progress per line (today)',resFecha:'Date',resCortes:'Cuts',resPals:'Pallets',resFalta:'Left to label',resPallet:'Pallet',resCant:'Qty',resHora:'Time',resItems:'Parts',resOk:'✓ Nothing pending',resCarga:'Loading previous days…',resErr:'Could not read previous days',resNota:'Cuts = MES entries. Pallets = closed labels (not voided). Left to label = Cuts − Pallets. Last 3 days. Only S1–S5 and Zhongke (VC and ASSY1 have no pallet label).',resAnt:'⚠ earlier day',resTotal:'Total'});
-Object.assign(SEMT.ko,{resBtn:'📝 일일 요약',resTit:'일일 요약 · 중간 공정',resS1:'1. 마감할 라벨 (팔레트 없는 컷)',resS2:'2. IMS에서 스캔할 팔레트',resS3:'3. 라인별 진행 (오늘)',resFecha:'날짜',resCortes:'컷',resPals:'팔레트',resFalta:'라벨 필요',resPallet:'팔레트',resCant:'수량',resHora:'시간',resItems:'부품',resOk:'✓ 대기 항목 없음',resCarga:'이전 날짜 불러오는 중…',resErr:'이전 날짜를 읽을 수 없습니다',resNota:'컷 = MES 입력. 팔레트 = 마감된 라벨(취소 제외). 라벨 필요 = 컷 − 팔레트. 최근 3일. S1–S5와 Zhongke만 포함 (VC와 ASSY1은 팔레트 라벨 없음).',resAnt:'⚠ 이전 날짜',resTotal:'합계'});
+Object.assign(SEMT.es,{resBtn:'📝 Resumen del día',resTit:'Resumen del día · Medio proceso',resS1:'1. Etiquetas por cerrar (cortes sin pallet)',resS2:'2. Pallets por escanear en IMS',resS3:'3. Avance por línea (hoy)',resFecha:'Fecha',resCortes:'Cortes',resPals:'Pallets',resFalta:'Falta etiquetar',resPallet:'Pallet',resCant:'Cant.',resHora:'Hora',resItems:'Partes',resOk:'✓ Nada pendiente',resCarga:'Cargando días anteriores…',resErr:'No se pudieron leer los días anteriores',resNota:'Cortes = capturas del MES. Pallets = etiquetas cerradas (sin anular). Falta etiquetar = Cortes − Pallets. Últimos 3 días. Solo S1–S5 y Zhongke (VC y ASSY1 no llevan etiqueta de pallet).',resAnt:'⚠ día anterior',resTotal:'Total',resQR:'🔳 QR para escanear en IMS',resQRtit:'QR de pallets por escanear en IMS',resVolver:'← Volver al resumen',resQRnota:'Escanea cada QR en IMS (Mov IN) para dar la entrada. Un pallet solo se puede escanear una vez.'});
+Object.assign(SEMT.en,{resBtn:'📝 Daily summary',resTit:'Daily summary · Mid process',resS1:'1. Labels to close (cuts without pallet)',resS2:'2. Pallets to scan in IMS',resS3:'3. Progress per line (today)',resFecha:'Date',resCortes:'Cuts',resPals:'Pallets',resFalta:'Left to label',resPallet:'Pallet',resCant:'Qty',resHora:'Time',resItems:'Parts',resOk:'✓ Nothing pending',resCarga:'Loading previous days…',resErr:'Could not read previous days',resNota:'Cuts = MES entries. Pallets = closed labels (not voided). Left to label = Cuts − Pallets. Last 3 days. Only S1–S5 and Zhongke (VC and ASSY1 have no pallet label).',resAnt:'⚠ earlier day',resTotal:'Total',resQR:'🔳 QR to scan in IMS',resQRtit:'QR of pallets to scan in IMS',resVolver:'← Back to summary',resQRnota:'Scan each QR in IMS (Mov IN) to receive it. A pallet can only be scanned once.'});
+Object.assign(SEMT.ko,{resBtn:'📝 일일 요약',resTit:'일일 요약 · 중간 공정',resS1:'1. 마감할 라벨 (팔레트 없는 컷)',resS2:'2. IMS에서 스캔할 팔레트',resS3:'3. 라인별 진행 (오늘)',resFecha:'날짜',resCortes:'컷',resPals:'팔레트',resFalta:'라벨 필요',resPallet:'팔레트',resCant:'수량',resHora:'시간',resItems:'부품',resOk:'✓ 대기 항목 없음',resCarga:'이전 날짜 불러오는 중…',resErr:'이전 날짜를 읽을 수 없습니다',resNota:'컷 = MES 입력. 팔레트 = 마감된 라벨(취소 제외). 라벨 필요 = 컷 − 팔레트. 최근 3일. S1–S5와 Zhongke만 포함 (VC와 ASSY1은 팔레트 라벨 없음).',resAnt:'⚠ 이전 날짜',resTotal:'합계',resQR:'🔳 IMS 스캔용 QR',resQRtit:'IMS 스캔 대기 팔레트 QR',resVolver:'← 요약으로 돌아가기',resQRnota:'IMS(Mov IN)에서 각 QR을 스캔하여 입고하세요. 팔레트는 한 번만 스캔할 수 있습니다.'});
 function ts(k){ return (SEMT[lang]||SEMT.es)[k]; }
 var vistaSem=false; try{ vistaSem=localStorage.getItem('pisoVista')==='sem'; }catch(e){}
 function setVista(v){ vistaSem=(v==='sem'); try{localStorage.setItem('pisoVista',v);}catch(e){} pintar(); }
@@ -755,7 +756,7 @@ window.addEventListener('afterprint',function(){ if(!document.body.classList.con
 
 
 // ===== RESUMEN DEL DÍA (todas las líneas) =====
-var resActivo=false, resPrev=null, resPrevErr=false;
+var resActivo=false, resPrev=null, resPrevErr=false, resModoQR=false;
 function resISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function resDatos(){
   var cs={}, ps={}, ordM=function(m){ var i=MAQS.indexOf(m); return i<0?99:i; };
@@ -771,7 +772,31 @@ function resDatos(){
     .sort(function(a,b){ return String(a.fecha).localeCompare(String(b.fecha)) || (ordM(a.maquina)-ordM(b.maquina)) || (a.horaMs||0)-(b.horaMs||0); });
   return {sin:sin, esc:esc2};
 }
+function resQrUrl(txt){
+  var tmp=document.createElement('div'); tmp.style.cssText='position:fixed;left:-9999px;top:0'; document.body.appendChild(tmp);
+  try{ new QRCode(tmp,{text:txt,width:240,height:240,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
+  var c=tmp.querySelector('canvas'), im=tmp.querySelector('img'), u=c?c.toDataURL('image/png'):(im?im.src:'');
+  document.body.removeChild(tmp); return u;
+}
+function resQrTexto(p){ return p.qr || [p.parte,p.desc,p.familia,p.qty,p.id].map(function(x){ return String(x==null?'':x).replace(/\|/g,'/'); }).join('|'); }
+function resHtmlQR(){
+  var d=resDatos(), h='<div class="ph"><div><h2>'+ts('resQRtit')+'</h2><div class="pinfo">'+ts('resQRnota')+'</div></div></div>';
+  h+='<div style="margin:6px 0"><button onclick="resVolver()" style="padding:6px 12px;border:1.5px solid #000;background:#fff;font-weight:700;cursor:pointer">'+ts('resVolver')+'</button></div>';
+  if(!d.esc.length) return h+'<div style="font-size:13px;padding:8px">'+ts('resOk')+'</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:10px">';
+  d.esc.forEach(function(p){
+    h+='<div style="border:1.5px solid #000;padding:6px;width:190px;text-align:center;page-break-inside:avoid;background:#fff;color:#000">'
+      +'<img src="'+resQrUrl(resQrTexto(p))+'" style="width:170px;height:170px" alt="QR">'
+      +'<div style="font-size:13px;font-weight:800">'+esc(p.parte)+'</div>'
+      +'<div style="font-size:11px">'+esc(p.maquina)+' · <b>'+n(p.qty)+'</b></div>'
+      +'<div style="font-size:10px">'+esc(p.id||'')+' · '+esc(p.horaTxt||'')+'</div></div>';
+  });
+  return h+'</div>';
+}
+function resVolver(){ resModoQR=false; resPintar(); }
+function resVerQR(){ resModoQR=true; resPintar(); window.scrollTo(0,0); }
 function resHtml(){
+  if(resModoQR) return resHtmlQR();
   var hoy=hoyISO(), d=resDatos(), ahora=new Date();
   var h='<div class="ph"><div><h2>'+ts('resTit')+'</h2><div class="pinfo">'+hoy+' · '+ts('plGen')+': '+ahora.toLocaleString(t('loc'))+'</div></div></div>';
   var aviso=function(f){ return f!==hoy?' <b>'+ts('resAnt')+'</b>':''; };
@@ -785,6 +810,7 @@ function resHtml(){
   }
   // 2) pallets por escanear
   h+='<div class="mh"><span>'+ts('resS2')+'</span><span>'+d.esc.length+'</span></div>';
+  if(d.esc.length) h+='<div style="margin:4px 0"><button onclick="resVerQR()" style="padding:6px 12px;border:1.5px solid #000;background:#fff;font-weight:700;cursor:pointer">'+ts('resQR')+'</button></div>';
   if(!d.esc.length) h+='<div style="font-size:12px;padding:6px 8px">'+ts('resOk')+'</div>';
   else {
     h+='<table><tr><th>'+ts('resFecha')+'</th><th>'+ts('resPallet')+'</th><th>'+t('maq')+'</th><th>'+t('codigo')+'</th><th class="r">'+ts('resCant')+'</th><th>'+ts('resHora')+'</th></tr>';
@@ -810,7 +836,7 @@ function resHtml(){
 }
 function resPintar(){ if(!resActivo) return; document.getElementById('pick').innerHTML=resHtml(); }
 function abrirResumen(){
-  resActivo=true; resPrev=null; resPrevErr=false;
+  resActivo=true; resModoQR=false; resPrev=null; resPrevErr=false;
   document.getElementById('pbTitulo').textContent=ts('resTit');
   document.getElementById('pbImprimir').textContent=t('pkImprimir');
   document.getElementById('pbCerrar').textContent=t('pkCerrar');

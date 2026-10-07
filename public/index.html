@@ -4420,14 +4420,17 @@ function sincIMS() {
       imsInventario[pn+'||PLANTA:P3'] = rawP3[pn];
       if (imsInventario[pn] === undefined) imsInventario[pn] = rawP3[pn];
     });
+    window._pendAplicado = {};
+    return aplicarPendientesIMS().then(function(){
     var total = Object.keys(imsInventario).filter(function(k){ return k.indexOf('||PLANTA:')<0; }).length;
-    st.textContent = '⬤ IMS · '+total+' partes'; st.style.color='#00e676';
+    st.textContent = '⬤ IMS · '+total+' partes' + (window._pendTotal ? ' · +'+window._pendTotal.toLocaleString()+' pend.' : ''); st.style.color='#00e676';
     st.style.borderColor='rgba(0,230,118,.3)'; st.style.background='rgba(0,230,118,.08)';
     window._ultimoSyncIMS = Date.now();
     if (BOM && BOM.length) {
       actualizarInvBOM(); refrescarVistasInventario();
     }
     if (typeof programarAutochequeo === 'function') programarAutochequeo();
+    });
   }).catch(function() { st.textContent='⬤ Sin conexión'; st.style.color='#ff4444'; });
 }
 
@@ -5507,20 +5510,50 @@ async function huellaMovsIMS() {
   const f = async (col) => { const q = await db.collection(col).orderBy('fecha', 'desc').limit(1).get(); return q.empty ? '' : (q.docs[0].id + '|' + String(q.docs[0].data().fecha)); };
   return (await f('planta4_movimientos')) + '||' + (await f('planta3_movimientos'));
 }
+
+// ===== INVENTARIO PROVISIONAL: pallets de medio proceso ya etiquetados (PENDING) pero aún sin escanear en IMS =====
+// Se suman al inventario P4 para que el Consolidado no pida de más. Al escanearse en IMS pasan a inventario real
+// y dejan de contarse aquí (no se duplica). Solo se cuentan los de los últimos 3 días.
+window._pendAplicado = window._pendAplicado || {};
+window._pendTotal = 0;
+async function aplicarPendientesIMS() {
+  if (!db) return;
+  try {
+    // 1) quitar lo aplicado antes (para no duplicar si se vuelve a ejecutar)
+    var prev = window._pendAplicado || {};
+    Object.keys(prev).forEach(function(k){ imsInventario[k] = (imsInventario[k] || 0) - prev[k]; });
+    window._pendAplicado = {};
+    // 2) leer los PENDING recientes
+    var d3 = new Date(); d3.setDate(d3.getDate() - 3);
+    var desde = d3.getFullYear() + '-' + String(d3.getMonth()+1).padStart(2,'0') + '-' + String(d3.getDate()).padStart(2,'0');
+    var snap = await db.collection('pallets_medio').where('status','==','PENDING').get();
+    var tot = 0, add = function(k, q){ imsInventario[k] = (imsInventario[k] || 0) + q; window._pendAplicado[k] = (window._pendAplicado[k] || 0) + q; };
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      if (String(d.fecha || '') < desde) return;
+      var q = Number(d.qty) || 0, pn = String(d.parte || '').trim().toUpperCase(), desc = String(d.desc || '').trim().toUpperCase();
+      if (!pn || q <= 0) return;
+      tot += q;
+      add(pn, q); add(pn + '||PLANTA:P4', q);
+      if (desc) { add(pn + '||' + desc, q); add(pn + '||' + desc + '||PLANTA:P4', q); }
+    });
+    window._pendTotal = tot;
+  } catch (e) { console.warn('pendientes IMS:', e.message); }
+}
 function sincIMSFresco(auto) {
   return new Promise(async (resolve) => {
     // AHORRO DE LECTURAS: en el ciclo automático no se relee todo el inventario si no hubo movimientos nuevos
     if (auto === true && db && window._imsSyncOk && window._ultimoSyncIMS && (Date.now() - window._ultimoSyncIMS) < 30 * 60000) {
       try {
         const h = await huellaMovsIMS();
-        if (h && h === window._huellaIMS) { resolve(); return; }
+        if (h && h === window._huellaIMS) { await aplicarPendientesIMS(); actualizarInvBOM(); refrescarVistasInventario(); resolve(); return; }
         window._huellaIMS = h;
       } catch (e) { /* si falla la revisión, se hace la lectura completa */ }
     }
     if (auto === true && db && !window._huellaIMS) { try { window._huellaIMS = await huellaMovsIMS(); } catch (e) {} }
     window._imsSyncErr = null; window._imsDocs = 0; window._imsSyncOk = false;
     if (!db) { window._imsSyncErr = 'sin-firebase'; resolve(); return; }
-    imsInventario = {};
+    imsInventario = {}; window._pendAplicado = {};
     var colsSync = [
       {col: 'planta4_inventario', planta: 'P4'},
       {col: 'planta3_inventario', planta: 'P3'}
@@ -5547,7 +5580,8 @@ function sincIMSFresco(auto) {
           }
         });
       }).catch(function(e){ window._imsSyncErr = (e && (e.code || e.message)) || 'error'; });
-    })).then(function() {
+    })).then(async function() {
+      await aplicarPendientesIMS();
       window._imsSyncOk = !window._imsSyncErr && window._imsDocs > 0;
       window._ultimoSyncIMS = Date.now();
       actualizarInvBOM();

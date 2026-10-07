@@ -2787,9 +2787,12 @@ function renderCons() {
         const esManualB = (r.desc||'').toUpperCase().includes('MANUAL BUNDLE');
         // Cada fila muestra su propio inventario real (Bundle=P4, MANUAL BUNDLE=P3)
         const invPropio = esManualB ? bundleInvDisp : (r.inv || 0);
-        const faltaPropia = Math.max(0, target - invPropio);
+        // MANUAL BUNDLE se calcula contra lo que realmente falta PRODUCIR (target - Bundle terminado),
+        // igual que el Simulador (bundleTargetReal) y que el resto de componentes del Bundle.
+        // Antes usaba el target completo e ignoraba el Bundle terminado en P4.
+        const faltaPropia = esManualB ? Math.max(0, necesitaProducir - invPropio) : Math.max(0, target - invPropio);
         // Solo MANUAL BUNDLE aporta al total a pedir — es el insumo que realmente se compra/produce, evita doble conteo del mismo faltante
-        const aPedirReal = esManualB && invPropio < target ? calcularAPedir(faltaPropia) : 0;
+        const aPedirReal = esManualB && faltaPropia > 0 ? calcularAPedir(faltaPropia) : 0;
         return {...r, inv: invPropio, falta: faltaPropia, aPedir: aPedirReal};
       });
       // Strip: mismo criterio simple que un componente normal — inventario

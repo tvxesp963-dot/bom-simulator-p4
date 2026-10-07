@@ -164,6 +164,7 @@ tr.swrunrow td{background:rgba(77,166,255,.08)}
       <button id="btnXls" onclick="exportarExcel()">📊 Excel</button>
       <button id="btnPlanAll" onclick="imprimirPlanTodas()"></button>
       <button id="btnPick" onclick="imprimirPickList()">📋 Pick List</button>
+      <button id="btnResumen" onclick="abrirResumen()"></button>
     </div>
     <div class="langs">
       <button data-l="es" title="Español"><img src="https://flagcdn.com/w40/mx.png" alt="MX"></button><button data-l="en" title="English"><img src="https://flagcdn.com/w40/us.png" alt="US"></button><button data-l="ko" title="한국어"><img src="https://flagcdn.com/w40/kr.png" alt="KR"></button>
@@ -249,6 +250,9 @@ var SEMT={
 Object.assign(SEMT.es,{cutSin:'🟡 En cortes sin paletizar: ',plAll:'🖨️ Plan todas',plTit:'Plan de producción · Medio proceso · Todas las líneas',plPub:'Plan publicado',plGen:'Generado',plNada:'Sin líneas con plan',plMaq:'Línea',plEst:'Estado',plListo:'Listo',plFalta:'Falta',plSinD:'Sin datos de material',plNoCola:'(sin cola)',mvBtn:'↔ Mover',mvT:'Mover',mvS:'Elige en qué máquinas corre este código',mvAqui:'✓ corre aquí',mvTocar:'tocar',mvOk:'Guardar',mvNo:'Cancelar',mvAviso:'El plan se recalcula en 1-5 min en el BOM Simulator.',mvNada:'Elige al menos una máquina',mvOkMsg:'Guardado. El plan se actualizará en unos minutos.',mvErr:'No se pudo guardar (permiso o red)',enLineaAhora:'▶ En línea ahora',fuera2:'⚠ Fuera de secuencia',adelantado:'⏩ Adelantado',prodDe:'Producido',alertSec:'En {m}: corre {a} (orden {oa}). El plan sugiere correr primero: {b} (orden {ob}). Lo producido se abona al modelo que corre.'});
 Object.assign(SEMT.en,{cutSin:'🟡 In cuts, not palletized: ',plAll:'🖨️ All lines plan',plTit:'Production plan · Mid process · All lines',plPub:'Published plan',plGen:'Generated',plNada:'No lines with a plan',plMaq:'Line',plEst:'Status',plListo:'Ready',plFalta:'Missing',plSinD:'No material data',plNoCola:'(empty queue)',mvBtn:'↔ Move',mvT:'Move',mvS:'Choose which machines run this part',mvAqui:'✓ runs here',mvTocar:'tap',mvOk:'Save',mvNo:'Cancel',mvAviso:'The plan is recalculated in 1-5 min in the BOM Simulator.',mvNada:'Pick at least one machine',mvOkMsg:'Saved. The plan will update in a few minutes.',mvErr:'Could not save (permission or network)',enLineaAhora:'▶ Running now',fuera2:'⚠ Out of sequence',adelantado:'⏩ Ahead of plan',prodDe:'Produced',alertSec:'On {m}: running {a} (order {oa}). The plan suggests running first: {b} (order {ob}). Output is credited to the item that is running.'});
 Object.assign(SEMT.ko,{cutSin:'🟡 컷 생산, 미적재: ',plAll:'🖨️ 전체 라인 계획',plTit:'생산 계획 · 중간 공정 · 전체 라인',plPub:'게시된 계획',plGen:'생성',plNada:'계획이 있는 라인 없음',plMaq:'라인',plEst:'상태',plListo:'가능',plFalta:'부족',plSinD:'자재 데이터 없음',plNoCola:'(대기 없음)',mvBtn:'↔ 이동',mvT:'이동',mvS:'이 부품을 생산할 설비를 선택하세요',mvAqui:'✓ 여기서 생산',mvTocar:'선택',mvOk:'저장',mvNo:'취소',mvAviso:'BOM 시뮬레이터에서 1-5분 후 계획이 재계산됩니다.',mvNada:'설비를 하나 이상 선택하세요',mvOkMsg:'저장되었습니다. 몇 분 후 계획이 갱신됩니다.',mvErr:'저장할 수 없습니다 (권한 또는 네트워크)',enLineaAhora:'▶ 현재 생산 중',fuera2:'⚠ 순서 이탈',adelantado:'⏩ 앞당김',prodDe:'생산',alertSec:'{m}: {a} 생산 중 (순서 {oa}). 계획상 먼저 생산할 항목: {b} (순서 {ob}). 생산량은 현재 생산 중인 항목에 반영됩니다.'});
+Object.assign(SEMT.es,{resBtn:'📝 Resumen del día',resTit:'Resumen del día · Medio proceso',resS1:'1. Etiquetas por cerrar (cortes sin pallet)',resS2:'2. Pallets por escanear en IMS',resS3:'3. Avance por línea (hoy)',resFecha:'Fecha',resCortes:'Cortes',resPals:'Pallets',resFalta:'Falta etiquetar',resPallet:'Pallet',resCant:'Cant.',resHora:'Hora',resItems:'Partes',resOk:'✓ Nada pendiente',resCarga:'Cargando días anteriores…',resErr:'No se pudieron leer los días anteriores',resNota:'Cortes = capturas del MES. Pallets = etiquetas cerradas (sin anular). Falta etiquetar = Cortes − Pallets. Se incluyen los últimos 3 días.',resAnt:'⚠ día anterior',resTotal:'Total'});
+Object.assign(SEMT.en,{resBtn:'📝 Daily summary',resTit:'Daily summary · Mid process',resS1:'1. Labels to close (cuts without pallet)',resS2:'2. Pallets to scan in IMS',resS3:'3. Progress per line (today)',resFecha:'Date',resCortes:'Cuts',resPals:'Pallets',resFalta:'Left to label',resPallet:'Pallet',resCant:'Qty',resHora:'Time',resItems:'Parts',resOk:'✓ Nothing pending',resCarga:'Loading previous days…',resErr:'Could not read previous days',resNota:'Cuts = MES entries. Pallets = closed labels (not voided). Left to label = Cuts − Pallets. Last 3 days included.',resAnt:'⚠ earlier day',resTotal:'Total'});
+Object.assign(SEMT.ko,{resBtn:'📝 일일 요약',resTit:'일일 요약 · 중간 공정',resS1:'1. 마감할 라벨 (팔레트 없는 컷)',resS2:'2. IMS에서 스캔할 팔레트',resS3:'3. 라인별 진행 (오늘)',resFecha:'날짜',resCortes:'컷',resPals:'팔레트',resFalta:'라벨 필요',resPallet:'팔레트',resCant:'수량',resHora:'시간',resItems:'부품',resOk:'✓ 대기 항목 없음',resCarga:'이전 날짜 불러오는 중…',resErr:'이전 날짜를 읽을 수 없습니다',resNota:'컷 = MES 입력. 팔레트 = 마감된 라벨(취소 제외). 라벨 필요 = 컷 − 팔레트. 최근 3일 포함.',resAnt:'⚠ 이전 날짜',resTotal:'합계'});
 function ts(k){ return (SEMT[lang]||SEMT.es)[k]; }
 var vistaSem=false; try{ vistaSem=localStorage.getItem('pisoVista')==='sem'; }catch(e){}
 function setVista(v){ vistaSem=(v==='sem'); try{localStorage.setItem('pisoVista',v);}catch(e){} pintar(); }
@@ -546,6 +550,7 @@ function semFalt(c){
 function pintar(){
   if(!firebase.auth().currentUser) return;
   var bpa=document.getElementById('btnPlanAll'); if(bpa) bpa.textContent=ts('plAll');
+  var brs=document.getElementById('btnResumen'); if(brs) brs.textContent=ts('resBtn');
   document.documentElement.lang=lang; document.title=t('title');
   document.getElementById('tTitle').textContent=t('title')+' · '+selMaq;
   document.querySelectorAll('.langs button').forEach(function(b){ b.classList.toggle('on', b.dataset.l===lang); });
@@ -712,7 +717,7 @@ function imprimirPickList(){
   document.body.classList.add('modo-pick','vista-pick');
   window.scrollTo(0,0);
 }
-function cerrarVistaPick(){ document.body.classList.remove('modo-pick','vista-pick'); var e=document.getElementById('pgStyle'); if(e) e.remove(); }
+function cerrarVistaPick(){ resActivo=false; document.body.classList.remove('modo-pick','vista-pick'); var e=document.getElementById('pgStyle'); if(e) e.remove(); }
 function imprimirPlanTodas(){
   if(!plan||!plan.colas){ alert(t('sinDatosExp')); return; }
   var ahora=new Date(), pubMs=plan.publicadoMs||Date.parse(plan.publicadoEn);
@@ -747,6 +752,83 @@ function imprimirPlanTodas(){
   window.scrollTo(0,0);
 }
 window.addEventListener('afterprint',function(){ if(!document.body.classList.contains('vista-pick')) document.body.classList.remove('modo-pick'); });
+
+
+// ===== RESUMEN DEL DÍA (todas las líneas) =====
+var resActivo=false, resPrev=null, resPrevErr=false;
+function resISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function resDatos(){
+  var cs={}, ps={}, ordM=function(m){ var i=MAQS.indexOf(m); return i<0?99:i; };
+  var allC=cortes.concat(resPrev?resPrev.cortes:[]), allP=pallets.concat(resPrev?resPrev.pallets:[]);
+  var key=function(m,pn){ return m+'||'+String(pn||'').trim().toUpperCase(); };  // se compara por línea+parte en toda la ventana (un corte de ayer puede etiquetarse hoy)
+  allC.forEach(function(r){ var m=r.maqNombre||r.maquina, k=key(m,r.parte); if(!cs[k]) cs[k]={f:r.fecha,m:m,pn:String(r.parte||'').trim(),q:0}; if(String(r.fecha)<String(cs[k].f)) cs[k].f=r.fecha; cs[k].q+=Number(r.prod!=null?r.prod:r.qty)||0; });
+  allP.forEach(function(p){ if(p.status==='VOID') return; var k=key(p.maquina,p.parte); ps[k]=(ps[k]||0)+(Number(p.qty)||0); });
+  var sin=Object.keys(cs).map(function(k){ var c=cs[k]; return {f:c.f,m:c.m,pn:c.pn,cortes:c.q,pal:ps[k]||0,falta:c.q-(ps[k]||0)}; })
+    .filter(function(x){ return x.falta>0; })
+    .sort(function(a,b){ return String(a.f).localeCompare(String(b.f)) || (ordM(a.m)-ordM(b.m)) || a.pn.localeCompare(b.pn); });
+  var esc2=allP.filter(function(p){ return p.status==='PENDING'; })
+    .sort(function(a,b){ return String(a.fecha).localeCompare(String(b.fecha)) || (ordM(a.maquina)-ordM(b.maquina)) || (a.horaMs||0)-(b.horaMs||0); });
+  return {sin:sin, esc:esc2};
+}
+function resHtml(){
+  var hoy=hoyISO(), d=resDatos(), ahora=new Date();
+  var h='<div class="ph"><div><h2>'+ts('resTit')+'</h2><div class="pinfo">'+hoy+' · '+ts('plGen')+': '+ahora.toLocaleString(t('loc'))+'</div></div></div>';
+  var aviso=function(f){ return f!==hoy?' <b>'+ts('resAnt')+'</b>':''; };
+  // 1) etiquetas por cerrar
+  h+='<div class="mh"><span>'+ts('resS1')+'</span><span>'+d.sin.length+'</span></div>';
+  if(!d.sin.length) h+='<div style="font-size:12px;padding:6px 8px">'+ts('resOk')+'</div>';
+  else {
+    h+='<table><tr><th>'+ts('resFecha')+'</th><th>'+t('maq')+'</th><th>'+t('codigo')+'</th><th class="r">'+ts('resCortes')+'</th><th class="r">'+ts('resPals')+'</th><th class="r">'+ts('resFalta')+'</th></tr>';
+    d.sin.forEach(function(x){ h+='<tr><td>'+esc(x.f)+aviso(x.f)+'</td><td><b>'+esc(x.m)+'</b></td><td><b>'+esc(x.pn)+'</b></td><td class="r">'+n(x.cortes)+'</td><td class="r">'+n(x.pal)+'</td><td class="r"><b>'+n(x.falta)+'</b></td></tr>'; });
+    h+='</table>';
+  }
+  // 2) pallets por escanear
+  h+='<div class="mh"><span>'+ts('resS2')+'</span><span>'+d.esc.length+'</span></div>';
+  if(!d.esc.length) h+='<div style="font-size:12px;padding:6px 8px">'+ts('resOk')+'</div>';
+  else {
+    h+='<table><tr><th>'+ts('resFecha')+'</th><th>'+ts('resPallet')+'</th><th>'+t('maq')+'</th><th>'+t('codigo')+'</th><th class="r">'+ts('resCant')+'</th><th>'+ts('resHora')+'</th></tr>';
+    d.esc.forEach(function(p){ h+='<tr><td>'+esc(p.fecha)+aviso(p.fecha)+'</td><td><b>'+esc(p.id||p.palletId||'')+'</b></td><td>'+esc(p.maquina)+'</td><td>'+esc(p.parte)+'</td><td class="r"><b>'+n(p.qty)+'</b></td><td>'+esc(p.horaTxt||'')+'</td></tr>'; });
+    h+='</table>';
+  }
+  // 3) avance por línea (hoy, según el plan publicado)
+  h+='<div class="mh"><span>'+ts('resS3')+'</span><span></span></div>';
+  if(!plan||!plan.colas) h+='<div style="font-size:12px;padding:6px 8px">'+ts('plNada')+'</div>';
+  else {
+    h+='<table><tr><th>'+t('maq')+'</th><th class="r">'+ts('resItems')+'</th><th class="r">'+t('target')+'</th><th class="r">'+t('prod')+'</th><th class="r">'+t('pend')+'</th><th class="r">'+t('avance')+'</th></tr>';
+    var tT=0,tP=0,tN=0,tI=0;
+    MAQS.forEach(function(m){
+      var cm=calcMaq(m), T=0,P=0,N=0;
+      cm.filas.forEach(function(f){ T+=f.target; P+=f.prod; N+=f.pend; });
+      tT+=T; tP+=P; tN+=N; tI+=cm.filas.length;
+      h+='<tr><td><b>'+esc(m)+'</b></td><td class="r">'+cm.filas.length+'</td><td class="r">'+n(T)+'</td><td class="r">'+n(P)+'</td><td class="r"><b>'+n(N)+'</b></td><td class="r">'+(T?Math.min(100,Math.round(P*100/T)):0)+'%</td></tr>';
+    });
+    h+='<tr><td><b>'+ts('resTotal')+'</b></td><td class="r"><b>'+tI+'</b></td><td class="r"><b>'+n(tT)+'</b></td><td class="r"><b>'+n(tP)+'</b></td><td class="r"><b>'+n(tN)+'</b></td><td class="r"><b>'+(tT?Math.min(100,Math.round(tP*100/tT)):0)+'%</b></td></tr></table>';
+  }
+  h+='<div class="pfoot">'+ts('resNota')+(resPrev===null&&!resPrevErr?' · '+ts('resCarga'):'')+(resPrevErr?' · '+ts('resErr'):'')+'</div>';
+  return h;
+}
+function resPintar(){ if(!resActivo) return; document.getElementById('pick').innerHTML=resHtml(); }
+function abrirResumen(){
+  resActivo=true; resPrev=null; resPrevErr=false;
+  document.getElementById('pbTitulo').textContent=ts('resTit');
+  document.getElementById('pbImprimir').textContent=t('pkImprimir');
+  document.getElementById('pbCerrar').textContent=t('pkCerrar');
+  var st=document.getElementById('pgStyle'); if(!st){ st=document.createElement('style'); st.id='pgStyle'; document.head.appendChild(st); }
+  st.textContent='@media print{@page{size:portrait;margin:10mm}}';
+  resPintar();
+  document.body.classList.add('modo-pick','vista-pick');
+  window.scrollTo(0,0);
+  // Días anteriores (últimos 3): se leen UNA vez al abrir, sin listeners en vivo
+  var d3=new Date(); d3.setDate(d3.getDate()-3);
+  var desde=resISO(d3), hoy=hoyISO();
+  Promise.all([
+    db.collection('pallets_medio').where('fecha','>=',desde).where('fecha','<',hoy).get(),
+    db.collection('registros').where('fecha','>=',desde).where('fecha','<',hoy).get()
+  ]).then(function(r){
+    resPrev={pallets:r[0].docs.map(function(x){ return Object.assign({id:x.id},x.data()); }), cortes:r[1].docs.map(function(x){ return x.data(); })};
+    resPintar();
+  }).catch(function(e){ console.warn('resumen:',e.message); resPrev={pallets:[],cortes:[]}; resPrevErr=true; resPintar(); });
+}
 
 // ===== EXCEL (todas las máquinas) =====
 function exportarExcel(){
@@ -819,11 +901,11 @@ function escucharPallets(){
   var f=hoyISO(); if(f===fechaPal && unsubPal) return; fechaPal=f;
   if(unsubPal) unsubPal();
   unsubPal=db.collection('pallets_medio').where('fecha','==',f).onSnapshot(function(s){
-    pallets=s.docs.map(function(d){ return d.data(); }); pintar();
+    pallets=s.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }); pintar(); resPintar();
   }, function(e){ console.warn('pallets_medio:',e); });
   if(unsubCut) unsubCut();
   unsubCut=db.collection('registros').where('fecha','==',f).onSnapshot(function(s){
-    cortes=s.docs.map(function(d){ return d.data(); }); pintar();
+    cortes=s.docs.map(function(d){ return d.data(); }); pintar(); resPintar();
   }, function(e){ cortes=[]; console.warn('registros:',e.message); });
 }
 var arrancado=false;

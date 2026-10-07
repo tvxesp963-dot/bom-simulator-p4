@@ -211,6 +211,7 @@ tr.swrunrow td{background:rgba(77,166,255,.08)}
       <button id="btnPdf" onclick="imprimirPDF()">🖨️ PDF</button>
       <button id="btnXls" onclick="exportarExcel()">📊 Excel</button>
       <button id="btnPick" onclick="imprimirPickList()">📋 Pick List</button>
+      <button id="btnResumen" onclick="abrirResumen()"></button>
     </div>
     <div class="langs">
       <button data-l="es" title="Español"><img src="https://flagcdn.com/w40/mx.png" alt="MX"></button><button data-l="en" title="English"><img src="https://flagcdn.com/w40/us.png" alt="US"></button><button data-l="ko" title="한국어"><img src="https://flagcdn.com/w40/kr.png" alt="KR"></button>
@@ -259,6 +260,9 @@ var T = {
       kPO:'총 PO 잔량',cEnv:'이미 출하됨',cEnvTip:'트레일러로 이미 출하됨 (생산량에 포함)',cExtra:'초과분 = 다른 출하분 선생산, 차감 안 됨',poTblT:'모델별 PO 잔량',poFaltaM:'PO 남은 수량',pctFalta:'% 잔여',totM:'합계',poTitulo:'PO 및 출하 요약',ocultar:'숨기기',mostrar:'보기',estim:'예상',restoTxt:'엑셀에 날짜 없는 PO 잔량',cYa:'이 출하분 기생산',cYah:'이 출하 모델만 해당',cFalta2h:'위 계산 결과',shipProd:'기생산',sigTag:'다음',sinPO:'PO 잔량 없음: BOM Simulator에서 계획 Excel(PO Balance, Ship 열 포함)을 올리고 📤 Publicar TV를 누르세요.',sigLinea:'ASSY1 다음',completoTxt:'완료',poTot:'총 PO',poBal:'생산할 PO',poFinal:'최종 PO',cNext:'다음 출하',cPO:'생산 대기 PO 잔량',cPOh:'미결 PO − 생산',cFalta:'출하까지 부족',cFaltah:'생산 시 감소',cFinal:'최종 PO 잔량',cFinalh:'출하 후 남는 수량',shipsT:'예정 출하 (순서대로 차감)',shipQty:'출하 수량',shipFalta:'부족',poAfter:'출하 후 PO',nxt:'다음',prog:'예정',
       d:'일',h:'시간',m:'분',pzas:'개',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],loc:'ko-KR'}
 };
+Object.assign(T.es,{resBtn:'📝 Resumen del día',resTit:'Resumen del día · Ensamble ASSY1',resBloq:'Detenidos por falta de material',resNoBloq:'✓ Ningún modelo detenido por material',resNota:'Producido = pallets de ShipQR. Pendiente = Target − Producido. Foto del momento en que se abre este resumen.',resTotal:'Total'});
+Object.assign(T.en,{resBtn:'📝 Daily summary',resTit:'Daily summary · ASSY1 Assembly',resBloq:'Stopped for missing material',resNoBloq:'✓ No model stopped by material',resNota:'Produced = ShipQR pallets. Pending = Target − Produced. Snapshot of when this summary is opened.',resTotal:'Total'});
+Object.assign(T.ko,{resBtn:'📝 일일 요약',resTit:'일일 요약 · ASSY1 조립',resBloq:'자재 부족으로 정지',resNoBloq:'✓ 자재 부족으로 정지된 모델 없음',resNota:'생산 = ShipQR 팔레트. 잔량 = 목표 − 생산. 이 요약을 연 시점의 기준입니다.',resTotal:'합계'});
 var lang = 'es';
 try { lang = localStorage.getItem('pisoLang') || 'es'; } catch (e) {}
 if (!T[lang]) lang = 'es';
@@ -533,6 +537,7 @@ function pintar(){
   document.getElementById('tTitle').textContent = t('title');
   document.querySelectorAll('.langs button').forEach(function(b){ b.classList.toggle('on', b.dataset.l === lang); });
   document.getElementById('foot').textContent = t('foot');
+  var brs = document.getElementById('btnResumen'); if (brs) brs.textContent = t('resBtn');
 
   // Encabezado: corte + publicado
   var ahora = new Date(), sub = '';
@@ -957,6 +962,50 @@ function imprimirPickList(){
   document.body.classList.add('modo-pick', 'vista-pick');
   window.scrollTo(0, 0);
 }
+
+// ===== RESUMEN DEL DÍA =====
+function abrirResumen(){
+  var u = window._ultimo;
+  if (!u) { alert(t('sinDatosExp')); return; }
+  var ahora = new Date();
+  var pub = (plan && plan.publicadoEn) ? new Date(plan.publicadoEn).toLocaleString(t('loc')) : '—';
+  var pc = proximoCorte(ahora);
+  var corteTxt = pc ? t('dias')[pc.getDay()] + ' ' + fechaCorta(pc) + ' ' + pc.toLocaleTimeString(t('loc'), {hour:'numeric', minute:'2-digit'}) : '—';
+  var pendTot = Math.max(0, u.tot.t - u.tot.p), pctTot = u.tot.t ? Math.round(u.tot.p * 100 / u.tot.t) : 0;
+  var h = '<div class="ph"><div><h2>' + t('resTit') + '</h2><div class="pinfo">' + t('corte') + ': ' + corteTxt + ' · ' + t('pkPlan') + ': ' + pub + ' · ' + t('impreso') + ': ' + ahora.toLocaleString(t('loc')) + '</div></div></div>';
+  h += '<div class="mh"><span>' + t('target') + ': ' + n(u.tot.t) + ' · ' + t('prod') + ': ' + n(u.tot.p) + ' · ' + t('pend') + ': ' + n(pendTot) + '</span><span>' + t('avance') + ': ' + pctTot + '%</span></div>';
+  var hayPO = false;
+  [u.run, u.wait, u.done].forEach(function(g){ g.forEach(function(f){ if (f.po !== null && f.po !== undefined) hayPO = true; }); });
+  var falt = function(f){ return ['Strip','Top','Bot','Bundle'].filter(function(k){ return f.m.materiales && matEst(f.m, k, f.pend) === false; }); };
+  h += '<table><tr><th style="width:5%">#</th><th>' + t('modelo') + '</th><th style="width:12%">' + t('codigo') + '</th><th style="width:7%">' + t('envio') + '</th><th class="r" style="width:8%">' + t('target') + '</th><th class="r" style="width:8%">' + t('prod') + '</th><th class="r" style="width:8%">' + t('pend') + '</th><th class="r" style="width:6%">' + t('avance') + '</th>' + (hayPO ? '<th class="r" style="width:9%">' + t('poBal') + '</th>' : '') + '<th style="width:22%">' + t('estado') + '</th></tr>';
+  [['run', u.run], ['wait', u.wait], ['done', u.done]].forEach(function(g){
+    g[1].forEach(function(f){
+      var est;
+      if (g[0] === 'run') { var cap = f.m.cap || 0; est = '⚡ ' + t('listo') + ' ' + n(cap >= f.pend ? f.pend : cap) + (cap >= f.pend ? '' : ' / ' + n(f.pend)); }
+      else if (g[0] === 'wait') { var fl = falt(f); est = '⏳ ' + (fl.length ? t('falta') + ': ' + fl.join(', ') : t('sinDatos')); }
+      else est = '✓ ' + t('completo');
+      h += '<tr><td><b>' + (g[0] === 'run' ? f.m.orden : '—') + '</b></td><td>' + esc(f.m.sm) + '</td><td><b>' + esc(f.m.code || '') + '</b></td><td>' + fechaEnvio(f.m.fecha) + '</td><td class="r">' + n(f.m.target || 0) + '</td><td class="r">' + n(f.prod) + '</td><td class="r"><b>' + n(f.pend) + '</b></td><td class="r">' + f.pct + '%</td>' +
+           (hayPO ? '<td class="r">' + (f.po === null || f.po === undefined ? '—' : n(f.po)) + '</td>' : '') + '<td>' + est + '</td></tr>';
+    });
+  });
+  h += '</table>';
+  var bl = u.wait.filter(function(f){ return falt(f).length; });
+  h += '<div class="mh"><span>' + t('resBloq') + '</span><span>' + bl.length + '</span></div>';
+  if (!bl.length) h += '<div style="font-size:12px;padding:6px 8px">' + t('resNoBloq') + '</div>';
+  else {
+    h += '<table>';
+    bl.forEach(function(f){ h += '<tr><td style="width:30%"><b>' + esc(f.m.sm) + '</b></td><td style="width:15%">' + esc(f.m.code || '') + '</td><td>' + falt(f).join(', ') + '</td><td class="r" style="width:12%">' + n(f.pend) + '</td></tr>'; });
+    h += '</table>';
+  }
+  h += '<div class="pfoot">' + t('resNota') + '</div>';
+  document.getElementById('pick').innerHTML = h;
+  document.getElementById('pbTitulo').textContent = t('resTit');
+  document.getElementById('pbImprimir').textContent = t('pkImprimir');
+  document.getElementById('pbCerrar').textContent = t('pkCerrar');
+  document.body.classList.add('modo-pick', 'vista-pick');
+  window.scrollTo(0, 0);
+}
+
 function cerrarVistaPick(){ document.body.classList.remove('modo-pick', 'vista-pick'); }
 window.addEventListener('afterprint', function(){ if (!document.body.classList.contains('vista-pick')) document.body.classList.remove('modo-pick'); });
 

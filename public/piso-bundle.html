@@ -147,6 +147,7 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
       <button id="btnZoomMenos" onclick="cambiarZoom(-0.1)">A−</button><button id="btnZoomPct" onclick="cambiarZoom(0)">100%</button><button id="btnZoomMas" onclick="cambiarZoom(0.1)">A+</button>
       <button id="btnPdf" onclick="window.print()">🖨️ PDF</button>
       <button id="btnXls" onclick="exportarExcel()">📊 Excel</button>
+      <button id="btnResumen" onclick="verResumen()"></button>
       <button id="btnPick" onclick="imprimirPickList()">📋 Pick List</button>
     </div>
     <div class="langs">
@@ -175,7 +176,7 @@ body.vista-pick #pick{display:block!important;max-width:1000px;margin:16px auto;
 
 <script>
 var T = {
-  es:{impreso:'Generado',codigo:'Número de parte',seccion:'Sección',hojaPlan:'Orden',maq:'Máquina',sinDatosExp:'Sin datos para exportar',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → Bundle P3',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkMaqs:'Máquinas',pkNada:'No hay items listos para correr.',pkEstim:'Fecha estimada según días de cola por máquina',pkPlan:'Plan publicado',pkVC:'Pasar por VC (ranurar) primero',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],title:'Bundle · Piso P3',loading:'Cargando plan...',publicado:'Publicado',viejo:'(plan de hace más de 12 h)',matViejo:'Plan de hace',
+  es:{rsBtn:'📝 Resumen del día',rsTit:'Resumen del día · Bundle P3',rsVista:'Vista previa · Resumen del día',rsMaq:'Máquina',rsParte:'Parte',rsModelo:'Modelo',rsProd:'Producido hoy',rsPal:'Pallets',rsPendIms:'Sin escanear en IMS',rsFalta:'Falta por producir',rsTotal:'Total',rsNada:'Sin producción registrada hoy',rsSinProd:'Sin producción hoy',rsNota:'Producido = pallets del MES de hoy (sin cancelados). Falta = lo pendiente del plan publicado.',impreso:'Generado',codigo:'Número de parte',seccion:'Sección',hojaPlan:'Orden',maq:'Máquina',sinDatosExp:'Sin datos para exportar',pkVista:'Vista previa · Pick List',pkImprimir:'🖨️ Imprimir',pkCerrar:'✕ Cerrar',pkTitulo:'Pick List · Almacén → Bundle P3',pkPrep:'Preparar',pkEntregar:'Entregar',pkYa:'YA (primero)',pkHoy:'hoy',pkManana:'mañana',pkMaterial:'Material',pkPN:'No. de parte',pkDesc:'Descripción',pkCant:'Cantidad',pkNota:'Nota',pkPrepChk:'Prep.',pkEntrChk:'Entr.',pkPreparo:'Preparó',pkEntrego:'Entregó',pkRecibio:'Recibió (línea)',pkResumen:'Resumen por número de parte',pkModelos:'Modelos',pkMaqs:'Máquinas',pkNada:'No hay items listos para correr.',pkEstim:'Fecha estimada según días de cola por máquina',pkPlan:'Plan publicado',pkVC:'Pasar por VC (ranurar) primero',dias:['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],title:'Bundle · Piso P3',loading:'Cargando plan...',publicado:'Publicado',viejo:'(plan de hace más de 12 h)',matViejo:'Plan de hace',
       target:'Target',prod:'Producido',pend:'Pendiente',avance:'Avance',orden:'Orden',envio:'Envío',modelo:'Modelo',material:'Material',estado:'Estado',
       run:'Se pueden correr',wait:'Esperando material',done:'Completados',listo:'Listo',de:'de',falta:'Falta',sinDatos:'Sin datos de material',completo:'Completo',
       vacio:'Todavía no hay plan de Bundle. Publícalo desde el BOM Simulator (Publicar TV).',sinCola:'Sin cola para esta máquina en el plan publicado',
@@ -185,7 +186,7 @@ var T = {
       forgot:'¿Olvidaste tu contraseña? Da clic aquí para restablecerla',rstT:'Restablecer contraseña',rstS:'Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.',
       rstB:'Enviar enlace',rstC:'Cancelar',rstOk:'Listo. Revisa tu correo y también la carpeta de SPAM.',rstErr:'No se pudo enviar. Revisa el correo escrito.',
       foot:'Orden = Bundle de P3 que sale del plan principal de P4 en el BOM Simulator (prioridad del Excel + material + líneas del master de Bundle) · Producido = pallets del MES de hoy · Se republica cada 5 min',loc:'es-MX'},
-  en:{impreso:'Generated',codigo:'Part number',seccion:'Section',hojaPlan:'Order',maq:'Machine',sinDatosExp:'No data to export',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → Bundle P3',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkMaqs:'Machines',pkNada:'No items ready to run.',pkEstim:'Estimated date from queue days per machine',pkPlan:'Plan published',pkVC:'Send through VC (slotting) first',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],title:'Bundle · P3 Floor',loading:'Loading plan...',publicado:'Published',viejo:'(plan older than 12 h)',matViejo:'Plan from',
+  en:{rsBtn:'📝 Daily summary',rsTit:'Daily summary · Bundle P3',rsVista:'Preview · Daily summary',rsMaq:'Machine',rsParte:'Part',rsModelo:'Model',rsProd:'Produced today',rsPal:'Pallets',rsPendIms:'Not scanned in IMS',rsFalta:'Left to produce',rsTotal:'Total',rsNada:'No production recorded today',rsSinProd:'No production today',rsNota:'Produced = today\'s MES pallets (excluding voided). Left = pending in the published plan.',impreso:'Generated',codigo:'Part number',seccion:'Section',hojaPlan:'Order',maq:'Machine',sinDatosExp:'No data to export',pkVista:'Preview · Pick List',pkImprimir:'🖨️ Print',pkCerrar:'✕ Close',pkTitulo:'Pick List · Warehouse → Bundle P3',pkPrep:'Prepare',pkEntregar:'Deliver',pkYa:'NOW (first)',pkHoy:'today',pkManana:'tomorrow',pkMaterial:'Material',pkPN:'Part number',pkDesc:'Description',pkCant:'Qty',pkNota:'Note',pkPrepChk:'Prep.',pkEntrChk:'Deliv.',pkPreparo:'Prepared by',pkEntrego:'Delivered by',pkRecibio:'Received (line)',pkResumen:'Summary by part number',pkModelos:'Models',pkMaqs:'Machines',pkNada:'No items ready to run.',pkEstim:'Estimated date from queue days per machine',pkPlan:'Plan published',pkVC:'Send through VC (slotting) first',dias:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],title:'Bundle · P3 Floor',loading:'Loading plan...',publicado:'Published',viejo:'(plan older than 12 h)',matViejo:'Plan from',
       target:'Target',prod:'Produced',pend:'Pending',avance:'Progress',orden:'Order',envio:'Ship date',modelo:'Model',material:'Material',estado:'Status',
       run:'Ready to run',wait:'Waiting for material',done:'Completed',listo:'Ready',de:'of',falta:'Missing',sinDatos:'No material data',completo:'Complete',
       vacio:'No Bundle plan yet. Publish it from the BOM Simulator (Publish TV).',sinCola:'No queue for this machine in the published plan',
@@ -195,7 +196,7 @@ var T = {
       forgot:'Forgot your password? Click here to reset it',rstT:'Reset password',rstS:'Enter your email and we will send you a link to create a new password.',
       rstB:'Send link',rstC:'Cancel',rstOk:'Done. Check your email and also your SPAM folder.',rstErr:'Could not send. Check the email you typed.',
       foot:'Order = P3 Bundle derived from the main P4 plan in the BOM Simulator (Excel priority + material + Bundle master lines) · Produced = today\'s MES pallets · Republished every 5 min',loc:'en-US'},
-  ko:{impreso:'생성',codigo:'부품 번호',seccion:'구분',hojaPlan:'순서',maq:'설비',sinDatosExp:'내보낼 데이터가 없습니다',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → 번들 P3',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkMaqs:'설비',pkNada:'생산 가능한 항목이 없습니다.',pkEstim:'설비별 작업일수 기준 예상일',pkPlan:'계획 게시',pkVC:'먼저 VC(슬롯 가공) 통과',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],title:'번들 · P3 현장',loading:'계획 불러오는 중...',publicado:'게시',viejo:'(12시간 이상 지난 계획)',matViejo:'계획 경과',
+  ko:{rsBtn:'📝 일일 요약',rsTit:'일일 요약 · 번들 P3',rsVista:'미리보기 · 일일 요약',rsMaq:'설비',rsParte:'부품',rsModelo:'모델',rsProd:'오늘 생산',rsPal:'팔레트',rsPendIms:'IMS 미스캔',rsFalta:'남은 생산',rsTotal:'합계',rsNada:'오늘 생산 기록 없음',rsSinProd:'오늘 생산 없음',rsNota:'생산 = 오늘 MES 팔레트(취소 제외). 남은 수량 = 게시된 계획의 잔량.',impreso:'생성',codigo:'부품 번호',seccion:'구분',hojaPlan:'순서',maq:'설비',sinDatosExp:'내보낼 데이터가 없습니다',pkVista:'미리보기 · 피킹 리스트',pkImprimir:'🖨️ 인쇄',pkCerrar:'✕ 닫기',pkTitulo:'피킹 리스트 · 창고 → 번들 P3',pkPrep:'준비',pkEntregar:'납품',pkYa:'즉시 (첫 번째)',pkHoy:'오늘',pkManana:'내일',pkMaterial:'자재',pkPN:'부품 번호',pkDesc:'설명',pkCant:'수량',pkNota:'비고',pkPrepChk:'준비',pkEntrChk:'납품',pkPreparo:'준비자',pkEntrego:'납품자',pkRecibio:'수령자 (라인)',pkResumen:'부품 번호별 합계',pkModelos:'모델',pkMaqs:'설비',pkNada:'생산 가능한 항목이 없습니다.',pkEstim:'설비별 작업일수 기준 예상일',pkPlan:'계획 게시',pkVC:'먼저 VC(슬롯 가공) 통과',dias:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],title:'번들 · P3 현장',loading:'계획 불러오는 중...',publicado:'게시',viejo:'(12시간 이상 지난 계획)',matViejo:'계획 경과',
       target:'목표',prod:'생산',pend:'잔량',avance:'진척률',orden:'순서',envio:'출하일',modelo:'모델',material:'자재',estado:'상태',
       run:'생산 가능',wait:'자재 대기',done:'완료',listo:'준비',de:'/',falta:'부족',sinDatos:'자재 데이터 없음',completo:'완료',
       vacio:'아직 번들 계획이 없습니다. BOM Simulator에서 게시하세요 (TV 게시).',sinCola:'게시된 계획에 이 설비의 작업 없음',
@@ -459,7 +460,7 @@ function pintar(){
   document.documentElement.lang=lang; document.title=t('title');
   document.getElementById('tTitle').textContent=t('title')+' · '+ml(selMaq);
   document.querySelectorAll('.langs button').forEach(function(b){ b.classList.toggle('on', b.dataset.l===lang); });
-  document.getElementById('foot').textContent=t('foot');
+  document.getElementById('foot').textContent=t('foot'); document.getElementById('btnResumen').textContent=t('rsBtn');
   pintarTabs(); pintarVistaSw();
 
   var ahora=new Date(), sub='';
@@ -613,6 +614,40 @@ function imprimirPickList(){
   h+='<div class="pfoot">'+t('pkEstim')+'</div>';
   document.getElementById('pick').innerHTML=h;
   document.getElementById('pbTitulo').textContent=t('pkVista');
+  document.getElementById('pbImprimir').textContent=t('pkImprimir');
+  document.getElementById('pbCerrar').textContent=t('pkCerrar');
+  document.body.classList.add('modo-pick','vista-pick');
+  window.scrollTo(0,0);
+}
+
+// ===== RESUMEN DEL DÍA =====
+function verResumen(){
+  var ahora=new Date(), tot=0, totPend=0, grupos='';
+  MAQS.forEach(function(m){
+    var cola=colaDe(m), porParte={};
+    vivosDe(m).forEach(function(p){
+      var r=porParte[p.parte]||(porParte[p.parte]={pn:p.parte,modelo:p.modelo||'',qty:0,pal:0,pend:0});
+      r.qty+=Number(p.qty)||0; r.pal++; if(p.status==='PENDING') r.pend+=Number(p.qty)||0;
+      if(!r.modelo && p.modelo) r.modelo=p.modelo;
+    });
+    var filas=Object.keys(porParte).map(function(k){ return porParte[k]; });
+    filas.forEach(function(r){
+      var c=cola.filter(function(x){ return x.pn===r.pn; })[0];
+      r.falta=c ? Math.max(0,(c.pendiente||0)) : 0;
+      if(c && !r.modelo) r.modelo=(c.modelos||[c.sm]||[]).join(', ');
+    });
+    var sub=filas.reduce(function(s,r){ return s+r.qty; },0), subP=filas.reduce(function(s,r){ return s+r.pend; },0);
+    tot+=sub; totPend+=subP;
+    grupos+='<div class="mh" style="background:#eee"><span>'+esc(ml(m))+'</span><span>'+t('rsTotal')+': '+n(sub)+' '+t('pzas')+'</span></div>';
+    if(!filas.length){ grupos+='<p style="font-size:11px;margin:4px 0">'+t('rsSinProd')+'</p>'; return; }
+    grupos+='<table><tr><th>'+t('rsParte')+'</th><th>'+t('rsModelo')+'</th><th class="r">'+t('rsPal')+'</th><th class="r">'+t('rsProd')+'</th><th class="r">'+t('rsPendIms')+'</th><th class="r">'+t('rsFalta')+'</th></tr>'+
+      filas.map(function(r){ return '<tr><td><b>'+esc(r.pn)+'</b></td><td>'+esc(r.modelo)+'</td><td class="r">'+r.pal+'</td><td class="r"><b>'+n(r.qty)+'</b></td><td class="r">'+(r.pend?n(r.pend):'—')+'</td><td class="r">'+n(r.falta)+'</td></tr>'; }).join('')+'</table>';
+  });
+  var h='<div class="ph"><div><h2>'+t('rsTit')+'</h2><div class="pinfo">'+ahora.toLocaleDateString(t('loc'),{weekday:'long',day:'2-digit',month:'long',year:'numeric'})+' · '+t('impreso')+': '+ahora.toLocaleTimeString(t('loc'),{hour:'2-digit',minute:'2-digit'})+'</div></div>'+
+    '<div class="firmas">'+t('rsTotal')+': <b>'+n(tot)+'</b> '+t('pzas')+'<br>'+t('rsPendIms')+': <b>'+n(totPend)+'</b></div></div>'+
+    (tot?grupos:'<p>'+t('rsNada')+'</p>')+'<div class="pfoot">'+t('rsNota')+'</div>';
+  document.getElementById('pick').innerHTML=h;
+  document.getElementById('pbTitulo').textContent=t('rsVista');
   document.getElementById('pbImprimir').textContent=t('pkImprimir');
   document.getElementById('pbCerrar').textContent=t('pkCerrar');
   document.body.classList.add('modo-pick','vista-pick');

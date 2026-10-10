@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
+<script src="uso-lecturas.js" data-app="BOM Simulator"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
 :root{--bg:#080c18;--bg2:#0e1325;--bg3:#141929;--bg4:#1c2238;--accent:#4da6ff;--accent2:#1a6fd4;--accent3:#0d4a99;--green:#00e676;--green2:#00b85a;--red:#ff4444;--amber:#ffb300;--cyan:#00e5ff;--purple:#b388ff;--teal:#00bcd4;--text:#dde3f5;--text2:#7a88b8;--text3:#3d4d77;--border:#1e2a4a;--border2:#263558;}
@@ -356,7 +357,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div id="consContent" style="display:none">
     <div class="top-actions">
       <span style="font-size:12px;color:var(--text2)" id="consTitle"></span>
-      <button class="btn btn-success btn-sm" style="margin-left:auto" onclick="exportarExcel()">📊 Descargar Excel</button>
+      <button class="btn btn-primary btn-sm" id="btnCorreoPlan" style="margin-left:auto;display:none" onclick="abrirCorreoPlan()">📧 Enviar correo de plan</button>
+      <button class="btn btn-success btn-sm" onclick="exportarExcel()">📊 Descargar Excel</button>
     </div>
     <div id="consCapasBar"></div>
     <div id="consCards"></div>
@@ -3539,7 +3541,8 @@ function formatoMilesWb(wb) {
   return wb;
 }
 
-function exportarExcel() {
+function exportarExcel(opts) {
+  const paraCorreo = !!(opts && opts.paraCorreo === true);
   if (!BOM.length) { alert('Primero procesa tu BOM'); return; }
   // Garantizar que los datos del Excel sean espejo exacto de lo calculado en pantalla
   renderCons();
@@ -3841,7 +3844,212 @@ function exportarExcel() {
   ws2['!cols'] = [{wch:5},{wch:18},{wch:14},{wch:30},{wch:13},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws2, 'Producir y VC Ranurar');
 
-  XLSX.writeFile(formatoMilesWb(wb), `BOM_Consolidado_P4_${semana.replace(/[\s\u2014]+/g,'_')}_${fechaArchivo}.xlsx`);
+  const nombreCons = `BOM_Consolidado_P4_${semana.replace(/[\s\u2014]+/g,'_')}_${fechaArchivo}.xlsx`;
+  if (paraCorreo) {
+    const wbC = formatoMilesWb(wb);
+    return { nombre: nombreCons, base64: XLSX.write(wbC, { bookType:'xlsx', type:'base64' }), ws: (ws1Capas || ws1) };
+  }
+  XLSX.writeFile(formatoMilesWb(wb), nombreCons);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// CORREO DEL PLAN — envía la foto del Consolidado + el Excel adjunto por Google Apps Script.
+// Destinatarios: lista guardada en Firestore (bom_simulator_p4/lista_correos), se edita en Admin BOM.
+// La clave del script NO está en el código: se pide una vez y se guarda en este navegador.
+// ═══════════════════════════════════════════════════════════════════
+var CORREO_URL = 'https://script.google.com/macros/s/AKfycbxjC00EfXcmv8zJY4iSudMLFRK1rA7dDv_b4DDzNCH2E7CPjPX8ZJQVNkQKnSoDZis/exec';
+var CORREO_TXT = {
+  es: { btn:'📧 Enviar correo de plan', titulo:'Enviar correo de plan', asunto:'Asunto', para:'Para', cc:'CC', vista:'Cuerpo del correo = foto del consolidado',
+        generando:'⏳ Generando la imagen…', adjunto:'Adjunto', enviar:'📧 Enviar ahora', cancelar:'Cancelar', enviando:'⏳ Enviando…',
+        ok:'✅ Correo enviado', errClave:'❌ Clave incorrecta. Vuelve a intentar.', errRed:'⚠ No se pudo confirmar el envío. Revisa tu correo/enviados antes de reenviar.',
+        sinDest:'Marca al menos un destinatario en "Para".', sinLista:'La lista de correos está vacía. Agrégalos en Admin BOM → Lista de correos.',
+        pedirClave:'Escribe la clave del script de correo (se guarda solo en este navegador):', sinDatos:'Primero carga el BOM y el plan.', sinImg:'No se pudo generar la imagen del consolidado.',
+        sale:'Sale desde la cuenta de Google del script',
+        lTitulo:'📧 Lista de correos', lAyuda:'Aquí se guardan los correos para los envíos automáticos. Marca Para / CC según quién deba recibirlo normalmente; al enviar todavía puedes cambiarlo.',
+        nombre:'Nombre', correo:'Correo', agregar:'+ Agregar', quitar:'Quitar', vacia:'Todavía no hay correos en la lista.', invalido:'Correo no válido', guardado:'✓ Guardado' },
+  en: { btn:'📧 Send plan email', titulo:'Send plan email', asunto:'Subject', para:'To', cc:'CC', vista:'Email body = picture of the consolidated',
+        generando:'⏳ Building the image…', adjunto:'Attachment', enviar:'📧 Send now', cancelar:'Cancel', enviando:'⏳ Sending…',
+        ok:'✅ Email sent', errClave:'❌ Wrong key. Try again.', errRed:'⚠ Could not confirm delivery. Check your sent mail before resending.',
+        sinDest:'Check at least one recipient in "To".', sinLista:'The mailing list is empty. Add emails in Admin BOM → Mailing list.',
+        pedirClave:'Enter the mail script key (saved only in this browser):', sinDatos:'Load the BOM and the plan first.', sinImg:'Could not build the consolidated image.',
+        sale:'Sent from the script\'s Google account',
+        lTitulo:'📧 Mailing list', lAyuda:'Emails used for the automatic sends are stored here. Check To / CC for who normally receives it; you can still change it when sending.',
+        nombre:'Name', correo:'Email', agregar:'+ Add', quitar:'Remove', vacia:'No emails in the list yet.', invalido:'Invalid email', guardado:'✓ Saved' },
+  ko: { btn:'📧 계획 메일 보내기', titulo:'계획 메일 보내기', asunto:'제목', para:'받는 사람', cc:'참조', vista:'메일 본문 = 통합 자재표 이미지',
+        generando:'⏳ 이미지 생성 중…', adjunto:'첨부', enviar:'📧 지금 보내기', cancelar:'취소', enviando:'⏳ 전송 중…',
+        ok:'✅ 메일 전송 완료', errClave:'❌ 키가 틀렸습니다. 다시 시도하세요.', errRed:'⚠ 전송 확인 불가. 다시 보내기 전에 보낸 편지함을 확인하세요.',
+        sinDest:'"받는 사람"을 하나 이상 선택하세요.', sinLista:'메일 목록이 비어 있습니다. Admin BOM → 메일 목록에서 추가하세요.',
+        pedirClave:'메일 스크립트 키를 입력하세요 (이 브라우저에만 저장):', sinDatos:'먼저 BOM과 계획을 불러오세요.', sinImg:'통합 자재표 이미지를 만들 수 없습니다.',
+        sale:'스크립트의 Google 계정으로 발송',
+        lTitulo:'📧 메일 목록', lAyuda:'자동 발송에 쓰는 메일을 저장합니다. 보통 받는 사람에 따라 받는 사람 / 참조를 체크하세요. 발송 시 다시 바꿀 수 있습니다.',
+        nombre:'이름', correo:'메일', agregar:'+ 추가', quitar:'삭제', vacia:'목록에 메일이 없습니다.', invalido:'잘못된 메일', guardado:'✓ 저장됨' }
+};
+function cT(k) { var l = (typeof autoChkLang === 'function') ? autoChkLang() : 'es'; return (CORREO_TXT[l] || CORREO_TXT.es)[k]; }
+function cEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); }
+function correoValido(x) { return /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(String(x || '').trim()); }
+
+// ── Lista de correos (1 documento en Firestore = 1 lectura; se lee una sola vez por sesión) ──
+window.listaCorreos = null;
+function cargarListaCorreos() {
+  if (window.listaCorreos) return Promise.resolve(window.listaCorreos);
+  if (!db && typeof initIMS === 'function') { try { initIMS(); } catch (e) {} }
+  if (!db) { window.listaCorreos = []; return Promise.resolve(window.listaCorreos); }
+  return db.collection('bom_simulator_p4').doc('lista_correos').get().then(function (doc) {
+    var d = doc.exists ? doc.data() : {};
+    window.listaCorreos = Array.isArray(d.lista) ? d.lista : [];
+    return window.listaCorreos;
+  }).catch(function () { window.listaCorreos = window.listaCorreos || []; return window.listaCorreos; });
+}
+function guardarListaCorreos() {
+  if (!db) return;
+  db.collection('bom_simulator_p4').doc('lista_correos').set({ lista: window.listaCorreos || [] }).then(function () {
+    var st = document.getElementById('listaCorreosSt'); if (st) { st.textContent = cT('guardado'); setTimeout(function () { if (st) st.textContent = ''; }, 2000); }
+  }).catch(function () {});
+}
+function prepararListaCorreos() { cargarListaCorreos().then(renderListaCorreos); }
+function renderListaCorreos() {
+  var wrap = document.getElementById('listaCorreosWrap'); if (!wrap) return;
+  var L = window.listaCorreos || [];
+  var inp = 'background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.4rem .5rem;color:var(--text);font-size:12px';
+  var filas = L.length ? L.map(function (p, i) {
+    return '<tr style="border-bottom:1px solid var(--border2)"><td style="padding:.4rem .3rem">' + cEsc(p.nombre) + '</td><td style="padding:.4rem .3rem;color:var(--text2)">' + cEsc(p.correo) + '</td>' +
+      '<td style="text-align:center"><input type="checkbox" ' + (p.para ? 'checked' : '') + ' onchange="listaCorreoMarcar(' + i + ',\'para\',this.checked)"></td>' +
+      '<td style="text-align:center"><input type="checkbox" ' + (p.cc ? 'checked' : '') + ' onchange="listaCorreoMarcar(' + i + ',\'cc\',this.checked)"></td>' +
+      '<td style="text-align:right"><button class="btn btn-secondary btn-sm" onclick="listaCorreoQuitar(' + i + ')">✕ ' + cEsc(cT('quitar')) + '</button></td></tr>';
+  }).join('') : '<tr><td colspan="5" style="font-size:11px;color:var(--text3);padding:.5rem 0">' + cEsc(cT('vacia')) + '</td></tr>';
+  wrap.innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--text2);font-size:11px;text-align:left"><th>' + cEsc(cT('nombre')) + '</th><th>' + cEsc(cT('correo')) + '</th><th style="text-align:center">' + cEsc(cT('para')) + '</th><th style="text-align:center">' + cEsc(cT('cc')) + '</th><th></th></tr></thead><tbody>' + filas + '</tbody></table>' +
+    '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem"><input id="lcNombre" type="text" placeholder="' + cEsc(cT('nombre')) + '" style="' + inp + ';flex:1;min-width:120px">' +
+    '<input id="lcCorreo" type="email" placeholder="correo@empresa.com" style="' + inp + ';flex:2;min-width:180px"><button class="btn btn-primary btn-sm" onclick="listaCorreoAgregar()">' + cEsc(cT('agregar')) + '</button></div>' +
+    '<div id="listaCorreosSt" style="margin-top:.4rem;font-size:12px;color:var(--green)"></div>';
+}
+function listaCorreoMarcar(i, campo, v) { var p = (window.listaCorreos || [])[i]; if (!p) return; p[campo] = !!v; guardarListaCorreos(); }
+function listaCorreoQuitar(i) { (window.listaCorreos || []).splice(i, 1); renderListaCorreos(); guardarListaCorreos(); }
+function listaCorreoAgregar() {
+  var n = (document.getElementById('lcNombre').value || '').trim(), c = (document.getElementById('lcCorreo').value || '').trim().toLowerCase();
+  if (!correoValido(c)) { var st = document.getElementById('listaCorreosSt'); if (st) { st.style.color = 'var(--red)'; st.textContent = cT('invalido'); setTimeout(function () { st.style.color = 'var(--green)'; st.textContent = ''; }, 2500); } return; }
+  window.listaCorreos = window.listaCorreos || [];
+  if (window.listaCorreos.some(function (p) { return (p.correo || '').toLowerCase() === c; })) return;
+  window.listaCorreos.push({ nombre: n || c.split('@')[0], correo: c, para: true, cc: false });
+  renderListaCorreos(); guardarListaCorreos();
+}
+
+// ── Hoja de Excel → tabla HTML → imagen PNG ──
+function colorHex(c) { if (!c || !c.rgb) return ''; var h = String(c.rgb); return '#' + h.slice(-6); }
+function hojaAHtml(ws) {
+  var r = XLSX.utils.decode_range(ws['!ref']), merges = ws['!merges'] || [], cols = ws['!cols'] || [];
+  var span = {}, skip = {}, rr, cc;
+  merges.forEach(function (m) {
+    span[m.s.r + ',' + m.s.c] = [m.e.r - m.s.r + 1, m.e.c - m.s.c + 1];
+    for (rr = m.s.r; rr <= m.e.r; rr++) for (cc = m.s.c; cc <= m.e.c; cc++) if (rr !== m.s.r || cc !== m.s.c) skip[rr + ',' + cc] = 1;
+  });
+  var ancho = 0, colgroup = '';
+  for (cc = r.s.c; cc <= r.e.c; cc++) { var w = Math.round(((cols[cc] && cols[cc].wch) || 10) * 7.5); ancho += w; colgroup += '<col style="width:' + w + 'px">'; }
+  var html = '<table style="border-collapse:collapse;table-layout:fixed;width:' + ancho + 'px;font-family:Calibri,Arial,sans-serif;background:#fff">' + colgroup;
+  for (rr = r.s.r; rr <= r.e.r; rr++) {
+    html += '<tr>';
+    for (cc = r.s.c; cc <= r.e.c; cc++) {
+      var key = rr + ',' + cc; if (skip[key]) continue;
+      var cell = ws[XLSX.utils.encode_cell({ r: rr, c: cc })], s = (cell && cell.s) || {}, f = s.font || {}, al = s.alignment || {};
+      var bg = s.fill && s.fill.patternType === 'solid' ? colorHex(s.fill.fgColor) : '', fg = colorHex(f.color) || '#000000';
+      var v = cell ? cell.v : ''; if (typeof v === 'number') v = v.toLocaleString('en-US'); if (v == null) v = '';
+      var sp = span[key], st = 'padding:3px 5px;font-size:' + Math.round((f.sz || 10) * 1.33) + 'px;color:' + fg + ';' + (bg ? 'background:' + bg + ';' : '') + (f.bold ? 'font-weight:700;' : '') +
+        'text-align:' + (al.horizontal || 'left') + ';vertical-align:middle;overflow:hidden;' + (al.wrapText ? 'white-space:normal;' : 'white-space:nowrap;') + (s.border && s.border.top ? 'border:1px solid #bbb;' : '') + 'height:22px;';
+      html += '<td' + (sp ? ' rowspan="' + sp[0] + '" colspan="' + sp[1] + '"' : '') + ' style="' + st + '">' + cEsc(v) + '</td>';
+    }
+    html += '</tr>';
+  }
+  return html + '</table>';
+}
+function cargarHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve();
+  return new Promise(function (ok, no) {
+    var s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = ok; s.onerror = function () { no(new Error('html2canvas')); }; document.head.appendChild(s);
+  });
+}
+function hojaAImagenPng(ws) {
+  return cargarHtml2Canvas().then(function () {
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:-30000px;top:0;background:#fff;padding:0;';
+    box.innerHTML = hojaAHtml(ws); document.body.appendChild(box);
+    return window.html2canvas(box, { backgroundColor: '#ffffff', scale: 1.5, logging: false }).then(function (cv) {
+      document.body.removeChild(box);
+      return cv.toDataURL('image/png');
+    }, function (e) { document.body.removeChild(box); throw e; });
+  });
+}
+
+// ── Ventana de envío ──
+function semanaIso(d) {
+  var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), dn = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dn); var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - y0) / 86400000 + 1) / 7);
+}
+function asuntoCorreoPlan() {
+  var d = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
+  return 'W' + semanaIso(d) + ' PO Balance requirement ' + p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + String(d.getFullYear()).slice(-2);
+}
+var _correoEstado = null;
+function cerrarCorreoPlan() { var m = document.getElementById('correoPlanModal'); if (m) m.remove(); _correoEstado = null; }
+function abrirCorreoPlan() {
+  if (!adminAuthed) return;
+  if (typeof BOM === 'undefined' || !BOM.length) { alert(cT('sinDatos')); return; }
+  var xl = exportarExcel({ paraCorreo: true });
+  if (!xl) return;
+  cargarListaCorreos().then(function (L) {
+    if (!L.length) { alert(cT('sinLista')); return; }
+    cerrarCorreoPlan();
+    var m = document.createElement('div'); m.id = 'correoPlanModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+    var filas = L.map(function (p, i) {
+      return '<tr><td style="padding:.3rem">' + cEsc(p.nombre) + ' <span style="color:var(--text3);font-size:11px">' + cEsc(p.correo) + '</span></td>' +
+        '<td style="text-align:center"><input type="checkbox" id="cpPara' + i + '" ' + (p.para ? 'checked' : '') + '></td><td style="text-align:center"><input type="checkbox" id="cpCc' + i + '" ' + (p.cc ? 'checked' : '') + '></td></tr>';
+    }).join('');
+    m.innerHTML = '<div style="background:var(--surface,#111827);border:1px solid var(--border);border-radius:12px;padding:1.2rem;max-width:640px;width:100%;max-height:92vh;overflow:auto;color:var(--text)">' +
+      '<div style="font-size:15px;font-weight:800;margin-bottom:.8rem">' + cEsc(cT('titulo')) + '</div>' +
+      '<label style="font-size:11px;color:var(--text2)">' + cEsc(cT('asunto')) + '</label>' +
+      '<input id="cpAsunto" type="text" value="' + cEsc(asuntoCorreoPlan()) + '" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:13px;margin:.2rem 0 .8rem">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:var(--text2);font-size:11px;text-align:left"><th></th><th style="text-align:center">' + cEsc(cT('para')) + '</th><th style="text-align:center">' + cEsc(cT('cc')) + '</th></tr></thead><tbody>' + filas + '</tbody></table>' +
+      '<div style="font-size:11px;color:var(--text2);margin:.9rem 0 .3rem">' + cEsc(cT('vista')) + '</div>' +
+      '<div id="cpVista" style="border:1px dashed var(--border);border-radius:8px;padding:.5rem;max-height:240px;overflow:auto;font-size:12px;color:var(--text2)">' + cEsc(cT('generando')) + '</div>' +
+      '<div style="margin-top:.6rem;font-size:12px">📎 ' + cEsc(cT('adjunto')) + ': <b>' + cEsc(xl.nombre) + '</b></div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:.3rem">' + cEsc(cT('sale')) + '</div>' +
+      '<div id="cpEstado" style="margin-top:.6rem;font-size:13px;font-weight:700"></div>' +
+      '<div style="display:flex;gap:.5rem;margin-top:.8rem;justify-content:flex-end"><button class="btn btn-secondary btn-sm" onclick="cerrarCorreoPlan()">' + cEsc(cT('cancelar')) + '</button>' +
+      '<button class="btn btn-primary btn-sm" id="cpEnviar" disabled onclick="enviarCorreoPlan()">' + cEsc(cT('enviar')) + '</button></div></div>';
+    document.body.appendChild(m);
+    _correoEstado = { xl: xl, lista: L, imagen: null };
+    hojaAImagenPng(xl.ws).then(function (png) {
+      if (!_correoEstado) return;
+      _correoEstado.imagen = png.split(',')[1];
+      document.getElementById('cpVista').innerHTML = '<img src="' + png + '" style="max-width:100%;display:block">';
+      document.getElementById('cpEnviar').disabled = false;
+    }).catch(function () { var v = document.getElementById('cpVista'); if (v) v.textContent = cT('sinImg'); });
+  });
+}
+function enviarCorreoPlan() {
+  var e = _correoEstado, est = document.getElementById('cpEstado'), btn = document.getElementById('cpEnviar');
+  if (!e || !e.imagen) return;
+  var para = [], cc = [];
+  e.lista.forEach(function (p, i) {
+    if (document.getElementById('cpPara' + i).checked && correoValido(p.correo)) para.push(p.correo);
+    if (document.getElementById('cpCc' + i).checked && correoValido(p.correo)) cc.push(p.correo);
+  });
+  if (!para.length) { est.style.color = 'var(--red)'; est.textContent = cT('sinDest'); return; }
+  var key = ''; try { key = localStorage.getItem('bomCorreoKey') || ''; } catch (x) {}
+  if (!key) { key = (prompt(cT('pedirClave')) || '').trim(); if (!key) return; }
+  btn.disabled = true; est.style.color = 'var(--text2)'; est.textContent = cT('enviando');
+  fetch(CORREO_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({
+    token: key, asunto: document.getElementById('cpAsunto').value, para: para, cc: cc, imagen: e.imagen, xlsx: e.xl.base64, archivo: e.xl.nombre }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j && j.ok) { try { localStorage.setItem('bomCorreoKey', key); } catch (x) {} est.style.color = 'var(--green)'; est.textContent = cT('ok'); setTimeout(cerrarCorreoPlan, 2500); }
+      else if (j && /clave/i.test(j.error || '')) { try { localStorage.removeItem('bomCorreoKey'); } catch (x) {} est.style.color = 'var(--red)'; est.textContent = cT('errClave'); btn.disabled = false; }
+      else { est.style.color = 'var(--red)'; est.textContent = '❌ ' + ((j && j.error) || '?'); btn.disabled = false; }
+    })
+    .catch(function () { est.style.color = 'var(--yellow,#f1c40f)'; est.textContent = cT('errRed'); btn.disabled = false; });
 }
 
 
@@ -3902,7 +4110,7 @@ function checkLoginAdmin() {
     document.getElementById('adminPanel').style.display = 'block';
     cargarBomActivo();
     cargarUsuariosBom();
-    var bp = document.getElementById('btnPublicar'); if (bp) bp.style.display = '';
+    var bp = document.getElementById('btnPublicar'); if (bp) bp.style.display = ''; var bcp = document.getElementById('btnCorreoPlan'); if (bcp) bcp.style.display = '';
   } else {
     err.style.display = 'block';
     document.getElementById('loginAdminPass').value = '';
@@ -4074,7 +4282,7 @@ function iniciarAuthListener() {
         cargarBomActivo();
         cargarUsuariosBom();
         if (typeof renderCortesEspeciales === 'function') renderCortesEspeciales();
-        var bp3 = document.getElementById('btnPublicar'); if (bp3) bp3.style.display = '';
+        var bp3 = document.getElementById('btnPublicar'); if (bp3) bp3.style.display = ''; var bcp = document.getElementById('btnCorreoPlan'); if (bcp) bcp.style.display = '';
       } else {
         activarModoSoloSimulador();
       }
@@ -4441,7 +4649,7 @@ function checkAdminKey() {
     document.getElementById('adminPanel').style.display = 'block';
     cargarBomActivo();
     cargarUsuariosBom();
-    var bp2 = document.getElementById('btnPublicar'); if (bp2) bp2.style.display = '';
+    var bp2 = document.getElementById('btnPublicar'); if (bp2) bp2.style.display = ''; var bcp = document.getElementById('btnCorreoPlan'); if (bcp) bcp.style.display = '';
   } else {
     document.getElementById('adminKeyErr').style.display = 'block';
     document.getElementById('adminKey').value = '';
@@ -4904,6 +5112,7 @@ function cargarCortesEspecialesFirebase() {
 function renderCortesEspeciales() {
   const wrap = document.getElementById('cortesEspecialesWrap');
   if (!wrap) return;
+  try { if (adminAuthed && typeof prepararListaCorreos === 'function') prepararListaCorreos(); } catch (e) {}
   const proximos = generarCortesAutomaticos(new Date(), 8);
   const selHtml = proximos.map(c => `<option value="${c.getTime()}">${formatCorteLabel(c).replace('📦 Envío ', '')}</option>`).join('');
   const activas = window.cortesEspeciales || [];
@@ -7730,6 +7939,11 @@ window.addEventListener('DOMContentLoaded', function() {
         Mueve un corte automático (miércoles 3:30pm / sábado 11:00am) a otra fecha u hora — por ejemplo, adelantar el embarque de esta semana. Afecta Plan Semanal, Pick List y Producido para todos.
       </div>
       <div id="cortesEspecialesWrap"><div style="color:var(--text2);font-size:12px;padding:.5rem;text-align:center">⏳ Cargando...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title" id="listaCorreosTitulo">📧 Lista de correos</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">Aquí se guardan los correos para el envío del plan (consolidado). Marca Para / CC; al enviar todavía puedes cambiarlo.</div>
+      <div id="listaCorreosWrap"><div style="color:var(--text2);font-size:12px;padding:.5rem;text-align:center">⏳ Cargando...</div></div>
     </div>
     <div class="card">
       <div class="card-title">📥 Subir nuevo BOM</div>

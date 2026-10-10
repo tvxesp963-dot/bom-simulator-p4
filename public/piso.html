@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
+<script src="uso-lecturas.js" data-app="Piso ASSY"></script>
 <style>
 :root{--bg:#0a0e1a;--card:#111827;--card2:#0d1220;--border:#1f2a3d;--text:#e8edf5;--text2:#8b96a8;--text3:#5c6678;--green:#00e676;--red:#ff4d4d;--yellow:#f1c40f;--accent:#4da6ff}
 *{box-sizing:border-box}
@@ -81,6 +82,8 @@ h1{font-size:26px;margin:0}
 .ships .s .d span:last-child{font-size:12px;color:#7dd3fc}
 .ships .s .q{display:flex;justify-content:space-between;font-size:14px;color:var(--text2)}
 .ships .s .q b{color:var(--text)}.ships .s .q b.z{color:var(--green)}.ships .s .q b.f{color:var(--yellow)}
+.ovtag{display:inline-block;margin-top:3px;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(231,76,60,.18);border:1px solid var(--red);color:var(--red);white-space:nowrap}.ovtag.cub{background:rgba(241,196,15,.15);border-color:var(--yellow);color:var(--yellow)}
+.ovbanner{background:rgba(231,76,60,.15);border:2px solid var(--red);color:var(--red);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:15px;font-weight:800}.ovbanner span{display:inline-block;margin:4px 8px 0 0;padding:2px 8px;border-radius:6px;background:var(--red);color:#fff}
 .aviso{background:rgba(241,196,15,.12);border:1px solid var(--yellow);color:var(--yellow);border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:14px;font-weight:700}
 .pobar{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px;font-size:14px;font-weight:700;color:var(--text2)}
 .pobar button{background:#0d1220;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 12px;font-weight:700;font-size:13px;cursor:pointer}
@@ -263,6 +266,10 @@ var T = {
 Object.assign(T.es,{resBtn:'📝 Resumen del día',resTit:'Resumen del día · Ensamble ASSY1',resBloq:'Detenidos por falta de material',resNoBloq:'✓ Ningún modelo detenido por material',resNota:'Producido = pallets de ShipQR. Pendiente = Target − Producido. Foto del momento en que se abre este resumen.',resTotal:'Total'});
 Object.assign(T.en,{resBtn:'📝 Daily summary',resTit:'Daily summary · ASSY1 Assembly',resBloq:'Stopped for missing material',resNoBloq:'✓ No model stopped by material',resNota:'Produced = ShipQR pallets. Pending = Target − Produced. Snapshot of when this summary is opened.',resTotal:'Total'});
 Object.assign(T.ko,{resBtn:'📝 일일 요약',resTit:'일일 요약 · ASSY1 조립',resBloq:'자재 부족으로 정지',resNoBloq:'✓ 자재 부족으로 정지된 모델 없음',resNota:'생산 = ShipQR 팔레트. 잔량 = 목표 − 생산. 이 요약을 연 시점의 기준입니다.',resTotal:'합계'});
+
+Object.assign(T.es,{ovCub:'⛔ PO cubierto · no producir más',ovSobre:'⚠ SOBREPRODUCCIÓN',ovPzs:'sobre el PO',ovAviso:'ALERTA DE SOBREPRODUCCIÓN: modelos que ya cubrieron o pasaron su PO Balance. No producir más:'});
+Object.assign(T.en,{ovCub:'⛔ PO covered · do not produce more',ovSobre:'⚠ OVERPRODUCTION',ovPzs:'over the PO',ovAviso:'OVERPRODUCTION ALERT: models that already covered or exceeded their PO Balance. Do not produce more:'});
+Object.assign(T.ko,{ovCub:'⛔ PO 충족 · 추가 생산 금지',ovSobre:'⚠ 과잉생산',ovPzs:'PO 초과',ovAviso:'과잉생산 경고: PO 잔량을 이미 채웠거나 초과한 모델입니다. 추가 생산 금지:'});
 var lang = 'es';
 try { lang = localStorage.getItem('pisoLang') || 'es'; } catch (e) {}
 if (!T[lang]) lang = 'es';
@@ -586,7 +593,7 @@ function pintar(){
     var tienePO = m.poBalance !== null && m.poBalance !== undefined && !isNaN(Number(m.poBalance));
     var poLive = tienePO ? Math.max(0, Number(m.poBalance) - prod) : null;
     var poFin = tienePO ? Math.max(0, poLive - pend) : null;
-    return { m: m, prod: prod, env: env, pend: pend, pct: m.target ? Math.min(100, Math.round(prod * 100 / m.target)) : 0, po: poLive, poFin: poFin };
+    var ovSobre = tienePO ? prod - Number(m.poBalance) : null; return { m: m, prod: prod, env: env, pend: pend, ov: (tienePO && Number(m.poBalance) > 0 && prod >= Number(m.poBalance)) ? ovSobre : null, pct: m.target ? Math.min(100, Math.round(prod * 100 / m.target)) : 0, po: poLive, poFin: poFin };
   });
   var tot = filas.reduce(function(a, f){ a.t += f.m.target || 0; a.p += Math.min(f.prod, f.m.target || 0); return a; }, {t:0, p:0});
 
@@ -653,6 +660,8 @@ function pintar(){
     kpiHtml = kp(t('target'), n(tot.t)) + kp(t('prod'), n(tot.p)) + kp(t('pend'), n(tot.t - tot.p)) + kp(t('avance'), avTot + '%', avTot >= 100 ? 'var(--green)' : '');
   }
   var html = '<div class="kpis">' + kpiHtml + '</div>';
+  var ovLista = filas.filter(function(f){ return f.ov !== null; });
+  if (ovLista.length) html += '<div class="ovbanner">' + t('ovAviso') + '<br>' + ovLista.map(function(f){ return '<span>' + esc(f.m.sm) + (f.ov > 0 ? ' +' + n(f.ov) : ' =PO') + '</span>'; }).join('') + '</div>';
   if (vistaSem) {
     app.innerHTML = semHtml(filas.map(function(f){ return { n: f.m.orden, mdl: f.m.sm, code: f.m.code, fecha: f.m.fecha, porDia: f.m.porDia, pend: f.pend, prod: f.prod, target: (f.m.target||0), cap: (f.m.cap==null?null:f.m.cap), mat: ((f.m.cap||0)>=f.pend?'ok':((f.m.cap||0)>0?'par':'no')), faltan: ['Strip','Top','Bot','Bundle'].filter(function(k){ return f.m.materiales && matEst(f.m,k,f.pend)===false; }).map(function(k){ return {k:k,pn:(f.m.pn&&f.m.pn[k])||'',disp:(f.m.disp&&f.m.disp[k]!=null)?f.m.disp[k]:0,req:(f.m.req&&f.m.req[k]!=null)?f.m.req[k]:0}; }) }; }), (plan && plan.capacidadDia) || 13000, plan && plan.cal, (function(){
       var enSm = (enLinea && enLinea.sm) ? enLinea.sm : null, fo = null, sug = run.length ? run[0].m.sm : null;
@@ -753,6 +762,7 @@ function pintar(){
       return '<span class="chip ' + cls + '"' + tip + '><span class="pm" style="display:none">' + (v === true ? '✓' : (v === false ? '✗' : '–')) + ' </span>' + k + '</span>';
     }).join('');
   };
+  var ovTag = function(f){ return f.ov === null ? '' : (f.ov > 0 ? '<div class="ovtag">' + t('ovSobre') + ' +' + n(f.ov) + ' ' + t('ovPzs') + '</div>' : '<div class="ovtag cub">' + t('ovCub') + '</div>'); };
   var envTag = function(f){ return f.env > 0 ? '<span class="envtag" title="' + esc(t('cEnvTip')) + '">✈ ' + n(f.env) + '</span>' : ''; };
   var poCells = function(f){ return '<td class="r" style="font-weight:700">' + (f.po === null ? '—' : n(Number(f.m.poBalance))) + '</td><td class="r colpo">' + (f.po === null ? '—' : n(f.po)) + '</td><td class="r colpf">' + (f.poFin === null ? '—' : n(f.poFin)) + '</td>'; };
   var bar = function(f, color){ return '<div class="bar"><div style="width:' + f.pct + '%;background:' + color + '"></div></div><div class="code">' + f.pct + '%</div>'; };
@@ -769,7 +779,7 @@ function pintar(){
       est = '<span class="est" style="color:var(--red)">' + (faltan.length ? t('falta') + ' ' + faltan.join(', ') : t('sinDatos')) + '</span>';
     }
     var corre = corriendoSM === m.sm;
-    return '<tr' + (corre ? ' class="run-now"' : '') + '><td>' + num + '</td><td><div class="mdl">' + esc(m.sm) + '</div><div class="code">' + esc(m.code || '') + '</div>' +
+    return '<tr' + (corre ? ' class="run-now"' : '') + '><td>' + num + '</td><td><div class="mdl">' + esc(m.sm) + '</div><div class="code">' + esc(m.code || '') + '</div>' + ovTag(f) +
       (corre ? '<span class="runtag">▶ ' + etiquetaRun + '</span>' : '') + '</td>' +
       '<td style="white-space:nowrap">' + fechaEnvio(m.fecha) + '</td>' +
       '<td class="r hide-sm">' + n(m.target) + '</td><td class="r">' + n(f.prod) + envTag(f) + '</td><td class="r" style="font-weight:800">' + n(f.pend) + '</td>' +
@@ -784,7 +794,7 @@ function pintar(){
   if (done.length || nOcultos > 0) html += '<tr class="sep sepdone"><td colspan="12">✓ ' + t('done') + (nOcultos > 0 ? ' <span style="font-weight:400;font-size:12px;opacity:.8">· ' + nOcultos + ' ' + t('ocultosHist') + '</span>' : '') + '</td></tr>' + done.map(function(f){
     var extra = f.prod - (f.m.target || 0);
     var correD = corriendoSM === f.m.sm;
-    return '<tr class="done' + (correD ? ' run-now' : '') + '"><td><span class="num ok">✓</span></td><td><div class="mdl">' + esc(f.m.sm) + '</div><div class="code">' + esc(f.m.code || '') + '</div>' + (correD ? '<span class="runtag">▶ ' + etiquetaRun + ' · ' + t('metaOk') + '</span>' : '') + '</td>' +
+    return '<tr class="done' + (correD ? ' run-now' : '') + '"><td><span class="num ok">✓</span></td><td><div class="mdl">' + esc(f.m.sm) + '</div><div class="code">' + esc(f.m.code || '') + '</div>' + ovTag(f) + (correD ? '<span class="runtag">▶ ' + etiquetaRun + ' · ' + t('metaOk') + '</span>' : '') + '</td>' +
            '<td style="white-space:nowrap">' + fechaEnvio(f.m.fecha) + '</td><td class="r hide-sm">' + n(f.m.target) + '</td>' +
            '<td class="r"><span class="prodok">' + n(f.prod) + '</span>' + (extra > 0 ? '<span class="extra">+' + n(extra) + '</span>' : '') + envTag(f) + '</td>' +
            '<td class="r" style="color:var(--green);font-weight:800">0</td><td class="hide-sm">' + bar(f, 'var(--green)') + '</td>' + poCells(f) + '<td></td>' +

@@ -4975,28 +4975,40 @@ async function obtenerProduccionRealASSY1(auto) {
   const porModelo = {}; // { modelo: { total, cicloActual, arrastre } }
   if (!db) return porModelo;
   // AHORRO DE LECTURAS: en el ciclo automático se reutiliza la última lectura si tiene menos de 20 min
-  if (auto === true && window._cacheShipqr && (Date.now() - window._cacheShipqr.t) < 20 * 60000) return window._cacheShipqr.d;
+  if (auto === true && window._cacheShipqr && window._cacheShipqr.plan === (window.simPlanCargadoEn || null) && (Date.now() - window._cacheShipqr.t) < 20 * 60000) return window._cacheShipqr.d;
   const ahora = new Date();
   const inicioCicloActual = corteAnteriorEnvio(ahora); // corte ya pasado más reciente = inicio del ciclo en curso
   try {
     const snap = await db.collection('shipqr_pallets').get();
+    const desdePlan = window.simPlanCargadoEn ? Date.parse(window.simPlanCargadoEn) : NaN;
     snap.forEach(doc => {
       const d = doc.data();
-      if (d.status === 'SHIPPED') return; // ya salió físicamente de la empresa, no cuenta
       if (d.motivo === 'REMPLAZO') return; // producción de remplazo: no cuenta como avance del plan
       const modelo = (d.modelo || '').trim();
       if (!modelo) return;
       const parte = (d.part_number || '').toUpperCase();
       if (!parte.startsWith('GH90')) return;
       const qty = Number(d.quantity) || 0;
+      // Embarcado (SHIPPED): ya salió de la planta, no es inventario disponible. Pero si se embarcó DESPUÉS de cargar
+      // el Excel del plan, SÍ es producido contra el target (igual que piso.html). Si no, el requerido de material se infla.
+      if (d.status === 'SHIPPED') {
+        if (isNaN(desdePlan)) return;
+        const tx = d.updated_at || d.created_at;
+        const tms = (tx && tx.seconds) ? tx.seconds * 1000 : 0;
+        if (tms < desdePlan) return;
+        if (!porModelo[modelo]) porModelo[modelo] = { total: 0, cicloActual: 0, arrastre: 0 };
+        porModelo[modelo].total += qty;
+        porModelo[modelo].cicloActual += qty;
+        return;
+      }
       const fecha = d.created_at ? new Date(d.created_at.seconds * 1000) : null;
       if (!porModelo[modelo]) porModelo[modelo] = { total: 0, cicloActual: 0, arrastre: 0 };
-      porModelo[modelo].total += qty;
+      porModelo[modelo].total += qty; // TODO pallet con etiqueta en ShipQR que sigue en P4 (sin embarcar) cuenta, de cualquier ciclo
       const esDeEsteCiclo = fecha && inicioCicloActual && fecha > inicioCicloActual;
       if (esDeEsteCiclo) porModelo[modelo].cicloActual += qty;
-      else porModelo[modelo].arrastre += qty;
+      else porModelo[modelo].arrastre += qty; // solo informativo: sigue sumando al total
     });
-    window._cacheShipqr = { t: Date.now(), d: porModelo };
+    window._cacheShipqr = { t: Date.now(), d: porModelo, plan: window.simPlanCargadoEn || null };
   } catch (e) {
     console.error('Error leyendo pallets de ShipQR:', e);
   }

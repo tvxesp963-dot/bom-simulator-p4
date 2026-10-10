@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan por día · Production plan by day · 일별 생산 계획</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-firestore-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.2/firebase-auth-compat.min.js"></script>
+<script src="uso-lecturas.js" data-app="Plan por día"></script>
+<style>
+:root{--bg:#0a0e1a;--card:#111827;--bd:#1f2a3d;--tx:#e8edf5;--t2:#8b96a8;--ac:#4da6ff;--gr:#00e676;--rd:#ff4d4d;--yl:#f1c40f}
+:root[data-theme="light"]{--bg:#f3f5f9;--card:#fff;--bd:#d8dee9;--tx:#1a2233;--t2:#5b6678;--ac:#1a73e8;--gr:#0a8f4d;--rd:#c62828;--yl:#9a6b00}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f3f5f9;--card:#fff;--bd:#d8dee9;--tx:#1a2233;--t2:#5b6678;--ac:#1a73e8;--gr:#0a8f4d;--rd:#c62828;--yl:#9a6b00}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;padding:14px 16px 40px}
+.wrap{max-width:1240px;margin:0 auto}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar h1{font-size:18px;margin:0;flex:1;min-width:220px}
+.btn{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:700;font-size:14px;cursor:pointer}
+.btn.w{background:#128c7e}.btn.g{background:transparent;border:1px solid var(--bd);color:var(--tx)}
+.btn:disabled{opacity:.55;cursor:default}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:14px;margin-right:8px}
+.msg{font-size:13px;color:var(--t2);margin:6px 0}
+.msg.ok{color:var(--gr)}.msg.er{color:var(--rd)}
+.login{max-width:340px;margin:60px auto;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px;display:grid;gap:10px}
+.login input{background:transparent;border:1px solid var(--bd);border-radius:8px;padding:10px;color:var(--tx);font-size:14px}
+.login .err{color:var(--rd);font-size:13px}
+.sheet{background:#fff;color:#111;border-radius:10px;padding:16px;border:1px solid var(--bd);overflow:auto}
+.sheet h2{margin:0;font-size:20px;color:#1a3a6b}
+.sheet .sub{font-size:12px;color:#555;margin:2px 0 12px}
+.sec{color:#fff;font-weight:800;padding:6px 10px;border-radius:5px;font-size:13px;margin:12px 0 4px}
+.sec.a{background:#0f6b3c}.sec.m{background:#1a4f9c}.sec.b{background:#7a4a00}
+table.p{border-collapse:collapse;width:100%;font-size:12.5px;margin-bottom:6px}
+table.p th{background:#1a3a6b;color:#fff;padding:5px 6px;text-align:center;font-weight:700;line-height:1.2;white-space:nowrap}
+table.p th small{display:block;font-weight:400;font-size:10px;opacity:.85}
+table.p td{border:1px solid #cfd6e4;padding:4px 6px;text-align:right}
+table.p td.m{text-align:left;font-weight:600}
+table.p td.m small{display:block;font-weight:400;color:#555;font-size:10.5px}
+table.p td.q{background:#eaf3ff;font-weight:700}
+table.p td.z{color:#b0b6c4;text-align:center}
+table.p td.s{text-align:left;font-size:11.5px}
+table.p td.s.ok{color:#0a7a3e;font-weight:700}table.p td.s.no{color:#b3261e;font-weight:700}table.p td.s.mid{color:#946200;font-weight:700}
+table.p tr.tot td{background:#f2f4f9;font-weight:800}
+.vacio{padding:10px;color:#666;font-size:13px}
+.foot{font-size:11px;color:#666;margin-top:8px}
+@page{size:letter landscape;margin:9mm}
+@media print{
+  body{background:#fff;padding:0}
+  .bar,.msg,.noprint{display:none!important}
+  .sheet{border:0;padding:0;overflow:visible}
+  table.p{font-size:10.5px}
+  table.p tr{page-break-inside:avoid}
+  .sec{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  table.p th,table.p td.q,table.p tr.tot td,.sec{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<script>
+// ===== Textos: siempre los 3 idiomas juntos (ES · EN · KO) =====
+var DIAS = [['Dom','Sun','일'],['Lun','Mon','월'],['Mar','Tue','화'],['Mié','Wed','수'],['Jue','Thu','목'],['Vie','Fri','금'],['Sáb','Sat','토']];
+var MESES = [['Ene','Jan','1월'],['Feb','Feb','2월'],['Mar','Mar','3월'],['Abr','Apr','4월'],['May','May','5월'],['Jun','Jun','6월'],['Jul','Jul','7월'],['Ago','Aug','8월'],['Sep','Sep','9월'],['Oct','Oct','10월'],['Nov','Nov','11월'],['Dic','Dec','12월']];
+var T = {
+  titulo: 'Plan de producción por día · Production plan by day · 일별 생산 계획',
+  pub: 'Plan publicado · Published · 게시',
+  assy: 'ASSY1 — Ensamble final · Final assembly · 최종 조립',
+  medio: 'MEDIO PROCESO · Mid process · 중간공정',
+  bundle: 'BUNDLE · 번들 — Piso P3',
+  modelo: ['Modelo','Model','모델'], linea: ['Línea · Modelo','Line · Model','라인 · 모델'], pieza: ['Pieza','Part','부품'],
+  envio: ['Envío','Ship','출하'], desp: ['Después','Later','이후'], total: ['Total','Total','합계'], estado: ['Estado','Status','상태'],
+  listo: 'Listo · Ready · 준비', falta: 'Falta · Missing · 부족', parcial: 'Parcial · Partial · 일부', sinPlan: 'Sin plan publicado · No published plan · 게시된 계획 없음',
+  imprimir: '🖨️ Imprimir · Print · 인쇄', wa: '📱 WhatsApp', act: '🔄 Actualizar · Refresh · 새로고침',
+  areas: 'Áreas · Areas · 구역', cargando: '⏳ Cargando… · Loading… · 불러오는 중…',
+  login: 'Inicia sesión · Sign in · 로그인', correo: 'Correo · Email · 이메일', pass: 'Contraseña · Password · 비밀번호', entrar: 'Entrar · Enter · 입장', errLogin: 'Correo o contraseña incorrectos · Wrong credentials · 잘못된 정보',
+  genImg: '⏳ Generando imagen… · Building image… · 이미지 생성 중…', waCopiada: '✅ Imagen copiada. En WhatsApp pégala con Ctrl+V · Image copied: paste in WhatsApp · 이미지 복사됨: WhatsApp에 붙여넣기', waDescargada: '✅ Imagen descargada. Adjúntala en el chat de WhatsApp · Image downloaded: attach it in WhatsApp · 이미지 다운로드됨: WhatsApp에 첨부', errImg: '⚠ No se pudo generar la imagen · Could not build the image · 이미지 생성 실패',
+  nota: 'Producido ya descontado. El reparto por día lo calcula el BOM Simulator con la capacidad de cada línea. · Produced already deducted. Daily split calculated by BOM Simulator from each line capacity. · 생산량 차감 완료. 일별 배분은 BOM Simulator가 라인 능력에 따라 계산합니다.'
+};
+function tr3(a){ return a[0] + ' · ' + a[1] + ' · ' + a[2]; }
+function th3(a){ return a[0] + '<small>' + a[1] + ' · ' + a[2] + '</small>'; }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function num(x){ return Math.round(x || 0).toLocaleString('en-US'); }
+function fechaD(iso){ return new Date(iso + 'T12:00:00'); }
+function fechaEnvio(iso){ if (!iso) return '—'; var d = fechaD(iso); if (isNaN(d)) return '—'; return d.getDate() + '-' + MESES[d.getMonth()][1]; }
+function isoSemana(d){ var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), dn = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - dn); var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0) / 86400000 + 1) / 7); }
+function fechaHora(iso){ if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}); }
+
+// ===== Firebase =====
+firebase.initializeApp({apiKey:"AIzaSyDbaC1kFX4ERhndtXDyHg8eCcexP5IjAuI",authDomain:"mes-production-esp.firebaseapp.com",projectId:"mes-production-esp"});
+var db = firebase.firestore(); try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
+var DATOS = null, AREAS = { assy: true, medio: true, bundle: true }, cargando = false;
+var root = document.getElementById('root');
+
+function mostrarLogin(){
+  root.innerHTML = '<div class="login"><div style="font-weight:700">' + esc(T.login) + '</div><input id="lgE" type="email" placeholder="' + esc(T.correo) + '"><input id="lgP" type="password" placeholder="' + esc(T.pass) + '"><button class="btn" id="lgB">' + esc(T.entrar) + '</button><div class="err" id="lgErr"></div></div>';
+  document.getElementById('lgB').onclick = function(){
+    firebase.auth().signInWithEmailAndPassword(document.getElementById('lgE').value.trim(), document.getElementById('lgP').value).catch(function(){ document.getElementById('lgErr').textContent = T.errLogin; });
+  };
+}
+function leerDatos(){
+  if (cargando) return Promise.resolve(); cargando = true;
+  var col = db.collection('bom_simulator_p4');
+  return Promise.all([col.doc('plan_piso').get(), col.doc('plan_piso_medio').get(), col.doc('plan_piso_bundle').get()]).then(function(r){
+    DATOS = { assy: r[0].exists ? r[0].data() : null, medio: r[1].exists ? r[1].data() : null, bundle: r[2].exists ? r[2].data() : null };
+    cargando = false;
+  }).catch(function(e){ cargando = false; if (e && e.code === 'permission-denied') mostrarLogin(); else root.innerHTML = '<div class="login"><div class="err">' + esc(e && e.message || e) + '</div></div>'; throw e; });
+}
+
+// ===== Armado de filas por área =====
+function sumaDia(porDia){ return (porDia || []).reduce(function(s, x){ return s + (x.q || 0); }, 0); }
+function faltantesObj(mat, pend){ var o = []; Object.keys(mat || {}).forEach(function(k){ if (mat[k] === false) o.push(k); }); return o; }
+function filasAssy(doc){
+  if (!doc || !doc.modelos) return [];
+  return doc.modelos.filter(function(m){ return (m.pendiente || 0) > 0 || (m.porDia && m.porDia.length); }).map(function(m){
+    var pend = m.pendiente || 0, cap = m.cap || 0, est, cls;
+    if (cap >= pend && pend > 0) { est = T.listo; cls = 'ok'; }
+    else if (cap > 0) { est = T.parcial + ' ' + num(cap) + ' / ' + num(pend); cls = 'mid'; }
+    else { var f = faltantesObj(m.materiales); est = T.falta + (f.length ? ': ' + f.join(', ') : ''); cls = 'no'; }
+    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999 };
+  });
+}
+function filasColas(doc, orden, etiqueta){
+  if (!doc || !doc.colas) return [];
+  var out = [], keys = Object.keys(doc.colas).sort(function(a, b){ var ia = orden.indexOf(a), ib = orden.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+  keys.forEach(function(k){
+    (doc.colas[k] || []).forEach(function(it){
+      if (!((it.pendiente || 0) > 0 || (it.porDia && it.porDia.length))) return;
+      var mats = it.materiales || [], falt = mats.filter(function(x){ return x.e ? x.e !== 'ok' : x.disp < x.req; }).map(function(x){ return x.k; });
+      var est, cls; var pend = it.pendiente || 0;
+      if (it.listo && !falt.length) { est = T.listo; cls = 'ok'; }
+      else if (it.listo) { est = T.parcial + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'mid'; }
+      else { est = T.falta + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'no'; }
+      var ms = it.modelos || [it.sm];
+      out.push({ et: etiqueta(k) + ' · ' + (ms[0] || ''), sub: ms.length > 1 ? '+' + (ms.length - 1) + ' ' + ms.slice(1).join(', ') : '', pieza: it.pn || '', fecha: it.fecha || '', porDia: it.porDia || [], total: sumaDia(it.porDia) || pend, est: est, cls: cls, grupo: k });
+    });
+  });
+  return out;
+}
+function armar(){
+  var A = { assy: filasAssy(DATOS.assy), medio: filasColas(DATOS.medio, ['Zhongke','S1','S2','S3','S4','S5','VC1','VC2'], function(k){ return k; }), bundle: filasColas(DATOS.bundle, ['B1','B2','PRE'], function(k){ return k === 'PRE' ? 'Pre kit' : k; }) };
+  A.assy.sort(function(a, b){ return a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : a.prio - b.prio; });
+  // Columnas = días con producción en las áreas elegidas (máx. 7); lo demás va en "Después"
+  var set = {};
+  Object.keys(A).forEach(function(k){ if (!AREAS[k]) return; A[k].forEach(function(r){ r.porDia.forEach(function(x){ if (x.q > 0) set[x.f] = 1; }); }); });
+  var dias = Object.keys(set).sort(), cols = dias.slice(0, 7), hayDesp = dias.length > cols.length;
+  return { A: A, cols: cols, hayDesp: hayDesp };
+}
+function tablaHtml(rows, cols, hayDesp, tipo){
+  if (!rows.length) return '<div class="vacio">' + esc(T.sinPlan) + '</div>';
+  var h = '<table class="p"><thead><tr><th style="text-align:left">' + th3(tipo === 'assy' ? T.modelo : T.linea) + '</th>' + (tipo === 'assy' ? '' : '<th>' + th3(T.pieza) + '</th>') + '<th>' + th3(T.envio) + '</th>';
+  cols.forEach(function(c){ var d = fechaD(c), w = DIAS[d.getDay()]; h += '<th>' + w[0] + ' ' + d.getDate() + '<small>' + w[1] + ' · ' + w[2] + '</small></th>'; });
+  if (hayDesp) h += '<th>' + th3(T.desp) + '</th>';
+  h += '<th>' + th3(T.total) + '</th><th style="text-align:left">' + th3(T.estado) + '</th></tr></thead><tbody>';
+  var tot = { cols: cols.map(function(){ return 0; }), desp: 0, total: 0 };
+  rows.forEach(function(r){
+    h += '<tr><td class="m">' + esc(r.et) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' + (tipo === 'assy' ? '' : '<td style="text-align:left">' + esc(r.pieza) + '</td>') + '<td style="text-align:center">' + esc(fechaEnvio(r.fecha)) + '</td>';
+    cols.forEach(function(c, i){ var q = r.porDia.filter(function(x){ return x.f === c; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.cols[i] += q; h += q > 0 ? '<td class="q">' + num(q) + '</td>' : '<td class="z">–</td>'; });
+    if (hayDesp) { var dq = r.porDia.filter(function(x){ return cols.indexOf(x.f) < 0; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.desp += dq; h += dq > 0 ? '<td class="q">' + num(dq) + '</td>' : '<td class="z">–</td>'; }
+    tot.total += r.total; h += '<td class="q">' + num(r.total) + '</td><td class="s ' + r.cls + '">' + esc(r.est) + '</td></tr>';
+  });
+  h += '<tr class="tot"><td class="m" ' + (tipo === 'assy' ? '' : 'colspan="2"') + '>' + esc(tr3(T.total)) + '</td><td></td>';
+  tot.cols.forEach(function(q){ h += '<td>' + (q > 0 ? num(q) : '–') + '</td>'; });
+  if (hayDesp) h += '<td>' + (tot.desp > 0 ? num(tot.desp) : '–') + '</td>';
+  return h + '<td>' + num(tot.total) + '</td><td></td></tr></tbody></table>';
+}
+
+// ===== Pantalla =====
+function pintar(){
+  if (!DATOS) { root.innerHTML = '<div class="msg">' + esc(T.cargando) + '</div>'; return; }
+  var X = armar(), pubs = [];
+  var secs = '';
+  if (AREAS.assy)   { secs += '<div class="sec a">' + esc(T.assy) + '</div>' + tablaHtml(X.A.assy, X.cols, X.hayDesp, 'assy'); if (DATOS.assy) pubs.push('ASSY ' + fechaHora(DATOS.assy.publicadoEn)); }
+  if (AREAS.medio)  { secs += '<div class="sec m">' + esc(T.medio) + '</div>' + tablaHtml(X.A.medio, X.cols, X.hayDesp, 'medio'); if (DATOS.medio) pubs.push('RGB ' + fechaHora(DATOS.medio.publicadoEn)); }
+  if (AREAS.bundle) { secs += '<div class="sec b">' + esc(T.bundle) + '</div>' + tablaHtml(X.A.bundle, X.cols, X.hayDesp, 'bundle'); if (DATOS.bundle) pubs.push('Bundle ' + fechaHora(DATOS.bundle.publicadoEn)); }
+  var sem = 'W' + isoSemana(new Date());   // misma semana que el asunto del correo (fecha de hoy)
+  root.innerHTML =
+    '<div class="bar"><h1>' + esc(T.titulo) + '</h1>' +
+    '<span class="noprint">' + ['assy','medio','bundle'].map(function(k){ return '<label class="chk"><input type="checkbox" ' + (AREAS[k] ? 'checked' : '') + ' onchange="AREAS.' + k + '=this.checked;pintar()"> ' + (k === 'assy' ? 'ASSY' : k === 'medio' ? 'Medio proceso' : 'Bundle') + '</label>'; }).join('') + '</span>' +
+    '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn g" onclick="refrescar()">' + esc(T.act) + '</button></div>' +
+    '<div class="msg" id="msg"></div>' +
+    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2><div class="sub">' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(T.nota) + '</div></div>';
+}
+function refrescar(){ DATOS = null; pintar(); leerDatos().then(pintar).catch(function(){}); }
+function msg(t, cls){ var m = document.getElementById('msg'); if (m) { m.className = 'msg ' + (cls || ''); m.textContent = t || ''; } }
+
+// ===== WhatsApp: imagen + texto en 3 idiomas =====
+function cargarH2C(){
+  if (window.html2canvas) return Promise.resolve();
+  return new Promise(function(ok, no){ var s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload = ok; s.onerror = function(){ no(new Error('h2c')); }; document.head.appendChild(s); });
+}
+function textoWa(){
+  var X = armar(), sem = 'W' + isoSemana(new Date());
+  var rango = '';
+  if (X.cols.length) { var a = fechaD(X.cols[0]), b = fechaD(X.cols[X.cols.length - 1]); rango = a.getDate() + '–' + b.getDate() + ' ' + MESES[b.getMonth()][1]; }
+  return '📋 Plan de producción · Production plan · 생산 계획' + (sem ? ' ' + sem : '') + (rango ? ' (' + rango + ')' : '') + '\n' +
+    '🇲🇽 ASSY, Medio proceso y Bundle por día.\n🇺🇸 ASSY, Mid process and Bundle by day.\n🇰🇷 ASSY, 중간공정, 번들 일별.';
+}
+function enviarWhatsApp(){
+  var btn = document.getElementById('btnWa'); if (btn) btn.disabled = true; msg(T.genImg);
+  var texto = textoWa();
+  cargarH2C().then(function(){ return window.html2canvas(document.getElementById('sheet'), { backgroundColor: '#ffffff', scale: 2, logging: false }); }).then(function(cv){
+    return new Promise(function(ok){ cv.toBlob(ok, 'image/png'); });
+  }).then(function(blob){
+    if (!blob) throw new Error('blob');
+    var nombre = 'Plan_Dia_' + new Date().toISOString().slice(0, 10) + '.png', file = new File([blob], nombre, { type: 'image/png' });
+    // Celular: abre el menú de compartir con la imagen ya adjunta (WhatsApp aparece ahí)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      return navigator.share({ files: [file], text: texto }).then(function(){ msg('✅', 'ok'); }).catch(function(e){ if (e && e.name === 'AbortError') msg(''); else throw e; });
+    }
+    // Computadora: copia la imagen al portapapeles (o la descarga) y abre WhatsApp con el texto
+    var abrir = function(m){ window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank'); msg(m, 'ok'); };
+    if (navigator.clipboard && window.ClipboardItem) {
+      return navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function(){ abrir(T.waCopiada); }, function(){ descargar(blob, nombre); abrir(T.waDescargada); });
+    }
+    descargar(blob, nombre); abrir(T.waDescargada);
+  }).catch(function(){ msg(T.errImg, 'er'); }).then(function(){ if (btn) btn.disabled = false; });
+}
+function descargar(blob, nombre){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+
+// ===== Arranque =====
+var arrancado = false;
+firebase.auth().onAuthStateChanged(function(u){
+  if (!u) { mostrarLogin(); return; }
+  if (arrancado) return; arrancado = true; pintar();
+  leerDatos().then(pintar).catch(function(){ arrancado = false; });
+});
+</script>
+</body>
+</html>

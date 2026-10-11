@@ -44,6 +44,16 @@ table.p td.s.ok{color:#0a7a3e;font-weight:700}table.p td.s.no{color:#b3261e;font
 table.p tr.tot td{background:#f2f4f9;font-weight:800}
 .g{background:#fff6e0!important;color:#946200;font-style:italic}
 .cv{display:block;font-weight:700;font-size:10.5px}.cv.p{color:#946200}.cv.n{color:#b3261e}
+/* Versión "foto" (WhatsApp): más ancha, letra grande y bordes marcados para que se lea en el celular */
+.sheet.foto{width:1500px;max-width:none;padding:26px;overflow:visible}
+.sheet.foto h2{font-size:30px}.sheet.foto .sub{font-size:16px;margin-bottom:16px}
+.sheet.foto .sec{font-size:20px;padding:9px 14px;margin:18px 0 6px}
+.sheet.foto table.p{font-size:17px}
+.sheet.foto table.p th{font-size:16px;padding:9px 8px}.sheet.foto table.p th small{font-size:12px}
+.sheet.foto table.p td{padding:9px 10px;border:1.5px solid #9aa6bf}
+.sheet.foto table.p td.m small{font-size:13px}.sheet.foto table.p td.s{font-size:15px}
+.sheet.foto table.p td.q{font-size:18px;background:#d6e8ff}.sheet.foto table.p td.g{background:#ffedc2!important}
+.sheet.foto .cv{font-size:13px}.sheet.foto .nomat{font-size:16px}.sheet.foto .foot{font-size:13px}
 .nomat{color:#b3261e;font-weight:800;font-size:12px;margin:8px 0 3px}
 .vacio{padding:10px;color:#666;font-size:13px}
 .foot{font-size:11px;color:#666;margin-top:8px}
@@ -286,7 +296,7 @@ function textoWa(){
 function enviarWhatsApp(){
   var btn = document.getElementById('btnWa'); if (btn) btn.disabled = true; msg(T.genImg);
   var texto = textoWa();
-  cargarH2C().then(function(){ return window.html2canvas(document.getElementById('sheet'), { backgroundColor: '#ffffff', scale: 2, logging: false }); }).then(function(cv){
+  cargarH2C().then(function(){ return window.html2canvas(document.getElementById('sheet'), { backgroundColor: '#ffffff', scale: 2, logging: false, windowWidth: 1700, onclone: function(doc){ var e = doc.getElementById('sheet'); if (e) e.classList.add('foto'); } }); }).then(function(cv){
     return new Promise(function(ok){ cv.toBlob(ok, 'image/png'); });
   }).then(function(blob){
     if (!blob) throw new Error('blob');

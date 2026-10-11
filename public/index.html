@@ -4090,7 +4090,7 @@ function semanaIso(d) {
 }
 function asuntoCorreoPlan() {
   var d = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
-  return 'W' + semanaIso(d) + ' PO Balance requirement ' + p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + String(d.getFullYear()).slice(-2);
+  return 'W' + semanaIso(d) + ' PO Balance requirement ' + p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + String(d.getFullYear()).slice(-2) + ' ' + (d.getHours() % 12 || 12) + ':' + p(d.getMinutes()) + ' ' + (d.getHours() < 12 ? 'AM' : 'PM');
 }
 var _correoEstado = null;
 function cerrarCorreoPlan() { var m = document.getElementById('correoPlanModal'); if (m) m.remove(); _correoEstado = null; }

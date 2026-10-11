@@ -5288,7 +5288,7 @@ async function obtenerProduccionRealASSY1(auto) {
   const porModelo = {}; // { modelo: { total, cicloActual, arrastre } }
   if (!db) return porModelo;
   // AHORRO DE LECTURAS: en el ciclo automático se reutiliza la última lectura si tiene menos de 20 min
-  if (auto === true && window._cacheShipqr && window._cacheShipqr.plan === (window.simPlanCargadoEn || null) && (Date.now() - window._cacheShipqr.t) < 20 * 60000) return window._cacheShipqr.d;
+  if (auto === true && window._cacheShipqr && window._cacheShipqr.plan === (window.simPlanCargadoEn || null) && (Date.now() - window._cacheShipqr.t) < 20 * 60000) { window._fuenteShipqr = { tipo: 'cache', t: window._cacheShipqr.t }; return window._cacheShipqr.d; }
   const ahora = new Date();
   const inicioCicloActual = corteAnteriorEnvio(ahora); // corte ya pasado más reciente = inicio del ciclo en curso
   try {
@@ -5321,7 +5321,7 @@ async function obtenerProduccionRealASSY1(auto) {
       if (esDeEsteCiclo) porModelo[modelo].cicloActual += qty;
       else porModelo[modelo].arrastre += qty; // solo informativo: sigue sumando al total
     });
-    window._cacheShipqr = { t: Date.now(), d: porModelo, plan: window.simPlanCargadoEn || null };
+    window._cacheShipqr = { t: Date.now(), d: porModelo, plan: window.simPlanCargadoEn || null }; window._fuenteShipqr = { tipo: 'lectura', t: window._cacheShipqr.t };
   } catch (e) {
     console.error('Error leyendo pallets de ShipQR:', e);
   }
@@ -5874,7 +5874,7 @@ function sincIMSFresco(auto) {
     if (auto === true && db && window._imsSyncOk && window._ultimoSyncIMS && (Date.now() - window._ultimoSyncIMS) < 30 * 60000) {
       try {
         const h = await huellaMovsIMS();
-        if (h && h === window._huellaIMS) { await aplicarPendientesIMS(); actualizarInvBOM(); refrescarVistasInventario(); resolve(); return; }
+        if (h && h === window._huellaIMS) { window._fuenteIMS = { tipo: 'huella', t: window._ultimoSyncIMS }; await aplicarPendientesIMS(); actualizarInvBOM(); refrescarVistasInventario(); resolve(); return; }
         window._huellaIMS = h;
       } catch (e) { /* si falla la revisión, se hace la lectura completa */ }
     }
@@ -5911,7 +5911,7 @@ function sincIMSFresco(auto) {
     })).then(async function() {
       await aplicarPendientesIMS();
       window._imsSyncOk = !window._imsSyncErr && window._imsDocs > 0;
-      window._ultimoSyncIMS = Date.now();
+      window._ultimoSyncIMS = Date.now(); window._fuenteIMS = { tipo: 'completa', t: window._ultimoSyncIMS, docs: window._imsDocs };
       actualizarInvBOM();
       // El inventario nuevo se refleja en TODAS las pantallas, no solo en el Plan.
       refrescarVistasInventario();
@@ -7434,6 +7434,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
+const BUILD_BOM = 'idx-20261010-1925';
 async function publicarPlanPiso(auto) {
   auto = auto === true;
   // Modo automático: sin ventanas ni cambios en el botón. Si el Autochequeo detecta
@@ -7454,6 +7455,7 @@ async function publicarPlanPiso(auto) {
     // GUARDIA: no pisar un plan más nuevo con uno viejo (otra PC/pestaña con plan anterior)
     try {
       const gd = await db.collection('bom_simulator_p4').doc('plan_piso').get();
+      window._prevPlanPiso = gd.exists ? gd.data() : null;
       const remoto = gd.exists ? (gd.data().planCargadoEn || '') : '';
       const local = window.simPlanCargadoEn || '';
       if (remoto && remoto > local) {
@@ -7529,7 +7531,20 @@ async function publicarPlanPiso(auto) {
     salida.filter(m => m.listo).sort((a, b) => completo(b) - completo(a) || b.cap - a.cap).forEach((m, i) => { m.orden = i + 1; });
 
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
+    // Registro de auditoría: de dónde salieron los datos y qué cambió contra la publicación anterior
+    let devId = ''; try { devId = localStorage.getItem('bomDevId') || ''; if (!devId) { devId = Math.random().toString(36).slice(2, 8); localStorage.setItem('bomDevId', devId); } } catch (e) { devId = 'sin-id'; }
+    const fuente = { ims: window._fuenteIMS || null, shipqr: window._fuenteShipqr || null, equipo: devId, auto: auto, version: BUILD_BOM };
+    const prev = window._prevPlanPiso || null, cambios = [];
+    if (prev && Array.isArray(prev.modelos)) {
+      const pm = {}; prev.modelos.forEach(m => { pm[m.sm] = m; });
+      salida.forEach(m => { const a = pm[m.sm]; if (!a) { cambios.push({ sm: m.sm, nuevo: 1 }); return; }
+        if ((a.pendiente || 0) !== (m.pendiente || 0) || (a.cap == null ? -1 : a.cap) !== (m.cap == null ? -1 : m.cap) || (a.producido || 0) !== (m.producido || 0)) {
+          cambios.push({ sm: m.sm, pendA: a.pendiente || 0, pendN: m.pendiente || 0, capA: a.cap == null ? null : a.cap, capN: m.cap == null ? null : m.cap, prodA: a.producido || 0, prodN: m.producido || 0 }); } });
+    }
+    const historial = ((prev && prev.historial) || []).slice(0, 19);
+    if (cambios.length) historial.unshift({ ts: new Date().toISOString(), por: u, fuente: fuente, cambios: cambios.slice(0, 40) });
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
+      fuente: fuente, historial: historial,
       publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida, auto: auto,
       planCargadoEn: window.simPlanCargadoEn || null,
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,

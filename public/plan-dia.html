@@ -84,7 +84,10 @@ var T = {
   modelo: ['Modelo','Model','모델'], linea: ['Línea · Modelo','Line · Model','라인 · 모델'], pieza: ['Pieza','Part','부품'],
   envio: ['Envío','Ship','출하'], desp: ['Después','Later','이후'], total: ['Total','Total','합계'], estado: ['Estado','Status','상태'],
   listo: 'Listo · Ready · 준비', falta: 'Falta · Missing · 부족', parcial: 'Parcial · Partial · 일부', sinPlan: 'Sin plan publicado · No published plan · 게시된 계획 없음',
-  imprimir: '🖨️ Imprimir · Print · 인쇄', wa: '📱 WhatsApp', act: '🔄 Actualizar · Refresh · 새로고침',
+  imprimir: '🖨️ Imprimir · Print · 인쇄', wa: '📱 WhatsApp', act: '👁 Ver en vivo · Live view · 실시간 보기', fijar: '🔒 Fijar plan · Lock plan · 계획 고정',
+  fijando: '⏳ Fijando… · Locking… · 고정 중…', fijado: '✅ Plan fijado. Todos los envíos usarán este mismo plan · Plan locked: all shares use this plan · 계획 고정됨', errFijar: '❌ No se pudo fijar · Could not lock · 고정 실패',
+  cambios: '🔎 ¿Qué cambió? · What changed? · 변경 내역', sinCambios: 'Sin cambios registrados todavía · No changes recorded yet · 기록된 변경 없음', datosDe: 'Datos · Data · 데이터', ims: 'Inventario IMS · IMS inventory · IMS 재고', shq: 'Producido ShipQR · ShipQR produced · ShipQR 생산', tComp: 'lectura completa', tHue: 'sin movimientos nuevos (reutiliza)', tCache: 'caché ≤20 min', tLect: 'lectura nueva', equipo: 'equipo', pendL: 'pendiente', matL: 'material', prodL: 'producido', nuevoL: 'modelo nuevo',
+  lbFijo: 'PLAN FIJADO · LOCKED PLAN · 고정된 계획', lbVivo: 'EN VIVO (sin fijar) · LIVE (not locked) · 실시간 (미고정)',
   areas: 'Áreas · Areas · 구역', cargando: '⏳ Cargando… · Loading… · 불러오는 중…',
   login: 'Inicia sesión · Sign in · 로그인', correo: 'Correo · Email · 이메일', pass: 'Contraseña · Password · 비밀번호', entrar: 'Entrar · Enter · 입장', errLogin: 'Correo o contraseña incorrectos · Wrong credentials · 잘못된 정보',
   genImg: '⏳ Generando imagen… · Building image… · 이미지 생성 중…', waCopiada: '✅ Imagen copiada. En WhatsApp pégala con Ctrl+V · Image copied: paste in WhatsApp · 이미지 복사됨: WhatsApp에 붙여넣기', waDescargada: '✅ Imagen descargada. Adjúntala en el chat de WhatsApp · Image downloaded: attach it in WhatsApp · 이미지 다운로드됨: WhatsApp에 첨부', errImg: '⚠ No se pudo generar la imagen · Could not build the image · 이미지 생성 실패',
@@ -113,13 +116,39 @@ function mostrarLogin(){
     firebase.auth().signInWithEmailAndPassword(document.getElementById('lgE').value.trim(), document.getElementById('lgP').value).catch(function(){ document.getElementById('lgErr').textContent = T.errLogin; });
   };
 }
-function leerDatos(){
-  if (cargando) return Promise.resolve(); cargando = true;
+var FIJO = null;   // datos del plan fijado (quién y cuándo) o null si se ve en vivo
+function leerVivo(){
   var col = db.collection('bom_simulator_p4');
   return Promise.all([col.doc('plan_piso').get(), col.doc('plan_piso_medio').get(), col.doc('plan_piso_bundle').get()]).then(function(r){
-    DATOS = { assy: r[0].exists ? r[0].data() : null, medio: r[1].exists ? r[1].data() : null, bundle: r[2].exists ? r[2].data() : null };
-    cargando = false;
-  }).catch(function(e){ cargando = false; if (e && e.code === 'permission-denied') mostrarLogin(); else root.innerHTML = '<div class="login"><div class="err">' + esc(e && e.message || e) + '</div></div>'; throw e; });
+    return { assy: r[0].exists ? r[0].data() : null, medio: r[1].exists ? r[1].data() : null, bundle: r[2].exists ? r[2].data() : null };
+  });
+}
+function errLectura(e){ cargando = false; if (e && e.code === 'permission-denied') mostrarLogin(); else root.innerHTML = '<div class="login"><div class="err">' + esc(e && e.message || e) + '</div></div>'; throw e; }
+// Lectura normal: el plan FIJADO (1 sola lectura). Si nunca se ha fijado, se ve en vivo.
+function leerDatos(){
+  if (cargando) return Promise.resolve(); cargando = true;
+  return db.collection('bom_simulator_p4').doc('plan_dia_fijo').get().then(function(f){
+    if (f.exists && f.data().json) {
+      try { DATOS = JSON.parse(f.data().json); FIJO = { en: f.data().fijadoEn, por: f.data().fijadoPor }; cargando = false; return; } catch (e) {}
+    }
+    return leerVivo().then(function(d){ DATOS = d; FIJO = null; cargando = false; });
+  }).catch(errLectura);
+}
+// Ver el plan en vivo (no se guarda)
+function verVivo(){
+  if (cargando) return; cargando = true; DATOS = null; pintar();
+  leerVivo().then(function(d){ DATOS = d; FIJO = null; cargando = false; pintar(); }).catch(errLectura);
+}
+// Fijar el plan: guarda una foto de lo publicado; todos los envíos usan esa misma foto hasta que se vuelva a fijar
+function fijarPlan(){
+  if (cargando) return; cargando = true; msg(T.fijando);
+  leerVivo().then(function(d){
+    var u = (firebase.auth().currentUser && firebase.auth().currentUser.email) || '';
+    var json = JSON.stringify(d), en = new Date().toISOString();
+    return db.collection('bom_simulator_p4').doc('plan_dia_fijo').set({ json: json, fijadoEn: en, fijadoPor: u }).then(function(){
+      DATOS = d; FIJO = { en: en, por: u }; cargando = false; pintar(); msg(T.fijado, 'ok');
+    });
+  }).catch(function(e){ cargando = false; msg(T.errFijar + ' ' + (e && e.message || ''), 'er'); });
 }
 
 // ===== Armado de filas por área =====
@@ -274,12 +303,47 @@ function pintar(){
   root.innerHTML =
     '<div class="bar"><h1>' + esc(T.titulo) + '</h1>' +
     '<span class="noprint">' + ['assy','medio','bundle'].map(function(k){ return '<label class="chk"><input type="checkbox" ' + (AREAS[k] ? 'checked' : '') + ' onchange="AREAS.' + k + '=this.checked;pintar()"> ' + (k === 'assy' ? 'ASSY' : k === 'medio' ? 'Medio proceso' : 'Bundle') + '</label>'; }).join('') + '</span>' +
-    '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn g" onclick="refrescar()">' + esc(T.act) + '</button></div>' +
+    '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn g" onclick="fijarPlan()">' + esc(T.fijar) + '</button><button class="btn g" onclick="verCambios()">' + esc(T.cambios) + '</button><button class="btn g" onclick="verVivo()">' + esc(T.act) + '</button></div>' +
     '<div class="msg" id="msg"></div>' +
-    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2><div class="sub">' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(T.nota) + '</div></div>';
+    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2><div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) : T.lbVivo) + '</b><br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(T.nota) + '</div></div><div id="panelCambios" class="noprint"></div>';
 }
-function refrescar(){ DATOS = null; pintar(); leerDatos().then(pintar).catch(function(){}); }
 function msg(t, cls){ var m = document.getElementById('msg'); if (m) { m.className = 'msg ' + (cls || ''); m.textContent = t || ''; } }
+
+// ===== Auditoría: de dónde salen los datos y qué cambió =====
+function horaCorta(ms){ if (!ms) return '—'; var d = new Date(ms); return d.toLocaleDateString('en-GB').slice(0, 5) + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}); }
+function textoFuente(){
+  var f = DATOS && DATOS.assy && DATOS.assy.fuente; if (!f) return T.datosDe + ': —';
+  var i = f.ims, q = f.shipqr;
+  var ti = !i ? '—' : horaCorta(i.t) + ' (' + (i.tipo === 'completa' ? T.tComp : T.tHue) + ')';
+  var tq = !q ? '—' : horaCorta(q.t) + ' (' + (q.tipo === 'cache' ? T.tCache : T.tLect) + ')';
+  return T.datosDe + ' — ' + T.ims.split(' · ')[0] + ': ' + ti + ' · ' + T.shq.split(' · ')[0] + ': ' + tq + ' · ' + T.equipo + ' ' + (f.equipo || '—');
+}
+function verCambios(){
+  var el = document.getElementById('panelCambios'); if (!el) return;
+  if (el.innerHTML) { el.innerHTML = ''; return; }
+  var H = (DATOS && DATOS.assy && DATOS.assy.historial) || [];
+  var h = '<div class="sheet" style="margin-top:12px"><h2 style="font-size:16px">' + esc(T.cambios) + '</h2>';
+  if (!H.length) h += '<div class="vacio">' + esc(T.sinCambios) + '</div>';
+  H.slice(0, 8).forEach(function(e){
+    h += '<div style="margin:10px 0 2px;font-weight:700;font-size:13px">' + esc(horaCorta(Date.parse(e.ts))) + ' · ' + esc((e.por || '').split('@')[0]) + ' · ' + esc(T.equipo) + ' ' + esc((e.fuente && e.fuente.equipo) || '—') + (e.fuente && e.fuente.auto ? ' · auto' : ' · manual') + '</div>';
+    h += '<div style="font-size:12px;color:#555;margin-bottom:3px">' + esc(textoFuenteDe(e.fuente)) + '</div><table class="p"><tbody>';
+    (e.cambios || []).forEach(function(c){
+      if (c.nuevo) { h += '<tr><td class="m">' + esc(c.sm) + '</td><td class="s">' + esc(T.nuevoL) + '</td></tr>'; return; }
+      var t = [];
+      if (c.pendA !== c.pendN) t.push(T.pendL + ' ' + num(c.pendA) + ' → ' + num(c.pendN));
+      if (c.prodA !== c.prodN) t.push(T.prodL + ' ' + num(c.prodA) + ' → ' + num(c.prodN));
+      if (c.capA !== c.capN) t.push(T.matL + ' ' + (c.capA == null ? '—' : num(c.capA)) + ' → ' + (c.capN == null ? '—' : num(c.capN)));
+      h += '<tr><td class="m">' + esc(c.sm) + '</td><td class="s">' + esc(t.join(' · ')) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+  });
+  el.innerHTML = h + '</div>';
+}
+function textoFuenteDe(f){
+  if (!f) return '';
+  var i = f.ims, q = f.shipqr;
+  return 'IMS: ' + (i ? horaCorta(i.t) + ' (' + (i.tipo === 'completa' ? T.tComp : T.tHue) + ')' : '—') + ' · ShipQR: ' + (q ? horaCorta(q.t) + ' (' + (q.tipo === 'cache' ? T.tCache : T.tLect) + ')' : '—') + ' · ' + (f.version || '');
+}
 
 // ===== WhatsApp: imagen + texto en 3 idiomas =====
 function cargarH2C(){

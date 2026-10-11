@@ -5489,6 +5489,9 @@ function esElegibleParaMaquina(codeHijo, maquina) {
   // 1) Ajuste manual (checkbox) por código = manda sobre todo
   const overrides = window.simMaquinasElegiblesPorCodigo && window.simMaquinasElegiblesPorCodigo[codeHijo];
   if (overrides && Object.prototype.hasOwnProperty.call(overrides, maquina)) return !!overrides[maquina];
+  // 1b) S2 y S5 son líneas flexibles (Tavox 2026-10-10): aceptan cualquier modelo aunque el master no las incluya
+  //     (solo las puede quitar el checkbox manual de arriba)
+  if (maquina === 'S2' || maquina === 'S5') return true;
   // 2) Master modelo→máquinas (Excel cargado): une las máquinas de todos los modelos que usan ese código
   const master = window.simMasterMaquinas;
   if (master && Object.keys(master).length) {
@@ -6198,6 +6201,7 @@ window.actualizarColchon = actualizarColchon;
 
 // Lee en vivo los targets de máquina que ya administra el MES (colección 'targets',
 // mismo proyecto Firebase) — si cambian ahí, aquí se reflejan solos.
+const TARGET_MEDIO_FIJO = { S1: 6000, S2: 6000, S3: 6000, S4: 6000, S5: 6000, Zhongke: 8000 };
 async function obtenerTargetsMaquinas() {
   const targets = {};
   if (!db) return targets;
@@ -6210,6 +6214,9 @@ async function obtenerTargetsMaquinas() {
   } catch (e) {
     console.error('Error leyendo targets de máquinas:', e);
   }
+  // Target diario fijo de medio proceso (definido por Tavox 2026-10-10): S1–S5 = 6,000 pzas/día, Zhongke = 8,000 pzas/día
+  // Si una máquina está en 0 en el MES (apagada / no trabajará) se respeta el 0 y queda fuera del plan.
+  Object.keys(TARGET_MEDIO_FIJO).forEach(k => { if (targets[k] !== 0) targets[k] = TARGET_MEDIO_FIJO[k]; });
   return targets;
 }
 

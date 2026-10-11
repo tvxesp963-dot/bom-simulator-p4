@@ -42,6 +42,7 @@ table.p td.z{color:#b0b6c4;text-align:center}
 table.p td.s{text-align:left;font-size:11.5px}
 table.p td.s.ok{color:#0a7a3e;font-weight:700}table.p td.s.no{color:#b3261e;font-weight:700}table.p td.s.mid{color:#946200;font-weight:700}
 table.p tr.tot td{background:#f2f4f9;font-weight:800}
+.nomat{color:#b3261e;font-weight:800;font-size:12px;margin:8px 0 3px}
 .vacio{padding:10px;color:#666;font-size:13px}
 .foot{font-size:11px;color:#666;margin-top:8px}
 @page{size:letter landscape;margin:9mm}
@@ -75,6 +76,8 @@ var T = {
   areas: 'Áreas · Areas · 구역', cargando: '⏳ Cargando… · Loading… · 불러오는 중…',
   login: 'Inicia sesión · Sign in · 로그인', correo: 'Correo · Email · 이메일', pass: 'Contraseña · Password · 비밀번호', entrar: 'Entrar · Enter · 입장', errLogin: 'Correo o contraseña incorrectos · Wrong credentials · 잘못된 정보',
   genImg: '⏳ Generando imagen… · Building image… · 이미지 생성 중…', waCopiada: '✅ Imagen copiada. En WhatsApp pégala con Ctrl+V · Image copied: paste in WhatsApp · 이미지 복사됨: WhatsApp에 붙여넣기', waDescargada: '✅ Imagen descargada. Adjúntala en el chat de WhatsApp · Image downloaded: attach it in WhatsApp · 이미지 다운로드됨: WhatsApp에 첨부', errImg: '⚠ No se pudo generar la imagen · Could not build the image · 이미지 생성 실패',
+  sinMat: '⚠ Sin material — fuera del plan por día · No material — not in daily plan · 자재 없음 — 일별 계획 제외',
+  pend: ['Pendiente','Pending','잔량'],
   nota: 'Producido ya descontado. El reparto por día lo calcula el BOM Simulator con la capacidad de cada línea. · Produced already deducted. Daily split calculated by BOM Simulator from each line capacity. · 생산량 차감 완료. 일별 배분은 BOM Simulator가 라인 능력에 따라 계산합니다.'
 };
 function tr3(a){ return a[0] + ' · ' + a[1] + ' · ' + a[2]; }
@@ -139,12 +142,14 @@ function filasColas(doc, orden, etiqueta){
 }
 function armar(){
   var A = { assy: filasAssy(DATOS.assy), medio: filasColas(DATOS.medio, ['Zhongke','S1','S2','S3','S4','S5','VC1','VC2'], function(k){ return k; }), bundle: filasColas(DATOS.bundle, ['B1','B2','PRE'], function(k){ return k === 'PRE' ? 'Pre kit' : k; }) };
+  var N = {};
+  Object.keys(A).forEach(function(k){ N[k] = A[k].filter(function(r){ return r.cls === 'no'; }); A[k] = A[k].filter(function(r){ return r.cls !== 'no'; }); });
   A.assy.sort(function(a, b){ return a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : a.prio - b.prio; });
   // Columnas = días con producción en las áreas elegidas (máx. 7); lo demás va en "Después"
   var set = {};
   Object.keys(A).forEach(function(k){ if (!AREAS[k]) return; A[k].forEach(function(r){ r.porDia.forEach(function(x){ if (x.q > 0) set[x.f] = 1; }); }); });
   var dias = Object.keys(set).sort(), cols = dias.slice(0, 7), hayDesp = dias.length > cols.length;
-  return { A: A, cols: cols, hayDesp: hayDesp };
+  return { A: A, N: N, cols: cols, hayDesp: hayDesp };
 }
 function tablaHtml(rows, cols, hayDesp, tipo){
   if (!rows.length) return '<div class="vacio">' + esc(T.sinPlan) + '</div>';
@@ -165,14 +170,26 @@ function tablaHtml(rows, cols, hayDesp, tipo){
   return h + '<td>' + num(tot.total) + '</td><td></td></tr></tbody></table>';
 }
 
+function tablaSinMat(rows, tipo){
+  if (!rows.length) return '';
+  var h = '<div class="nomat">' + esc(T.sinMat) + '</div><table class="p"><thead><tr><th style="text-align:left">' + th3(tipo === 'assy' ? T.modelo : T.linea) + '</th>' + (tipo === 'assy' ? '' : '<th>' + th3(T.pieza) + '</th>') + '<th>' + th3(T.envio) + '</th><th>' + th3(T.pend) + '</th><th style="text-align:left">' + th3(T.estado) + '</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    h += '<tr><td class="m">' + esc(r.et) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' + (tipo === 'assy' ? '' : '<td style="text-align:left">' + esc(r.pieza) + '</td>') + '<td style="text-align:center">' + esc(fechaEnvio(r.fecha)) + '</td><td>' + num(r.total) + '</td><td class="s no">' + esc(r.est) + '</td></tr>';
+  });
+  return h + '</tbody></table>';
+}
+function bloque(k, X){
+  var vacioOk = !X.A[k].length && X.N[k].length;
+  return (vacioOk ? '' : tablaHtml(X.A[k], X.cols, X.hayDesp, k === 'assy' ? 'assy' : k)) + tablaSinMat(X.N[k], k === 'assy' ? 'assy' : k);
+}
 // ===== Pantalla =====
 function pintar(){
   if (!DATOS) { root.innerHTML = '<div class="msg">' + esc(T.cargando) + '</div>'; return; }
   var X = armar(), pubs = [];
   var secs = '';
-  if (AREAS.assy)   { secs += '<div class="sec a">' + esc(T.assy) + '</div>' + tablaHtml(X.A.assy, X.cols, X.hayDesp, 'assy'); if (DATOS.assy) pubs.push('ASSY ' + fechaHora(DATOS.assy.publicadoEn)); }
-  if (AREAS.medio)  { secs += '<div class="sec m">' + esc(T.medio) + '</div>' + tablaHtml(X.A.medio, X.cols, X.hayDesp, 'medio'); if (DATOS.medio) pubs.push('RGB ' + fechaHora(DATOS.medio.publicadoEn)); }
-  if (AREAS.bundle) { secs += '<div class="sec b">' + esc(T.bundle) + '</div>' + tablaHtml(X.A.bundle, X.cols, X.hayDesp, 'bundle'); if (DATOS.bundle) pubs.push('Bundle ' + fechaHora(DATOS.bundle.publicadoEn)); }
+  if (AREAS.assy)   { secs += '<div class="sec a">' + esc(T.assy) + '</div>' + bloque('assy', X); if (DATOS.assy) pubs.push('ASSY ' + fechaHora(DATOS.assy.publicadoEn)); }
+  if (AREAS.medio)  { secs += '<div class="sec m">' + esc(T.medio) + '</div>' + bloque('medio', X); if (DATOS.medio) pubs.push('RGB ' + fechaHora(DATOS.medio.publicadoEn)); }
+  if (AREAS.bundle) { secs += '<div class="sec b">' + esc(T.bundle) + '</div>' + bloque('bundle', X); if (DATOS.bundle) pubs.push('Bundle ' + fechaHora(DATOS.bundle.publicadoEn)); }
   var sem = 'W' + isoSemana(new Date());   // misma semana que el asunto del correo (fecha de hoy)
   root.innerHTML =
     '<div class="bar"><h1>' + esc(T.titulo) + '</h1>' +

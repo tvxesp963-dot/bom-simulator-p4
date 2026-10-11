@@ -42,6 +42,7 @@ table.p td.z{color:#b0b6c4;text-align:center}
 table.p td.s{text-align:left;font-size:11.5px}
 table.p td.s.ok{color:#0a7a3e;font-weight:700}table.p td.s.no{color:#b3261e;font-weight:700}table.p td.s.mid{color:#946200;font-weight:700}
 table.p tr.tot td{background:#f2f4f9;font-weight:800}
+.cv{display:block;font-weight:700;font-size:10.5px}.cv.p{color:#946200}.cv.n{color:#b3261e}
 .nomat{color:#b3261e;font-weight:800;font-size:12px;margin:8px 0 3px}
 .vacio{padding:10px;color:#666;font-size:13px}
 .foot{font-size:11px;color:#666;margin-top:8px}
@@ -120,7 +121,7 @@ function filasAssy(doc){
     if (cap >= pend && pend > 0) { est = T.listo; cls = 'ok'; }
     else if (cap > 0) { est = T.parcial + ' ' + num(cap) + ' / ' + num(pend); cls = 'mid'; }
     else { var f = faltantesObj(m.materiales); est = T.falta + (f.length ? ': ' + f.join(', ') : ''); cls = 'no'; }
-    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999 };
+    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999, ord: m.orden || 999, cap: (m.cap == null ? null : m.cap) };
   });
 }
 function filasColas(doc, orden, etiqueta){
@@ -144,7 +145,7 @@ function armar(){
   var A = { assy: filasAssy(DATOS.assy), medio: filasColas(DATOS.medio, ['Zhongke','S1','S2','S3','S4','S5','VC1','VC2'], function(k){ return k; }), bundle: filasColas(DATOS.bundle, ['B1','B2','PRE'], function(k){ return k === 'PRE' ? 'Pre kit' : k; }) };
   var N = {};
   Object.keys(A).forEach(function(k){ N[k] = A[k].filter(function(r){ return r.cls === 'no'; }); A[k] = A[k].filter(function(r){ return r.cls !== 'no'; }); });
-  A.assy.sort(function(a, b){ return a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : a.prio - b.prio; });
+  A.assy.sort(function(a, b){ return a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : (a.ord - b.ord) || (a.prio - b.prio); });
   // Columnas = días con producción en las áreas elegidas (máx. 7); lo demás va en "Después"
   var set = {};
   Object.keys(A).forEach(function(k){ if (!AREAS[k]) return; A[k].forEach(function(r){ r.porDia.forEach(function(x){ if (x.q > 0) set[x.f] = 1; }); }); });
@@ -160,7 +161,10 @@ function tablaHtml(rows, cols, hayDesp, tipo){
   var tot = { cols: cols.map(function(){ return 0; }), desp: 0, total: 0 };
   rows.forEach(function(r){
     h += '<tr><td class="m">' + esc(r.et) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' + (tipo === 'assy' ? '' : '<td style="text-align:left">' + esc(r.pieza) + '</td>') + '<td style="text-align:center">' + esc(fechaEnvio(r.fecha)) + '</td>';
-    cols.forEach(function(c, i){ var q = r.porDia.filter(function(x){ return x.f === c; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.cols[i] += q; h += q > 0 ? '<td class="q">' + num(q) + '</td>' : '<td class="z">–</td>'; });
+    cols.forEach(function(c, i){ var q = r.porDia.filter(function(x){ return x.f === c; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.cols[i] += q;
+      var antes = r.porDia.filter(function(x){ return x.f < c; }).reduce(function(s, x){ return s + (x.q || 0); }, 0);
+      var cov = (r.cap == null) ? q : Math.max(0, Math.min(q, r.cap - antes));
+      h += q > 0 ? '<td class="q">' + num(q) + (cov < q ? '<small class="cv ' + (cov > 0 ? 'p' : 'n') + '">✓ ' + num(cov) + '</small>' : '') + '</td>' : '<td class="z">–</td>'; });
     if (hayDesp) { var dq = r.porDia.filter(function(x){ return cols.indexOf(x.f) < 0; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.desp += dq; h += dq > 0 ? '<td class="q">' + num(dq) + '</td>' : '<td class="z">–</td>'; }
     tot.total += r.total; h += '<td class="q">' + num(r.total) + '</td><td class="s ' + r.cls + '">' + esc(r.est) + '</td></tr>';
   });

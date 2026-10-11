@@ -5324,6 +5324,9 @@ async function obtenerProduccionRealASSY1(auto) {
     window._cacheShipqr = { t: Date.now(), d: porModelo, plan: window.simPlanCargadoEn || null }; window._fuenteShipqr = { tipo: 'lectura', t: window._cacheShipqr.t };
   } catch (e) {
     console.error('Error leyendo pallets de ShipQR:', e);
+    // Si falla la lectura NO se devuelve vacío (eso ponía "Producido = 0" y movía el plan): se conserva la última lectura buena
+    window._fuenteShipqr = { tipo: 'error', t: Date.now() };
+    return window._cacheShipqr ? window._cacheShipqr.d : null;
   }
   return porModelo;
 }
@@ -5339,6 +5342,7 @@ async function sincronizarProducidoDesdeMES(auto) {
   if (wrap) wrap.innerHTML = `<div style="padding:1.5rem;text-align:center;color:var(--text2);font-size:12px">⏳ Trayendo producción real de ASSY1 desde el MES...</div>`;
 
   const datos = await obtenerProduccionRealASSY1(auto);
+  if (!datos) { renderPlanSemanal(); return; } // lectura fallida: se dejan los valores anteriores
   window.simProducidoDesglosePorModelo = window.simProducidoDesglosePorModelo || {};
 
   const modelosPlan = Object.keys(simTargetsPorModelo).filter(sm => (simTargetsPorModelo[sm] || 0) > 0);
@@ -7434,7 +7438,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM = 'idx-20261010-1925';
+const BUILD_BOM='idx-20261010-2000';
 async function publicarPlanPiso(auto) {
   auto = auto === true;
   // Modo automático: sin ventanas ni cambios en el botón. Si el Autochequeo detecta
@@ -7465,7 +7469,16 @@ async function publicarPlanPiso(auto) {
         if (!window.confirm(msg + '\n\n¿Publicar de todos modos y SOBREESCRIBIR el plan nuevo? (Aceptar = sobreescribir)')) { regresar(); return; }
       }
     } catch (eg) { console.warn('guardia plan', eg); }
+    // ID de este equipo
+    let devId = ''; try { devId = localStorage.getItem('bomDevId') || ''; if (!devId) { devId = Math.random().toString(36).slice(2, 8); localStorage.setItem('bomDevId', devId); } } catch (e) { devId = 'sin-id'; }
+    // UN SOLO PUBLICADOR: si otra computadora/pestaña publicó hace menos de 4 min, esta no publica (evita planes que se alternan)
+    if (auto && window._prevPlanPiso && window._prevPlanPiso.fuente && window._prevPlanPiso.fuente.equipo && window._prevPlanPiso.fuente.equipo !== devId) {
+      const edad = Date.now() - Date.parse(window._prevPlanPiso.publicadoEn || 0);
+      if (edad >= 0 && edad < 4 * 60000) { window._pisoAutoEstado = { estado: 'OK', alertas: 0 }; console.warn('[Auto-publicar piso] otro equipo publicó hace ' + Math.round(edad / 1000) + ' s; esta pestaña no publica'); regresar(); return; }
+    }
     await sincIMSFresco(auto);
+    // Producido SIEMPRE fresco antes de calcular (antes, al dar "Publicar TV" a mano se usaba el producido guardado en esta PC, que podía estar viejo)
+    try { await sincronizarProducidoDesdeMES(auto); } catch (eP) { console.warn('producido', eP); }
     // Si el IMS no se pudo leer (cuota, permisos, red), NO se publica: el piso conserva el último plan bueno
     // en vez de mostrar "Falta todo" con inventario en cero.
     if (!window._imsSyncOk) {
@@ -7532,7 +7545,6 @@ async function publicarPlanPiso(auto) {
 
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
     // Registro de auditoría: de dónde salieron los datos y qué cambió contra la publicación anterior
-    let devId = ''; try { devId = localStorage.getItem('bomDevId') || ''; if (!devId) { devId = Math.random().toString(36).slice(2, 8); localStorage.setItem('bomDevId', devId); } } catch (e) { devId = 'sin-id'; }
     const fuente = { ims: window._fuenteIMS || null, shipqr: window._fuenteShipqr || null, equipo: devId, auto: auto, version: BUILD_BOM };
     const prev = window._prevPlanPiso || null, cambios = [];
     if (prev && Array.isArray(prev.modelos)) {

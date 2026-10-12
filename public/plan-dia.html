@@ -87,7 +87,8 @@ var T = {
   listo: 'Listo · Ready · 준비', falta: 'Falta · Missing · 부족', parcial: 'Parcial · Partial · 일부', sinPlan: 'Sin plan publicado · No published plan · 게시된 계획 없음',
   imprimir: '🖨️ Imprimir · Print · 인쇄', wa: '📱 WhatsApp', act: '👁 Ver en vivo · Live view · 실시간 보기', fijar: '🔒 Fijar plan · Lock plan · 계획 고정',
   fijando: '⏳ Fijando… · Locking… · 고정 중…', fijado: '✅ Plan fijado. Todos los envíos usarán este mismo plan · Plan locked: all shares use this plan · 계획 고정됨', errFijar: '❌ No se pudo fijar · Could not lock · 고정 실패',
-  cambios: '🔎 ¿Qué cambió? · What changed? · 변경 내역', sinCambios: 'Sin cambios registrados todavía · No changes recorded yet · 기록된 변경 없음', datosDe: 'Datos · Data · 데이터', ims: 'Inventario IMS · IMS inventory · IMS 재고', shq: 'Producido ShipQR · ShipQR produced · ShipQR 생산', tComp: 'lectura completa', tHue: 'sin movimientos nuevos (reutiliza)', tCache: 'caché ≤20 min', tLect: 'lectura nueva', equipo: 'equipo', pendL: 'pendiente', matL: 'material', prodL: 'producido', nuevoL: 'modelo nuevo',
+  cambios: '🔎 ¿Qué cambió? · What changed? · 변경 내역', sinCambios: 'Sin cambios registrados todavía · No changes recorded yet · 기록된 변경 없음', datosDe: 'Datos · Data · 데이터', ims: 'Inventario IMS · IMS inventory · IMS 재고', shq: 'Producido ShipQR · ShipQR produced · ShipQR 생산', tComp: 'lectura completa', tHue: 'sin movimientos nuevos (reutiliza)', tCache: 'caché ≤20 min', tLect: 'lectura nueva', equipo: 'equipo', pendL: 'pendiente', matL: 'material', prodL: 'producido', nuevoL: 'modelo nuevo', prioL: 'prioridad', dispL: 'disponible', invL: 'inventario', invIgual: 'inventario igual: cambió por la cascada de prioridad · inventory unchanged: priority cascade · 재고 동일: 우선순위 차감',
+  hace: ['hace', 'ago', '전'], hoySolo: ['⚠ En vivo hoy solo', '⚠ Live today only', '⚠ 현재 가능'], difVivo: ['modelos con menos material en vivo que en este plan fijado', 'models have less material live than this locked plan', '고정 계획보다 현재 자재가 적은 모델'], reFijar: '¿Fijar de nuevo? · Lock again? · 다시 고정?',
   lbFijo: 'PLAN FIJADO · LOCKED PLAN · 고정된 계획', lbVivo: 'EN VIVO (sin fijar) · LIVE (not locked) · 실시간 (미고정)',
   areas: 'Áreas · Areas · 구역', cargando: '⏳ Cargando… · Loading… · 불러오는 중…',
   login: 'Inicia sesión · Sign in · 로그인', correo: 'Correo · Email · 이메일', pass: 'Contraseña · Password · 비밀번호', entrar: 'Entrar · Enter · 입장', errLogin: 'Correo o contraseña incorrectos · Wrong credentials · 잘못된 정보',
@@ -103,6 +104,12 @@ function num(x){ return Math.round(x || 0).toLocaleString('en-US'); }
 function fechaD(iso){ return new Date(iso + 'T12:00:00'); }
 function fechaEnvio(iso){ if (!iso) return '—'; var d = fechaD(iso); if (isNaN(d)) return '—'; return d.getDate() + '-' + MESES[d.getMonth()][1]; }
 function isoSemana(d){ var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), dn = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - dn); var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0) / 86400000 + 1) / 7); }
+function edadPlan(iso){
+  var ms = Date.now() - Date.parse(iso); if (isNaN(ms) || ms < 0) return '';
+  var h = ms / 3600000, tx = h < 1 ? Math.max(1, Math.round(ms / 60000)) + ' min' : (h < 48 ? Math.round(h) + ' h' : Math.round(h / 24) + ' d');
+  var s = T.hace[0] + ' ' + tx + ' · ' + tx + ' ' + T.hace[1] + ' · ' + tx + ' ' + T.hace[2];
+  return h >= 6 ? ' ⚠ ' + s + ' — ' + T.reFijar : ' (' + s + ')';
+}
 function fechaHora(iso){ if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}); }
 
 // ===== Firebase =====
@@ -117,6 +124,7 @@ function mostrarLogin(){
     firebase.auth().signInWithEmailAndPassword(document.getElementById('lgE').value.trim(), document.getElementById('lgP').value).catch(function(){ document.getElementById('lgErr').textContent = T.errLogin; });
   };
 }
+var VIVO = null;   // capacidad en vivo por modelo (solo para comparar con el plan fijado)
 var FIJO = null;   // datos del plan fijado (quién y cuándo) o null si se ve en vivo
 function leerVivo(){
   var col = db.collection('bom_simulator_p4');
@@ -130,15 +138,17 @@ function leerDatos(){
   if (cargando) return Promise.resolve(); cargando = true;
   return db.collection('bom_simulator_p4').doc('plan_dia_fijo').get().then(function(f){
     if (f.exists && f.data().json) {
-      try { DATOS = JSON.parse(f.data().json); FIJO = { en: f.data().fijadoEn, por: f.data().fijadoPor }; cargando = false; return; } catch (e) {}
+      var dj = null; try { dj = JSON.parse(f.data().json); } catch (e) {}
+      if (dj) { DATOS = dj; FIJO = { en: f.data().fijadoEn, por: f.data().fijadoPor };
+        return db.collection('bom_simulator_p4').doc('plan_piso').get().then(function(v){ VIVO = {}; if (v.exists && v.data().modelos) v.data().modelos.forEach(function(m){ VIVO[m.sm] = Math.min(m.cap || 0, m.pendiente || 0); }); }).catch(function(){ VIVO = null; }).then(function(){ cargando = false; }); }
     }
-    return leerVivo().then(function(d){ DATOS = d; FIJO = null; cargando = false; });
+    return leerVivo().then(function(d){ DATOS = d; FIJO = null; VIVO = null; cargando = false; });
   }).catch(errLectura);
 }
 // Ver el plan en vivo (no se guarda)
 function verVivo(){
   if (cargando) return; cargando = true; DATOS = null; pintar();
-  leerVivo().then(function(d){ DATOS = d; FIJO = null; cargando = false; pintar(); }).catch(errLectura);
+  leerVivo().then(function(d){ DATOS = d; FIJO = null; VIVO = null; cargando = false; pintar(); }).catch(errLectura);
 }
 // Fijar el plan: guarda una foto de lo publicado; todos los envíos usan esa misma foto hasta que se vuelva a fijar
 function fijarPlan(){
@@ -162,7 +172,7 @@ function filasAssy(doc){
     if (cap >= pend && pend > 0) { est = T.listo; cls = 'ok'; }
     else if (cap > 0) { est = T.parcial + ' ' + num(cap) + ' / ' + num(pend); cls = 'mid'; }
     else { var f = faltantesObj(m.materiales); est = T.falta + (f.length ? ': ' + f.join(', ') : ''); cls = 'no'; }
-    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999, ord: m.orden || 999, cap: (m.cap == null ? null : m.cap), capTot: m.cap || 0, pend: pend };
+    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999, ord: m.orden || 999, cap: (m.cap == null ? null : m.cap), capTot: m.cap || 0, pend: pend, alerta: (FIJO && VIVO && VIVO[m.sm] != null && VIVO[m.sm] < Math.min(m.cap || 0, pend)) ? VIVO[m.sm] : null };
   }), doc);
 }
 // ASSY: reparto propio con la capacidad diaria (13,000): solo modelos con material,
@@ -273,7 +283,7 @@ function tablaHtml(rows, cols, hayDesp, tipo){
       var qa = r.porDia.filter(function(x){ return x.f === c && !x.g; }).reduce(function(s, x){ return s + (x.q || 0); }, 0);
       h += q > 0 ? '<td class="q' + (qa === 0 && r.porDia.some(function(x){ return x.g; }) ? ' g' : '') + '">' + (qa > 0 && qa < q ? num(qa) + '<small class="cg">+' + num(q - qa) + '</small>' : num(q)) + '</td>' : '<td class="z">–</td>'; });
     if (hayDesp) { var dq = r.porDia.filter(function(x){ return cols.indexOf(x.f) < 0; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.desp += dq; h += dq > 0 ? '<td class="q">' + num(dq) + '</td>' : '<td class="z">–</td>'; }
-    tot.total += r.total; h += '<td class="q">' + num(r.total) + '</td><td class="s ' + r.cls + '">' + esc(r.est) + '</td></tr>';
+    tot.total += r.total; h += '<td class="q">' + num(r.total) + '</td><td class="s ' + r.cls + '">' + esc(r.est) + (r.alerta != null ? '<br><b style="color:#b3261e">' + esc(tr3(T.hoySolo)) + ' ' + num(r.alerta) + '</b>' : '') + '</td></tr>';
   });
   h += '<tr class="tot"><td class="m" ' + (tipo === 'assy' ? '' : 'colspan="2"') + '>' + esc(tr3(T.total)) + '</td><td></td>';
   tot.cols.forEach(function(q){ h += '<td>' + (q > 0 ? num(q) : '–') + '</td>'; });
@@ -307,7 +317,7 @@ function pintar(){
     '<span class="noprint">' + ['assy','medio','bundle'].map(function(k){ return '<label class="chk"><input type="checkbox" ' + (AREAS[k] ? 'checked' : '') + ' onchange="AREAS.' + k + '=this.checked;pintar()"> ' + (k === 'assy' ? 'ASSY' : k === 'medio' ? 'Medio proceso' : 'Bundle') + '</label>'; }).join('') + '</span>' +
     '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn g" onclick="fijarPlan()">' + esc(T.fijar) + '</button><button class="btn g" onclick="verCambios()">' + esc(T.cambios) + '</button><button class="btn g" onclick="verVivo()">' + esc(T.act) + '</button></div>' +
     '<div class="msg" id="msg"></div>' +
-    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2><div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) : T.lbVivo) + '</b><br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(T.nota) + '</div></div><div id="panelCambios" class="noprint"></div>';
+    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2><div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) + edadPlan(FIJO.en) : T.lbVivo) + '</b>' + (function(){ var n = X.A.assy.filter(function(r){ return r.alerta != null; }).length; return n ? '<br><b style="color:#b3261e">⚠ ' + n + ' ' + esc(tr3(T.difVivo)) + '</b>' : ''; })() + '<br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(T.nota) + '</div></div><div id="panelCambios" class="noprint"></div>';
 }
 function msg(t, cls){ var m = document.getElementById('msg'); if (m) { m.className = 'msg ' + (cls || ''); m.textContent = t || ''; } }
 
@@ -335,6 +345,12 @@ function verCambios(){
       if (c.pendA !== c.pendN) t.push(T.pendL + ' ' + num(c.pendA) + ' → ' + num(c.pendN));
       if (c.prodA !== c.prodN) t.push(T.prodL + ' ' + num(c.prodA) + ' → ' + num(c.prodN));
       if (c.capA !== c.capN) t.push(T.matL + ' ' + (c.capA == null ? '—' : num(c.capA)) + ' → ' + (c.capN == null ? '—' : num(c.capN)));
+      if (c.prioA !== undefined && c.prioA !== c.prioN) t.push(T.prioL + ' ' + c.prioA + ' → ' + c.prioN);
+      (c.mats || []).forEach(function(x){
+        var d = (x.dA == null ? '—' : num(x.dA)) + ' → ' + (x.dN == null ? '—' : num(x.dN));
+        var inv = (x.iA === x.iN) ? T.invIgual : (T.invL + ' ' + (x.iA == null ? '—' : num(x.iA)) + ' → ' + (x.iN == null ? '—' : num(x.iN)));
+        t.push(x.k + ': ' + T.dispL + ' ' + d + ' (' + inv + ')');
+      });
       h += '<tr><td class="m">' + esc(c.sm) + '</td><td class="s">' + esc(t.join(' · ')) + '</td></tr>';
     });
     h += '</tbody></table>';

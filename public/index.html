@@ -7438,7 +7438,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261010-2000';
+const BUILD_BOM='idx-20261012-0715';
 async function publicarPlanPiso(auto) {
   auto = auto === true;
   // Modo automático: sin ventanas ni cambios en el botón. Si el Autochequeo detecta
@@ -7545,13 +7545,19 @@ async function publicarPlanPiso(auto) {
 
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
     // Registro de auditoría: de dónde salieron los datos y qué cambió contra la publicación anterior
-    const fuente = { ims: window._fuenteIMS || null, shipqr: window._fuenteShipqr || null, equipo: devId, auto: auto, version: BUILD_BOM };
+    const fuente = { ims: window._fuenteIMS || null, shipqr: window._fuenteShipqr || null, equipo: devId, auto: auto, version: BUILD_BOM, pendIMS: window._pendTotal || 0 };
     const prev = window._prevPlanPiso || null, cambios = [];
     if (prev && Array.isArray(prev.modelos)) {
       const pm = {}; prev.modelos.forEach(m => { pm[m.sm] = m; });
       salida.forEach(m => { const a = pm[m.sm]; if (!a) { cambios.push({ sm: m.sm, nuevo: 1 }); return; }
-        if ((a.pendiente || 0) !== (m.pendiente || 0) || (a.cap == null ? -1 : a.cap) !== (m.cap == null ? -1 : m.cap) || (a.producido || 0) !== (m.producido || 0)) {
-          cambios.push({ sm: m.sm, pendA: a.pendiente || 0, pendN: m.pendiente || 0, capA: a.cap == null ? null : a.cap, capN: m.cap == null ? null : m.cap, prodA: a.producido || 0, prodN: m.producido || 0 }); } });
+        // Detalle por material: disponible para este modelo (después de la cascada de prioridad) e inventario total del código
+        const mats = [];
+        ['Strip', 'Top', 'Bot', 'Bundle'].forEach(k => {
+          const dA = a.disp ? a.disp[k] : null, dN = m.disp ? m.disp[k] : null, iA = a.invTotal ? a.invTotal[k] : null, iN = m.invTotal ? m.invTotal[k] : null;
+          if (dA !== dN || iA !== iN) mats.push({ k: k, dA: dA == null ? null : dA, dN: dN == null ? null : dN, iA: iA == null ? null : iA, iN: iN == null ? null : iN });
+        });
+        if ((a.pendiente || 0) !== (m.pendiente || 0) || (a.cap == null ? -1 : a.cap) !== (m.cap == null ? -1 : m.cap) || (a.producido || 0) !== (m.producido || 0) || (a.prioridad || 0) !== (m.prioridad || 0)) {
+          cambios.push({ sm: m.sm, pendA: a.pendiente || 0, pendN: m.pendiente || 0, capA: a.cap == null ? null : a.cap, capN: m.cap == null ? null : m.cap, prodA: a.producido || 0, prodN: m.producido || 0, prioA: a.prioridad || 0, prioN: m.prioridad || 0, mats: mats }); } });
     }
     const historial = ((prev && prev.historial) || []).slice(0, 19);
     if (cambios.length) historial.unshift({ ts: new Date().toISOString(), por: u, fuente: fuente, cambios: cambios.slice(0, 40) });

@@ -43,6 +43,7 @@ table.p td.s{text-align:left;font-size:11.5px}
 table.p td.s.ok{color:#0a7a3e;font-weight:700}table.p td.s.no{color:#b3261e;font-weight:700}table.p td.s.mid{color:#946200;font-weight:700}
 table.p tr.tot td{background:#f2f4f9;font-weight:800}
 .g{background:#fff6e0!important;color:#946200;font-style:italic}
+.cg{display:block;background:#fff6e0;color:#946200;font-style:italic;font-weight:700;font-size:11px;border-radius:3px;margin-top:2px;padding:0 4px}
 .cv{display:block;font-weight:700;font-size:10.5px}.cv.p{color:#946200}.cv.n{color:#b3261e}
 /* Versión "foto" (WhatsApp): más ancha, letra grande y bordes marcados para que se lea en el celular */
 .sheet.foto{width:1500px;max-width:none;padding:26px;overflow:visible}
@@ -53,7 +54,7 @@ table.p tr.tot td{background:#f2f4f9;font-weight:800}
 .sheet.foto table.p td{padding:9px 10px;border:1.5px solid #9aa6bf}
 .sheet.foto table.p td.m small{font-size:13px}.sheet.foto table.p td.s{font-size:15px}
 .sheet.foto table.p td.q{font-size:18px;background:#d6e8ff}.sheet.foto table.p td.g{background:#ffedc2!important}
-.sheet.foto .cv{font-size:13px}.sheet.foto .nomat{font-size:16px}.sheet.foto .foot{font-size:13px}
+.sheet.foto .cv{font-size:13px}.sheet.foto .cg{font-size:14px;margin-top:3px;padding:1px 6px}.sheet.foto .nomat{font-size:16px}.sheet.foto .foot{font-size:13px}
 .nomat{color:#b3261e;font-weight:800;font-size:12px;margin:8px 0 3px}
 .vacio{padding:10px;color:#666;font-size:13px}
 .foot{font-size:11px;color:#666;margin-top:8px}
@@ -93,7 +94,7 @@ var T = {
   genImg: '⏳ Generando imagen… · Building image… · 이미지 생성 중…', waCopiada: '✅ Imagen copiada. En WhatsApp pégala con Ctrl+V · Image copied: paste in WhatsApp · 이미지 복사됨: WhatsApp에 붙여넣기', waDescargada: '✅ Imagen descargada. Adjúntala en el chat de WhatsApp · Image downloaded: attach it in WhatsApp · 이미지 다운로드됨: WhatsApp에 첨부', errImg: '⚠ No se pudo generar la imagen · Could not build the image · 이미지 생성 실패',
   sinMat: '⚠ Sin material — fuera del plan por día · No material — not in daily plan · 자재 없음 — 일별 계획 제외',
   pend: ['Pendiente','Pending','잔량'],
-  nota: 'Celda crema/cursiva = guía (falta material) · ✓ = lo que ya hay disponible. Producido ya descontado. Cada día se llena a la capacidad de la línea (ASSY 13,000): primero lo que ya tiene material y después el resto como guía. · Produced already deducted. Each day fills to line capacity (ASSY 13,000): available material first, the rest as a guide. · 생산량 차감 완료. 매일 라인 능력(ASSY 13,000)까지 채움: 자재 있는 모델 먼저, 나머지는 참고용.'
+  nota: 'Número normal = ya hay material · crema/cursiva (o +número crema) = guía, falta material. Producido ya descontado. Cada día se llena a la capacidad de la línea (ASSY 13,000): primero lo que ya tiene material y después el resto como guía. · Produced already deducted. Each day fills to line capacity (ASSY 13,000): available material first, the rest as a guide. · 생산량 차감 완료. 매일 라인 능력(ASSY 13,000)까지 채움: 자재 있는 모델 먼저, 나머지는 참고용.'
 };
 function tr3(a){ return a[0] + ' · ' + a[1] + ' · ' + a[2]; }
 function th3(a){ return a[0] + '<small>' + a[1] + ' · ' + a[2] + '</small>'; }
@@ -188,9 +189,9 @@ function repartoAssy(rows, doc){
   rows.forEach(function(r){ r.porDia = []; });
   // Pasada 1: lo que YA tiene material (más material primero)
   listos.forEach(function(r){ poner(r, Math.min(r.capTot, r.pend), false); });
-  // Pasada 2: lo que falta producir de cada modelo, como guía (orden de envío y prioridad)
+  // Pasada 2: lo que falta producir de cada modelo, como guía — MISMA lógica: primero el que más material tiene, hacia abajo (luego envío y prioridad)
   rows.filter(function(r){ return r.pend - Math.min(r.capTot, r.pend) > 0; })
-    .sort(function(a, b){ return ((a.fecha || '9999') < (b.fecha || '9999') ? -1 : (a.fecha || '9999') > (b.fecha || '9999') ? 1 : 0) || (a.prio - b.prio); })
+    .sort(function(a, b){ return (Math.min(b.capTot, b.pend) - Math.min(a.capTot, a.pend)) || ((a.fecha || '9999') < (b.fecha || '9999') ? -1 : (a.fecha || '9999') > (b.fecha || '9999') ? 1 : 0) || (a.prio - b.prio); })
     .forEach(function(r){ poner(r, r.pend - Math.min(r.capTot, r.pend), true); });
   rows.forEach(function(r){
     r.porDia.sort(function(x, y){ return x.f < y.f ? -1 : x.f > y.f ? 1 : (x.g ? 1 : 0) - (y.g ? 1 : 0); });
@@ -227,8 +228,9 @@ function guiaColas(rows, doc){
     G.forEach(function(r){ r.porDia.forEach(function(x){ usado[x.f] = (usado[x.f] || 0) + (x.q || 0); }); });
     var d = new Date(); d.setHours(12, 0, 0, 0);
     function fct(x){ var w = x.getDay(); return (w >= 1 && w <= 5) ? 1 : (w === 6 ? fS : 0); }
+    G.forEach(function(r){ r.disp0 = sumaDia(r.porDia); });
     G.filter(function(r){ return r.pend - sumaDia(r.porDia) > 0; })
-      .sort(function(a, b){ return ((a.fecha || '9999') < (b.fecha || '9999') ? -1 : (a.fecha || '9999') > (b.fecha || '9999') ? 1 : 0) || (a.prio - b.prio); })
+      .sort(function(a, b){ return (b.disp0 - a.disp0) || ((a.fecha || '9999') < (b.fecha || '9999') ? -1 : (a.fecha || '9999') > (b.fecha || '9999') ? 1 : 0) || (a.prio - b.prio); })
       .forEach(function(r){
         var q = r.pend - sumaDia(r.porDia), dd = new Date(d), guard = 0;
         while (q > 0 && guard++ < 120) {
@@ -269,7 +271,7 @@ function tablaHtml(rows, cols, hayDesp, tipo){
     h += '<tr><td class="m">' + esc(r.et) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' + (tipo === 'assy' ? '' : '<td style="text-align:left">' + esc(r.pieza) + '</td>') + '<td style="text-align:center">' + esc(fechaEnvio(r.fecha)) + '</td>';
     cols.forEach(function(c, i){ var q = r.porDia.filter(function(x){ return x.f === c; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.cols[i] += q;
       var qa = r.porDia.filter(function(x){ return x.f === c && !x.g; }).reduce(function(s, x){ return s + (x.q || 0); }, 0);
-      h += q > 0 ? '<td class="q' + (qa === 0 && r.porDia.some(function(x){ return x.g; }) ? ' g' : '') + '">' + num(q) + (qa > 0 && qa < q ? '<small class="cv p">✓ ' + num(qa) + '</small>' : '') + '</td>' : '<td class="z">–</td>'; });
+      h += q > 0 ? '<td class="q' + (qa === 0 && r.porDia.some(function(x){ return x.g; }) ? ' g' : '') + '">' + (qa > 0 && qa < q ? num(qa) + '<small class="cg">+' + num(q - qa) + '</small>' : num(q)) + '</td>' : '<td class="z">–</td>'; });
     if (hayDesp) { var dq = r.porDia.filter(function(x){ return cols.indexOf(x.f) < 0; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.desp += dq; h += dq > 0 ? '<td class="q">' + num(dq) + '</td>' : '<td class="z">–</td>'; }
     tot.total += r.total; h += '<td class="q">' + num(r.total) + '</td><td class="s ' + r.cls + '">' + esc(r.est) + '</td></tr>';
   });

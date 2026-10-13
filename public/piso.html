@@ -275,6 +275,28 @@ var lang = 'es';
 try { lang = localStorage.getItem('pisoLang') || 'es'; } catch (e) {}
 if (!T[lang]) lang = 'es';
 function t(k){ return T[lang][k]; }
+// ===== AVISO: ¿lo que se ve es el Excel más reciente? =====
+var cargaInfo = null;
+var AVP = {
+  es:{viejo:'⚠ PLAN DESACTUALIZADO: el último Excel cargado fue {a} ({h}) pero lo publicado es {p}. Publica de nuevo desde el BOM Simulator (Publicar TV).',sinFecha:'⚠ Este plan no trae fecha de carga: lo publicó una versión vieja del BOM Simulator. Actualiza (Ctrl+F5) las PCs que tengan el simulador abierto y publica de nuevo.',excel:'Excel',cargado:'cargado',otro:'otro plan'},
+  en:{viejo:'⚠ OUTDATED PLAN: the latest Excel loaded was {a} ({h}) but what is published is {p}. Publish again from the BOM Simulator (Publish TV).',sinFecha:'⚠ This plan has no load date: it was published by an old version of the BOM Simulator. Refresh (Ctrl+F5) every PC with the simulator open and publish again.',excel:'Excel',cargado:'loaded',otro:'another plan'},
+  ko:{viejo:'⚠ 오래된 계획: 마지막으로 불러온 엑셀은 {a} ({h}) 이지만 게시된 것은 {p} 입니다. BOM Simulator에서 다시 게시하세요 (TV 게시).',sinFecha:'⚠ 이 계획에는 불러온 날짜가 없습니다: BOM Simulator의 구버전이 게시했습니다. 시뮬레이터가 열린 PC를 새로고침(Ctrl+F5)하고 다시 게시하세요.',excel:'엑셀',cargado:'불러옴',otro:'다른 계획'}
+};
+function _hAv(iso){ try{ return new Date(iso).toLocaleString(t('loc'),{weekday:'short',hour:'numeric',minute:'2-digit'}); }catch(e){ return iso||'—'; } }
+function _escAv(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];}); }
+function avisoPlan(){
+  if(!plan) return '';
+  var L=AVP[lang]||AVP.es, pc=plan.planCargadoEn||'', ci=(cargaInfo&&cargaInfo.planCargadoEn)||'', h='';
+  if(pc) h+=' · '+L.excel+': <b>'+_escAv(plan.planArchivo||'—')+'</b> ('+L.cargado+' '+_hAv(pc)+')';
+  var est='display:block;margin-top:8px;padding:8px 12px;border-radius:10px;font-weight:800;font-size:15px;';
+  if(ci && pc<ci){
+    h+='<span style="'+est+'background:rgba(231,76,60,.18);border:2px solid #e74c3c;color:#ff8a7a">'+L.viejo.replace('{a}','<b>'+_escAv(cargaInfo.archivo||'—')+'</b>').replace('{h}',_hAv(ci)).replace('{p}',pc?('<b>'+_escAv(plan.planArchivo||'—')+'</b> ('+_hAv(pc)+')'):L.otro)+'</span>';
+  } else if(!pc){
+    h+='<span style="'+est+'background:rgba(241,196,15,.15);border:2px solid #f1c40f;color:#f1c40f">'+L.sinFecha+'</span>';
+  }
+  return h;
+}
+
 function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
 function fechaCorta(d){ return d.toLocaleDateString(t('loc'), {day:'2-digit', month:'short'}); }
 /* ===== VISTA SEMANA (plan por día) ===== */
@@ -417,6 +439,7 @@ function errorLectura(e){
 
 function arrancar(){
   if (arrancado) return; arrancado = true;
+  db.collection('bom_simulator_p4').doc('plan_carga').onSnapshot(function(d){ cargaInfo=d.exists?d.data():null; pintar(); }, function(){});
   unsubPlan = db.collection('bom_simulator_p4').doc('plan_piso').onSnapshot(function(doc){
     var nuevo = doc.exists ? doc.data() : { modelos: [] };
     // GUARDIA: si llega un plan más viejo que el último visto, se ignora (no pisar el plan nuevo)
@@ -567,6 +590,7 @@ function pintar(){
   }
   if (enLinea) sub += ' · <span id="runSpan"></span>';
   else sub += ' · <span id="runSpan" style="color:var(--text2);font-size:14px">' + t('sinConf') + '</span>';
+  sub += avisoPlan();
   document.getElementById('sub').innerHTML = sub;
 
   var app = document.getElementById('app');

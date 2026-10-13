@@ -906,6 +906,7 @@ try {
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
     if (d.poBalance) window.simPOBalancePorModelo = Object.assign(window.simPOBalancePorModelo, d.poBalance);
     if (d.planCargadoEn) window.simPlanCargadoEn = d.planCargadoEn;
+    if (d.planArchivo) window.simPlanArchivo = d.planArchivo;
     if (d.maquinasElegiblesPorCodigo) window.simMaquinasElegiblesPorCodigo = Object.assign(window.simMaquinasElegiblesPorCodigo, d.maquinasElegiblesPorCodigo);
     if (d.panelMaquinasColapsado !== undefined) window.simPanelMaquinasColapsado = d.panelMaquinasColapsado;
     if (d.masterMaquinas) window.simMasterMaquinas = d.masterMaquinas;
@@ -929,7 +930,7 @@ function guardarPlanCompleto() {
       prioridades: window.simPrioridadPorModelo || {},
       fechas: window.simFechaEntregaPorModelo || {},
       poBalance: window.simPOBalancePorModelo || {},
-      planCargadoEn: window.simPlanCargadoEn || null,
+      planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null,
       maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {},
       panelMaquinasColapsado: !!window.simPanelMaquinasColapsado,
       masterMaquinas: window.simMasterMaquinas || {},
@@ -1331,7 +1332,7 @@ async function publicarPlanBundle(auto, usuario, conTargetOrdenado, produccionRe
   await cargarMasterBundleFirestore();
   const colas = calcularColasBundle(conTargetOrdenado, produccionReal);
   await db.collection('bom_simulator_p4').doc('plan_piso_bundle').set({
-    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto, colas, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null
+    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto, colas, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null
   });
 }
 
@@ -1435,6 +1436,7 @@ function cargarPlanMultiExcel(file) {
       window.simFechaEntregaPorModelo = {};
       window.simPOBalancePorModelo = {};
       window.simPlanCargadoEn = new Date().toISOString();   // marca de carga: piso cuenta como enviado lo que salga desde este momento
+      window.simPlanArchivo = (file && file.name) || null;
 
       const modelosBOM = [...new Set(BOM.map(r => r.sm))];
       let agregados = 0, noEncontrados = [];
@@ -1493,6 +1495,10 @@ function cargarPlanMultiExcel(file) {
       { const _nPO = Object.keys(window.simPOBalancePorModelo || {}).length; msg += _nPO ? ` · PO Balance: ${_nPO} modelo(s)` : ' · ⚠️ sin columna PO Balance'; }
       if (noEncontrados.length) msg += ` ⚠️ No encontrados en el BOM actual: ${noEncontrados.join(', ')}`;
       statusEl.textContent = msg;
+      try { registrarCargaPlan(); } catch (eR) { console.warn('plan_carga', eR); }
+      if (agregados > 0 && typeof adminAuthed !== 'undefined' && adminAuthed) setTimeout(function () {
+        if (window.confirm('✅ Excel cargado: ' + agregados + ' modelo(s).\n\nEl piso (ASSY, medio proceso y Bundle) sigue mostrando el plan ANTERIOR hasta que se publique.\n\n¿Publicar al piso ahora?')) publicarPlanPiso();
+      }, 400);
     } catch (err) {
       statusEl.textContent = '❌ Error leyendo el archivo: ' + err.message;
     }
@@ -1500,6 +1506,18 @@ function cargarPlanMultiExcel(file) {
   };
   reader.readAsArrayBuffer(file);
 }
+
+// Registro de la última carga de Excel (lo leen las pantallas de piso para avisar si lo publicado es viejo)
+function registrarCargaPlan() {
+  if (!db || typeof adminAuthed === 'undefined' || !adminAuthed || !window.simPlanCargadoEn) return;
+  const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
+  let devId = ''; try { devId = localStorage.getItem('bomDevId') || ''; } catch (e) {}
+  return db.collection('bom_simulator_p4').doc('plan_carga').set({
+    planCargadoEn: window.simPlanCargadoEn, archivo: window.simPlanArchivo || '', n: multiModelosActivos.length,
+    modelos: multiModelosActivos.slice(0, 60), por: u, equipo: devId
+  }).catch(function (e) { console.warn('plan_carga', e); });
+}
+window.registrarCargaPlan = registrarCargaPlan;
 
 function quitarModeloMulti(sm) {
   multiModelosActivos = multiModelosActivos.filter(m => m !== sm);
@@ -7410,7 +7428,7 @@ async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionRea
   const colas = await calcularColasMedioProceso(conTargetOrdenado, produccionReal);
   await db.collection('bom_simulator_p4').doc('plan_piso_medio').set({
     publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario, auto: !!auto,
-    colas: colas, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null
+    colas: colas, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null
   });
 }
 
@@ -7438,13 +7456,30 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261012-0715';
+const BUILD_BOM='idx-20261012-1600';
+// Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
+// Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
+(function vigilarVersion() {
+  function chequear() {
+    fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(tx => {
+      const m = /const BUILD_BOM='([^']+)'/.exec(tx || '');
+      if (!m || m[1] === BUILD_BOM || window._buildViejo) return;
+      window._buildViejo = true;
+      const d = document.createElement('div');
+      d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:10px 14px;font:700 14px system-ui;text-align:center';
+      d.innerHTML = '🔄 Hay una versión NUEVA del BOM Simulator. Esta pestaña ya no publica al piso. <button onclick="location.reload()" style="margin-left:10px;padding:5px 12px;border:0;border-radius:6px;font-weight:800;cursor:pointer">Actualizar ahora</button>';
+      document.body.appendChild(d);
+    }).catch(() => {});
+  }
+  setTimeout(chequear, 60000); setInterval(chequear, 10 * 60000);
+})();
 async function publicarPlanPiso(auto) {
   auto = auto === true;
   // Modo automático: sin ventanas ni cambios en el botón. Si el Autochequeo detecta
   // un número que no cuadra, NO publica (el piso mostrará el aviso de datos viejos).
   const alert = auto ? (m) => console.warn('[Auto-publicar piso]', m) : (m) => window.alert(m);
   if (auto && window._publicandoPiso) return;
+  if (window._buildViejo) { if (!auto) window.alert('Esta pestaña tiene una versión VIEJA del BOM Simulator. Actualiza con Ctrl+F5 (el plan no se pierde) y vuelve a publicar.'); return; }
   if (!adminAuthed) { alert('Solo el administrador puede publicar al piso.'); return; }
   if (auto) { ejecutarAutochequeo(); if (window._autoChk && window._autoChk.errores.length) { window._pisoAutoEstado = { estado: 'AUTOCHEQUEO', alertas: window._autoChk.errores.length }; console.warn('[Auto-publicar piso] omitido: Autochequeo con alertas'); return; } }
   else if (!confirmarSiHayAlertas()) return;
@@ -7460,7 +7495,9 @@ async function publicarPlanPiso(auto) {
     try {
       const gd = await db.collection('bom_simulator_p4').doc('plan_piso').get();
       window._prevPlanPiso = gd.exists ? gd.data() : null;
-      const remoto = gd.exists ? (gd.data().planCargadoEn || '') : '';
+      let remoto = gd.exists ? (gd.data().planCargadoEn || '') : '';
+      // También contra el ÚLTIMO Excel cargado en cualquier PC (cubre planes publicados por versiones viejas, que no traen fecha de carga)
+      try { const gc = await db.collection('bom_simulator_p4').doc('plan_carga').get(); const rc = gc.exists ? (gc.data().planCargadoEn || '') : ''; if (rc > remoto) remoto = rc; } catch (ec) {}
       const local = window.simPlanCargadoEn || '';
       if (remoto && remoto > local) {
         window._pisoAutoEstado = { estado: 'PLAN_VIEJO', alertas: 1 };
@@ -7564,7 +7601,7 @@ async function publicarPlanPiso(auto) {
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
       fuente: fuente, historial: historial,
       publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida, auto: auto,
-      planCargadoEn: window.simPlanCargadoEn || null,
+      planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null,
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
       capacidadSabado: Math.round(((typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000) * factorDiaCal(new Date(2026, 9, 10))),
       cal: calSnapshot()

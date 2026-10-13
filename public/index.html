@@ -181,6 +181,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div style="display:flex;gap:.5rem">
     <button id="autoChkBadge" onclick="toggleAutoChkPanel()" title="Autochequeo" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid rgba(122,136,184,.35);background:rgba(122,136,184,.1);color:var(--text2);font-weight:700;cursor:pointer">⏳ Autochequeo</button>
     <span id="imsStatus" style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);color:#ff4444">⬤ IMS</span>
+    <span id="pisoEstadoChip" style="display:none;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700;cursor:pointer" title="Estado de lo que muestran las pantallas del piso"></span>
     <button class="btn btn-secondary btn-sm" onclick="sincIMS()">🔄 Sync IMS</button>
     <button class="btn btn-secondary btn-sm" onclick="cfAbrir()">📋 Conteo físico</button>
     <button class="btn btn-success btn-sm" id="btnExport" onclick="exportarExcel()" style="display:none">📊 Exportar Excel</button>
@@ -4469,7 +4470,36 @@ Storage.prototype.removeItem = function (k) {
   if (this === window.localStorage && adminAuthed && PLAN_KEYS.indexOf(k) >= 0) publicarPlanCompartido();
 };
 
+// Chip permanente en la barra de arriba: ¿el piso muestra el mismo Excel que está cargado aquí?
+function vigilarPiso() {
+  if (window._vigilaPiso || !db) return;
+  const chip = document.getElementById('pisoEstadoChip'); if (!chip) return;
+  window._vigilaPiso = true; chip.style.display = '';
+  let ultimo = null, tengo = false;
+  const hora = (iso) => { try { return new Date(iso).toLocaleString('es-MX', { weekday: 'short', hour: 'numeric', minute: '2-digit' }); } catch (e) { return iso || '—'; } };
+  function pinta() {
+    if (!tengo) return;
+    const local = window.simPlanCargadoEn || '', d = ultimo;
+    let txt, bg, bc, col, tip;
+    if (!d) { txt = '📺 Piso: sin plan'; bg = 'rgba(139,150,168,.12)'; bc = 'rgba(139,150,168,.4)'; col = '#8b96a8'; tip = 'No hay plan publicado. Presiona Publicar TV.'; }
+    else {
+      const remoto = d.planCargadoEn || '', edadMin = Math.round((Date.now() - Date.parse(d.publicadoEn || 0)) / 60000);
+      tip = 'Piso: Excel ' + (d.planArchivo || '—') + ' (cargado ' + (remoto ? hora(remoto) : 'sin fecha') + ') · publicado ' + hora(d.publicadoEn) + ' por ' + (d.publicadoPor || '—') + '\nAquí: Excel ' + (window.simPlanArchivo || '—') + ' (cargado ' + (local ? hora(local) : '—') + ')';
+      if (remoto && local && remoto === local) {
+        if (edadMin > 60) { txt = '📺 Piso al día · publicado hace ' + (edadMin >= 120 ? Math.round(edadMin / 60) + ' h' : edadMin + ' min'); bg = 'rgba(255,186,0,.12)'; bc = 'rgba(255,186,0,.45)'; col = '#ffba00'; }
+        else { txt = '📺 Piso al día'; bg = 'rgba(0,184,90,.12)'; bc = 'rgba(0,184,90,.4)'; col = '#00b85a'; }
+      } else { txt = '📺 ⚠ Piso muestra OTRO plan · Publicar TV'; bg = 'rgba(231,76,60,.18)'; bc = '#e74c3c'; col = '#ff8a7a'; }
+    }
+    chip.textContent = txt; chip.style.background = bg; chip.style.border = '1px solid ' + bc; chip.style.color = col; chip.title = tip || '';
+  }
+  db.collection('bom_simulator_p4').doc('plan_piso').onSnapshot(function (doc) { ultimo = doc.exists ? doc.data() : null; tengo = true; pinta(); }, function () {});
+  setInterval(pinta, 60000);
+  chip.onclick = function () { pinta(); };
+}
+window.vigilarPiso = vigilarPiso;
+
 function alEntrarAdminPlan() {
+  setTimeout(vigilarPiso, 2500);
   try { const t0 = Number(localStorage.getItem('pisoAutoOn_p4') || 0); if (t0 && Date.now() - t0 < 24 * 36e5) { window._pisoAutoOn = true; latidoPisoAuto(); } } catch (e) {}
   var b = document.getElementById('btnCompartirPlan'); if (b) b.style.display = '';
   if (!db) return;
@@ -7476,7 +7506,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261012-1800';
+const BUILD_BOM='idx-20261012-1830';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {

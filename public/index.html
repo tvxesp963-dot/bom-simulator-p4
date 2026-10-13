@@ -5901,16 +5901,16 @@ function sincIMSFresco(auto) {
       } catch (e) { /* si falla la revisión, se hace la lectura completa */ }
     }
     if (auto === true && db && !window._huellaIMS) { try { window._huellaIMS = await huellaMovsIMS(); } catch (e) {} }
-    window._imsSyncErr = null; window._imsDocs = 0; window._imsSyncOk = false;
-    if (!db) { window._imsSyncErr = 'sin-firebase'; resolve(); return; }
-    imsInventario = {}; window._pendAplicado = {};
+    // Lectura con variables LOCALES: dos lecturas al mismo tiempo ya no se borran entre sí, y si la lectura falla se conserva el inventario anterior
+    let errLocal = null, docsLocal = 0; const invLocal = {}, detalle = {};
+    if (!db) { window._imsSyncErr = 'sin-firebase'; window._imsSyncOk = false; resolve(); return; }
     var colsSync = [
       {col: 'planta4_inventario', planta: 'P4'},
       {col: 'planta3_inventario', planta: 'P3'}
     ];
     Promise.all(colsSync.map(function(c) {
       return db.collection(c.col).get().then(function(snap) {
-        window._imsDocs += snap.size || 0;
+        docsLocal += snap.size || 0; detalle[c.planta] = snap.size || 0;
         snap.forEach(function(doc) {
           var d = doc.data();
           if (!d.pn) return;
@@ -5918,22 +5918,25 @@ function sincIMSFresco(auto) {
           var desc = (d.desc||'').trim().toUpperCase();
           var actual = invActualIMS(d); // mismo campo que muestran los IMS
           var keyPlanta = pn + '||PLANTA:' + c.planta;
-          imsInventario[keyPlanta] = (imsInventario[keyPlanta]||0) + actual;
+          invLocal[keyPlanta] = (invLocal[keyPlanta]||0) + actual;
           if (c.planta === 'P3') {
-            imsInventario[pn] = actual;
+            invLocal[pn] = actual;
           } else {
-            imsInventario[pn] = (imsInventario[pn]||0) + actual;
+            invLocal[pn] = (invLocal[pn]||0) + actual;
           }
           if (desc) {
-            imsInventario[pn+'||'+desc] = actual;
-            imsInventario[pn+'||'+desc+'||PLANTA:'+c.planta] = actual;
+            invLocal[pn+'||'+desc] = actual;
+            invLocal[pn+'||'+desc+'||PLANTA:'+c.planta] = actual;
           }
         });
-      }).catch(function(e){ window._imsSyncErr = (e && (e.code || e.message)) || 'error'; });
+      }).catch(function(e){ errLocal = (e && (e.code || e.message)) || 'error'; detalle[c.planta] = 'error'; });
     })).then(async function() {
-      await aplicarPendientesIMS();
-      window._imsSyncOk = !window._imsSyncErr && window._imsDocs > 0;
-      window._ultimoSyncIMS = Date.now(); window._fuenteIMS = { tipo: 'completa', t: window._ultimoSyncIMS, docs: window._imsDocs };
+      const ok = !errLocal && docsLocal > 0;
+      if (ok) { imsInventario = invLocal; window._pendAplicado = {}; }
+      window._imsSyncErr = errLocal; window._imsDocs = docsLocal; window._imsDetalle = detalle;
+      if (ok) await aplicarPendientesIMS();
+      window._imsSyncOk = ok;
+      window._ultimoSyncIMS = Date.now(); window._fuenteIMS = { tipo: 'completa', t: window._ultimoSyncIMS, docs: docsLocal };
       actualizarInvBOM();
       // El inventario nuevo se refleja en TODAS las pantallas, no solo en el Plan.
       refrescarVistasInventario();
@@ -7438,6 +7441,23 @@ async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionRea
 // pantalla piso.html la muestre. No cambia ningún cálculo: usa las mismas
 // funciones que pintan la tabla 1 (calcularFaltantesPorModeloPlan + calcularPlanSemanal).
 // Abre las 2 pantallas de piso (ASSY y RGB) en pestañas con nombre: si ya están abiertas solo se enfocan
+// Panel fijo de estado de la publicación (no se pierde al cambiar de pestaña como una ventana de aviso)
+function pubEstado(msg, tipo) {
+  try {
+    let d = document.getElementById('pubEstadoPiso');
+    if (!d) {
+      d = document.createElement('div'); d.id = 'pubEstadoPiso';
+      d.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:99998;max-width:560px;padding:12px 16px;border-radius:12px;font:700 14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.6);cursor:pointer';
+      d.title = 'clic para cerrar'; d.onclick = function () { d.remove(); };
+      document.body.appendChild(d);
+    }
+    const c = tipo === 'ok' ? ['#0b2a1b', '#00b85a', '#7dffb0'] : tipo === 'err' ? ['#3a1414', '#e74c3c', '#ff8a7a'] : ['#102238', '#4da6ff', '#cfe6ff'];
+    d.style.background = c[0]; d.style.border = '2px solid ' + c[1]; d.style.color = c[2];
+    d.textContent = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' · ' + msg;
+  } catch (e) {}
+}
+window.pubEstado = pubEstado;
+
 function abrirPantallasPiso() {
   const lista = [['piso.html', 'pisoAssy', 'ASSY1'], ['piso-medio.html', 'pisoRGB', 'Medio Proceso'], ['piso-bundle.html', 'pisoBundle', 'Bundle P3']];
   const bloq = [];
@@ -7456,7 +7476,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261012-1600';
+const BUILD_BOM='idx-20261012-1800';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {
@@ -7477,7 +7497,7 @@ async function publicarPlanPiso(auto) {
   auto = auto === true;
   // Modo automático: sin ventanas ni cambios en el botón. Si el Autochequeo detecta
   // un número que no cuadra, NO publica (el piso mostrará el aviso de datos viejos).
-  const alert = auto ? (m) => console.warn('[Auto-publicar piso]', m) : (m) => window.alert(m);
+  const alert = auto ? (m) => console.warn('[Auto-publicar piso]', m) : (m) => { pubEstado('❌ ' + String(m).replace(/\n+/g, ' '), 'err'); window.alert(m); };
   if (auto && window._publicandoPiso) return;
   if (window._buildViejo) { if (!auto) window.alert('Esta pestaña tiene una versión VIEJA del BOM Simulator. Actualiza con Ctrl+F5 (el plan no se pierde) y vuelve a publicar.'); return; }
   if (!adminAuthed) { alert('Solo el administrador puede publicar al piso.'); return; }
@@ -7485,7 +7505,7 @@ async function publicarPlanPiso(auto) {
   else if (!confirmarSiHayAlertas()) return;
   if (!db) { alert('Firebase no disponible — no se pudo publicar'); return; }
   window._publicandoPiso = true;
-  if (!auto) abrirPantallasPiso();
+  if (!auto) { abrirPantallasPiso(); pubEstado('⏳ Publicando... (1/4) leyendo inventario del IMS y producido. Espera, no cambies de pestaña.', 'run'); }
   const btn = auto ? null : document.getElementById('btnPublicarPiso');
   const txt0 = btn ? btn.textContent : '';
   if (btn) { btn.textContent = '⏳ Publicando...'; btn.disabled = true; }
@@ -7514,16 +7534,18 @@ async function publicarPlanPiso(auto) {
       if (edad >= 0 && edad < 4 * 60000) { window._pisoAutoEstado = { estado: 'OK', alertas: 0 }; console.warn('[Auto-publicar piso] otro equipo publicó hace ' + Math.round(edad / 1000) + ' s; esta pestaña no publica'); regresar(); return; }
     }
     await sincIMSFresco(auto);
+    if (!window._imsSyncOk) { await new Promise(r => setTimeout(r, 1500)); await sincIMSFresco(false); }   // un reintento antes de rendirse
     // Producido SIEMPRE fresco antes de calcular (antes, al dar "Publicar TV" a mano se usaba el producido guardado en esta PC, que podía estar viejo)
     try { await sincronizarProducidoDesdeMES(auto); } catch (eP) { console.warn('producido', eP); }
     // Si el IMS no se pudo leer (cuota, permisos, red), NO se publica: el piso conserva el último plan bueno
     // en vez de mostrar "Falta todo" con inventario en cero.
     if (!window._imsSyncOk) {
       window._pisoAutoEstado = { estado: 'IMS', alertas: 1 };
-      alert('No se pudo leer el inventario del IMS (' + (window._imsSyncErr || 'sin datos') + '). No se publicó para no mostrar faltantes falsos al piso.');
+      alert('No se pudo leer el inventario del IMS (' + (window._imsSyncErr || ('sin datos' + (window._imsDetalle ? ' · documentos leídos: P4=' + window._imsDetalle.P4 + ', P3=' + window._imsDetalle.P3 : ''))) + '). No se publicó para no mostrar faltantes falsos al piso.');
       regresar(); return;
     }
     await cargarMasterFirestore();
+    if (!auto) pubEstado('⏳ Publicando... (2/4) calculando el plan.', 'run');
     const produccionReal = { ...(window.simProducidoManualPorModelo || {}) };
     const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
     const modelos = [...new Set(BOM.map(r => r.sm))].filter(Boolean);
@@ -7598,14 +7620,20 @@ async function publicarPlanPiso(auto) {
     }
     const historial = ((prev && prev.historial) || []).slice(0, 19);
     if (cambios.length) historial.unshift({ ts: new Date().toISOString(), por: u, fuente: fuente, cambios: cambios.slice(0, 40) });
+    if (!auto) pubEstado('⏳ Publicando... (3/4) escribiendo el plan de ASSY (' + salida.length + ' modelos).', 'run');
+    const verPub = Date.now();
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
       fuente: fuente, historial: historial,
-      publicadoEn: new Date().toISOString(), publicadoPor: u, ver: Date.now(), modelos: salida, auto: auto,
+      publicadoEn: new Date().toISOString(), publicadoPor: u, ver: verPub, modelos: salida, auto: auto,
       planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null,
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
       capacidadSabado: Math.round(((typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000) * factorDiaCal(new Date(2026, 9, 10))),
       cal: calSnapshot()
     });
+    // Verificación: se vuelve a leer del servidor para confirmar que el plan quedó escrito
+    let verificado = true;
+    try { const chk = await db.collection('bom_simulator_p4').doc('plan_piso').get({ source: 'server' }); verificado = chk.exists && chk.data().ver === verPub; } catch (ev) { verificado = null; }
+    if (!auto) pubEstado('⏳ Publicando... (4/4) medio proceso y Bundle.', 'run');
     // Misma publicación para el piso de medio proceso (S1-S5, Zhongke, VC1, VC2)
     let avisoMedio = '';
     try { await publicarPlanMedio(auto, u, conTarget, produccionReal); }
@@ -7617,6 +7645,12 @@ async function publicarPlanPiso(auto) {
     window._pisoAutoEstado = { estado: 'OK', alertas: 0 };
     try { localStorage.setItem('pisoAutoOn_p4', String(Date.now())); } catch (e) {}
     if (!auto) latidoPisoAuto();
+    if (!auto) {
+      const arch = window.simPlanArchivo ? (' · Excel: ' + window.simPlanArchivo) : '';
+      if (verificado === false) pubEstado('⚠️ Se escribió pero el servidor devolvió OTRO plan (¿otra PC publicando a la vez?). Vuelve a presionar Publicar TV.', 'err');
+      else if (avisoMedio || avisoBundle) pubEstado('⚠️ ASSY publicado (' + salida.length + ' modelos' + arch + '), pero hubo fallas: ' + (avisoMedio ? 'Medio proceso: ' + avisoMedio + '. ' : '') + (avisoBundle ? 'Bundle: ' + avisoBundle : ''), 'err');
+      else pubEstado('✅ PUBLICADO: ASSY (' + salida.length + ' modelos' + arch + '), Medio proceso y Bundle. Ya puedes ir a las pantallas del piso y recargar con Ctrl+F5.', 'ok');
+    }
     if (avisoMedio && !auto) window.alert('ASSY publicado, pero el plan de medio proceso falló: ' + avisoMedio);
     if (avisoBundle && !auto) window.alert('El plan de Bundle P3 falló: ' + avisoBundle);
     regresar(auto ? '' : ((avisoMedio || avisoBundle) ? '⚠️ Revisar publicación' : '✅ ASSY + RGB + Bundle · auto 5 min'));

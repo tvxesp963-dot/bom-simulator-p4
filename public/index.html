@@ -7506,7 +7506,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261012-1830';
+const BUILD_BOM='idx-20261012-1830b';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {
@@ -7671,6 +7671,15 @@ async function publicarPlanPiso(auto) {
     let avisoBundle = '';
     try { await publicarPlanBundle(auto, u, conTarget, produccionReal); }
     catch (eBundle) { console.warn('[Publicar bundle]', eBundle); avisoBundle = eBundle.message || 'error'; }
+    // Plan del día (plan-dia.html): al publicar a mano, se fija solo el mismo plan (así no hay que ir a "Fijar de nuevo")
+    if (!auto && !avisoMedio && !avisoBundle && verificado !== false) {
+      try {
+        const col = db.collection('bom_simulator_p4');
+        const rr = await Promise.all([col.doc('plan_piso').get({ source: 'server' }), col.doc('plan_piso_medio').get({ source: 'server' }), col.doc('plan_piso_bundle').get({ source: 'server' })]);
+        const dj = { assy: rr[0].exists ? rr[0].data() : null, medio: rr[1].exists ? rr[1].data() : null, bundle: rr[2].exists ? rr[2].data() : null };
+        await col.doc('plan_dia_fijo').set({ json: JSON.stringify(dj), fijadoEn: new Date().toISOString(), fijadoPor: u });
+      } catch (ePD) { console.warn('[plan del día]', ePD); }
+    }
     if (!auto) { window._pisoAutoOn = true; window._pisoAutoTick = 0; window._pisoAutoTick2 = 0; }
     window._pisoAutoEstado = { estado: 'OK', alertas: 0 };
     try { localStorage.setItem('pisoAutoOn_p4', String(Date.now())); } catch (e) {}

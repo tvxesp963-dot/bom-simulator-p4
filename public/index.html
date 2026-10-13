@@ -6281,7 +6281,8 @@ async function obtenerTargetsMaquinas() {
   } catch (e) { console.warn('[maquinas_status]', e); }
   // Target diario fijo de medio proceso (definido por Tavox 2026-10-10): S1–S5 = 6,000 pzas/día, Zhongke = 8,000 pzas/día
   // Si una máquina está en 0 en el MES (apagada / no trabajará) se respeta el 0 y queda fuera del plan.
-  Object.keys(TARGET_MEDIO_FIJO).forEach(k => { if (targets[k] !== 0) targets[k] = TARGET_MEDIO_FIJO[k]; });
+  // Desde 2026-10-13 manda el target de la pantalla Targets por Máquina del MES; el fijo solo se usa si esa máquina no tiene target en el MES.
+  Object.keys(TARGET_MEDIO_FIJO).forEach(k => { if (targets[k] === undefined || isNaN(targets[k])) targets[k] = TARGET_MEDIO_FIJO[k]; });
   return targets;
 }
 
@@ -7514,7 +7515,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261013-0735';
+const BUILD_BOM='idx-20261013-0745';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {

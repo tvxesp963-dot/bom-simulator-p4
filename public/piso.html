@@ -630,6 +630,12 @@ function pintar(){
   var tot = filas.reduce(function(a, f){ a.t += f.m.target || 0; a.p += Math.min(f.prod, f.m.target || 0); return a; }, {t:0, p:0});
 
   var run = filas.filter(function(f){ return f.pend > 0 && f.m.orden; }).sort(function(a,b){ return a.m.orden - b.m.orden; });
+  // Modelo confirmado por el leader (ASSY1): va primero de "Se pueden correr" al instante, sin esperar la siguiente publicación.
+  // Cuando termina su pendiente ya no está en la lista y sigue el orden normal; si el leader confirma otro, pasa ese.
+  if (enLinea && enLinea.conf) {
+    var iConf = run.map(function(f){ return f.m.sm; }).indexOf(enLinea.sm);
+    if (iConf > 0) run.unshift(run.splice(iConf, 1)[0]);
+  }
   var wait = filas.filter(function(f){ return f.pend > 0 && !f.m.orden; }).sort(function(a,b){ return (a.m.prioridad||999) - (b.m.prioridad||999); });
   // Renumerar en vivo: 1, 2, 3… sin huecos (los completados ya no cuentan)
   run.forEach(function(f, i){ f.m = Object.assign({}, f.m, { orden: i + 1 }); });
@@ -650,7 +656,7 @@ function pintar(){
   var corriendoSM = null, esSiguiente = false;
   if (enLinea) {
     var fEn = filas.filter(function(f){ return f.m.sm === enLinea.sm; })[0];
-    if (!fEn || fEn.pend > 0 || enLinea.conf) corriendoSM = enLinea.sm;   // confirmado por el operador = sigue corriendo aunque ya cumplió su envío
+    if (!fEn || fEn.pend > 0) corriendoSM = enLinea.sm;   // si el modelo confirmado ya cumplió su envío, el parpadeo pasa al siguiente en el orden normal (salvo que el leader confirme otro)
     else if (run.length) { corriendoSM = run[0].m.sm; esSiguiente = true; }
     var rs = document.getElementById('runSpan');
     if (rs) {

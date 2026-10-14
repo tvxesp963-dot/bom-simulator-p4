@@ -163,6 +163,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <input id="loginPass" type="password" placeholder="Contraseña" style="padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1f2b;color:#fff;font-size:14px" onkeydown="if(event.key==='Enter')checkLogin()">
     <button onclick="checkLogin()" style="padding:10px 12px;border-radius:8px;border:none;background:#1A4F9C;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Ingresar</button>
     <div id="loginErr" style="display:none;color:#ff4444;font-size:12px;text-align:center">Usuario o contraseña incorrectos</div>
+    <div id="lgnForgot" onclick="lgnReset()" style="text-align:center;font-size:12px;color:#7fb2ff;cursor:pointer;text-decoration:underline">¿Olvidaste tu contraseña? Da clic aquí para restablecerla</div>
+    <div id="lgnMsg" style="display:none;font-size:12px;text-align:center"></div>
+    <select id="lgnLangSel" onchange="lgnSetLang(this.value)" style="background:#1a1f2b;color:#8a93a6;border:1px solid #333;border-radius:6px;padding:4px;font-size:12px;align-self:center"><option value="es">Español</option><option value="en">English</option><option value="ko">한국어</option></select>
     <div onclick="mostrarLoginAdmin()" style="text-align:center;font-size:11px;color:#8a93a6;cursor:pointer;margin-top:6px;text-decoration:underline">¿Eres administrador? Entra aquí</div>
   </div>
   <div id="loginAdminBox" style="display:none;flex-direction:column;gap:10px;width:260px;margin-top:10px">
@@ -479,6 +482,7 @@ function latidoPisoAuto() {
 function tickPisoAuto() {
   if (!window._pisoAutoOn || !adminAuthed || modoSoloSimulador || typeof publicarPlanPiso !== 'function') return;
   escucharAjustesMaquinas();
+  escucharLineaConf();
   window._pisoAutoTick2 = (window._pisoAutoTick2 || 0) + 1;
   if (window._pisoAutoTick2 % 5 !== 0) { latidoPisoAuto(); return; }
   const p = (typeof sincronizarProducidoDesdeMES === 'function') ? sincronizarProducidoDesdeMES(true) : null;
@@ -503,6 +507,41 @@ function escucharAjustesMaquinas() {
       tmr = setTimeout(() => { publicarPlanPiso(true).catch(() => {}); }, 4000);
     }, () => { window._escuchaAjustes = false; });
   } catch (e) { window._escuchaAjustes = false; }
+}
+
+// ===== Modelo confirmado por el leader en ASSY1 (doc linea_asy1: { sm, ts, por }) =====
+// Si hay un modelo confirmado (vigente 12 h) con pendiente, el plan publicado le reparte el material PRIMERO
+// y los demás se acomodan con lo que sobra (en su prioridad del Excel). La prioridad del Excel no se modifica.
+// Cuando ese modelo termina su pendiente, o el leader confirma otro, se republica solo.
+window._lineaConfAsy1 = null; window._lineaConfLista = false;
+function escucharLineaConf() {
+  try {
+    if (window._escuchaLineaConf || typeof db === 'undefined' || !db) return;
+    window._escuchaLineaConf = true;
+    let primera = true, tmr = null;
+    db.collection('bom_simulator_p4').doc('linea_asy1').onSnapshot(snap => {
+      const antes = window._lineaConfAsy1 && window._lineaConfAsy1.sm || '';
+      window._lineaConfAsy1 = snap.exists ? snap.data() : null; window._lineaConfLista = true;
+      const ahora = window._lineaConfAsy1 && window._lineaConfAsy1.sm || '';
+      if (primera) { primera = false; return; }
+      if (snap.metadata.hasPendingWrites || antes === ahora) return;
+      if (!window._pisoAutoOn || !adminAuthed || modoSoloSimulador) return;
+      clearTimeout(tmr);
+      tmr = setTimeout(() => { publicarPlanPiso(true).catch(() => {}); }, 4000);
+    }, () => { window._escuchaLineaConf = false; });
+  } catch (e) { window._escuchaLineaConf = false; }
+}
+async function modeloConfirmadoAsy1() {
+  try {
+    escucharLineaConf();
+    if (!window._lineaConfLista) {
+      const d = await db.collection('bom_simulator_p4').doc('linea_asy1').get();
+      window._lineaConfAsy1 = d.exists ? d.data() : null;
+    }
+    const c = window._lineaConfAsy1;
+    if (c && c.sm && c.ts && (Date.now() - c.ts) <= 12 * 36e5) return c.sm;
+  } catch (e) {}
+  return null;
 }
 
 // DRAG & DROP
@@ -4203,8 +4242,15 @@ function checkLogin() {
   var err = document.getElementById('loginErr');
   err.style.display = 'none';
   if (!auth) { err.textContent = 'Firebase no conectado, recarga la página.'; err.style.display = 'block'; return; }
-  firebase.auth().signInWithEmailAndPassword(email, pass).catch(function() {
-    err.textContent = 'Usuario o contraseña incorrectos';
+  firebase.auth().signInWithEmailAndPassword(email, pass).catch(function(e) {
+    var c = e && e.code || '';
+    var m = LGN_T[lgnLang()];
+    var txt = (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found' || c === 'auth/invalid-email') ? m.bad
+            : c === 'auth/unauthorized-domain' ? m.dom
+            : c === 'auth/network-request-failed' ? m.net
+            : c === 'auth/too-many-requests' ? m.many
+            : c === 'auth/user-disabled' ? m.dis : m.bad;
+    err.textContent = txt + ' [' + (c || 'error') + ']';
     err.style.display = 'block';
   });
 }
@@ -7515,7 +7561,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261013-0745';
+const BUILD_BOM='idx-20261014-1500';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {
@@ -7591,7 +7637,11 @@ async function publicarPlanPiso(auto) {
     const conTarget = modelos.filter(sm => multiModelosActivos.includes(sm) && (simTargetsPorModelo[sm] || 0) > 0).sort((a, b) => prio(a) - prio(b));
     if (!conTarget.length) { alert('No hay modelos con target en el Plan Requerido.'); regresar(); return; }
 
-    calcularFaltantesPorModeloPlan(conTarget, produccionReal);
+    // Modelo confirmado por el leader: toma el material primero (solo si tiene pendiente); el resto sigue su prioridad del Excel.
+    const smConf = await modeloConfirmadoAsy1();
+    const confVigente = (smConf && conTarget.includes(smConf) && Math.max(0, (simTargetsPorModelo[smConf] || 0) - (produccionReal[smConf] || 0)) > 0) ? smConf : null;
+    const ordenReparto = confVigente ? [confVigente, ...conTarget.filter(sm => sm !== confVigente)] : conTarget;
+    calcularFaltantesPorModeloPlan(ordenReparto, produccionReal);
     const caps = window._planMaterialCapPorModelo || {};
     const pick = window._planPickList || [];
     const { semanas } = calcularPlanSemanal(produccionReal, caps);
@@ -7633,13 +7683,13 @@ async function publicarPlanPiso(auto) {
       const porDiaA = [];
       semanas.forEach(sw => (sw.dias || []).forEach(d => { (d.asignaciones || []).forEach(a => { if (a.sm !== sm || !(a.qty > 0)) return; const f = d.fecha, fIso = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0'); porDiaA.push({ f: fIso, q: Math.round(a.qty) }); }); }));
       return { sm, porDia: porDiaA, prioridad: prio(sm), code: (strip && strip.pn) || (bundle && bundle.pn) || '', fecha, target, poBalance: (window.simPOBalancePorModelo && window.simPOBalancePorModelo[sm] != null) ? window.simPOBalancePorModelo[sm] : null, producido, pendiente, cap, materiales, pn, desc, req, falta, disp, invTotal,
-               listo: pendiente > 0 && cap !== null && cap > 0, orden: null };
+               listo: pendiente > 0 && cap !== null && cap > 0, orden: null, confirmado: sm === confVigente };
     });
     // Numeración igual que iniciarParpadeoPlanListo(): de mayor a menor pzas listas
     // Primero los modelos con material completo para todo su pendiente, luego los parciales;
     // dentro de cada grupo, de más a menos pzas listas (mismo criterio que el ⚡ Listo).
     const completo = (m) => (m.cap >= m.pendiente ? 1 : 0);
-    salida.filter(m => m.listo).sort((a, b) => completo(b) - completo(a) || b.cap - a.cap).forEach((m, i) => { m.orden = i + 1; });
+    salida.filter(m => m.listo).sort((a, b) => (b.confirmado ? 1 : 0) - (a.confirmado ? 1 : 0) || completo(b) - completo(a) || b.cap - a.cap).forEach((m, i) => { m.orden = i + 1; });
 
     const u = (firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.email : 'admin';
     // Registro de auditoría: de dónde salieron los datos y qué cambió contra la publicación anterior
@@ -8799,5 +8849,52 @@ window.cfPintarInicio = cfPintarInicio; window.cfImprimir = cfImprimir; window.c
 window.cfGuardar = cfGuardar; window.cfAjustar = cfAjustar; window.cfExcel = cfExcel; window.cfCambiarIdioma = cfCambiarIdioma;
 </script>
 
+
+<script>
+var LGN_T = {
+  es:{mail:'Correo',pass:'Contraseña',go:'Ingresar',forgot:'¿Olvidaste tu contraseña? Da clic aquí para restablecerla',bad:'Correo o contraseña incorrectos',dom:'Dominio no autorizado en Firebase',net:'Sin conexión a internet / red bloqueada',many:'Demasiados intentos, espera unos minutos',dis:'Cuenta deshabilitada',ask:'Escribe tu correo arriba y vuelve a dar clic',sent:'✅ Correo enviado. Revisa tu bandeja y también SPAM / correo no deseado.',show:'Mostrar contraseña',hide:'Ocultar contraseña'},
+  en:{mail:'Email',pass:'Password',go:'Sign in',forgot:'Forgot your password? Click here to reset it',bad:'Wrong email or password',dom:'Domain not authorized in Firebase',net:'No internet connection / network blocked',many:'Too many attempts, wait a few minutes',dis:'Account disabled',ask:'Type your email above and click again',sent:'✅ Email sent. Check your inbox and also SPAM / junk folder.',show:'Show password',hide:'Hide password'},
+  ko:{mail:'이메일',pass:'비밀번호',go:'로그인',forgot:'비밀번호를 잊으셨나요? 여기를 눌러 재설정하세요',bad:'이메일 또는 비밀번호가 올바르지 않습니다',dom:'Firebase에서 승인되지 않은 도메인',net:'인터넷 연결 없음 / 네트워크 차단',many:'시도 횟수 초과, 잠시 후 다시 시도하세요',dis:'계정이 비활성화되었습니다',ask:'위에 이메일을 입력하고 다시 누르세요',sent:'✅ 이메일을 보냈습니다. 받은편지함과 스팸함도 확인하세요.',show:'비밀번호 표시',hide:'비밀번호 숨기기'}
+};
+function lgnLang(){var l='es';try{l=localStorage.getItem('lgnLang')||'es';}catch(e){}return LGN_T[l]?l:'es';}
+function lgnSetLang(l){try{localStorage.setItem('lgnLang',l);}catch(e){} lgnApply();}
+function lgnApply(){
+  var m=LGN_T[lgnLang()];
+  var g=function(i){return document.getElementById(i);};
+  if(g('loginUser'))g('loginUser').placeholder=m.mail;
+  if(g('loginPass'))g('loginPass').placeholder=m.pass;
+  if(g('lgnForgot'))g('lgnForgot').textContent=m.forgot;
+  if(g('lgnLangSel'))g('lgnLangSel').value=lgnLang();
+  var b=document.querySelector('#loginUserBox button[onclick="checkLogin()"]'); if(b)b.textContent=m.go;
+  document.querySelectorAll('.lgn-eye').forEach(function(x){x.title=m.show;});
+}
+function lgnReset(){
+  var m=LGN_T[lgnLang()], box=document.getElementById('lgnMsg');
+  var email=document.getElementById('loginUser').value.trim().toLowerCase();
+  box.style.display='block';
+  if(!email){box.style.color='#ffba00';box.textContent=m.ask;return;}
+  firebase.auth().sendPasswordResetEmail(email).then(function(){
+    box.style.color='#4cd37b';box.textContent=m.sent;
+  }).catch(function(e){
+    box.style.color='#ff4444';box.textContent=(e.code==='auth/unauthorized-domain'?m.dom:e.code==='auth/network-request-failed'?m.net:m.sent)+' ['+(e.code||'')+']';
+  });
+}
+(function(){
+  function addEye(inp){
+    if(inp.dataset.eye)return; inp.dataset.eye='1';
+    var w=document.createElement('span'); w.style.cssText='position:relative;display:block;width:100%';
+    inp.parentNode.insertBefore(w,inp); w.appendChild(inp);
+    inp.style.boxSizing='border-box'; inp.style.width='100%'; inp.style.paddingRight='40px';
+    var b=document.createElement('button'); b.type='button'; b.className='lgn-eye'; b.textContent='👁';
+    b.title=LGN_T[lgnLang()].show;
+    b.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;padding:0;color:#fff';
+    b.onclick=function(){var show=inp.type==='password';inp.type=show?'text':'password';b.title=LGN_T[lgnLang()][show?'hide':'show'];b.style.opacity=show?'.5':'1';};
+    w.appendChild(b);
+  }
+  function scan(){document.querySelectorAll('input[type="password"]').forEach(addEye);}
+  scan(); lgnApply();
+  new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});
+})();
+</script>
 </body>
 </html>

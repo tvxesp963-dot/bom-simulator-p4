@@ -252,7 +252,14 @@ function _escAv(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){re
 function avisoPlan(){
   if(!plan) return '';
   var L=AVP[lang]||AVP.es, pc=plan.planCargadoEn||'', ci=(cargaInfo&&cargaInfo.planCargadoEn)||'', h='';
-  if(pc) h+=' · '+L.excel+': <b>'+_escAv(plan.planArchivo||'—')+'</b> ('+L.cargado+' '+_hAv(pc)+')';
+  if(pc){
+    var BL={es:{pub:'publicado',ok:'Plan al día',v:'Revisar: plan con muchas horas sin actualizar',r:'Excel más nuevo sin publicar'},en:{pub:'published',ok:'Plan up to date',v:'Check: plan not updated for many hours',r:'Newer Excel not published yet'},ko:{pub:'게시',ok:'최신 계획',v:'확인: 계획이 오랫동안 갱신되지 않음',r:'더 새로운 엑셀이 아직 게시되지 않음'}}[lang]||{pub:'publicado',ok:'Plan al día',v:'Revisar: plan con muchas horas sin actualizar',r:'Excel más nuevo sin publicar'};
+    var fmt=function(x){ try{ return new Date(x).toLocaleString(t('loc'),{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}); }catch(e){ return x||'—'; } };
+    var pubMs=plan.publicadoMs||Date.parse(plan.publicadoEn)||0, edadH=pubMs?(Date.now()-pubMs)/36e5:0;
+    var rojo=(ci&&pc<ci), amar=(!pubMs||edadH>12);
+    var co=rojo?['rgba(231,76,60,.18)','#e74c3c','#ff8a7a','⛔',BL.r]:amar?['rgba(241,196,15,.15)','#f1c40f','#f1c40f','⚠',BL.v]:['rgba(46,204,113,.14)','#2ecc71','#5df0a0','✅',BL.ok];
+    h+='<span style="display:inline-block;margin:4px 0;padding:3px 10px;border-radius:8px;font-size:14px;font-weight:600;line-height:1.3;background:'+co[0]+';border:1px solid '+co[1]+';color:var(--text2,#9aa5b8)">'+co[3]+' '+L.excel+': <b style="color:var(--text,#e8edf5)">'+_escAv(plan.planArchivo||'—')+'</b> · '+L.cargado+' '+fmt(pc)+(pubMs?' · '+BL.pub+' '+fmt(pubMs):'')+'</span>';
+  }
   var est='display:block;margin-top:8px;padding:8px 12px;border-radius:10px;font-weight:800;font-size:15px;';
   if(ci && pc<ci){
     h+='<span style="'+est+'background:rgba(231,76,60,.18);border:2px solid #e74c3c;color:#ff8a7a">'+L.viejo.replace('{a}','<b>'+_escAv(cargaInfo.archivo||'—')+'</b>').replace('{h}',_hAv(ci)).replace('{p}',pc?('<b>'+_escAv(plan.planArchivo||'—')+'</b> ('+_hAv(pc)+')'):L.otro)+'</span>';

@@ -55,6 +55,11 @@ table.p tr.tot td{background:#f2f4f9;font-weight:800}
 .sheet.foto table.p td.m small{font-size:13px}.sheet.foto table.p td.s{font-size:15px}
 .sheet.foto table.p td.q{font-size:18px;background:#d6e8ff}.sheet.foto table.p td.g{background:#ffedc2!important}
 .sheet.foto .cv{font-size:13px}.sheet.foto .cg{font-size:14px;margin-top:3px;padding:1px 6px}.sheet.foto .nomat{font-size:16px}.sheet.foto .foot{font-size:13px}
+.xl{border-radius:6px;padding:3px 10px;margin:4px 0 6px;font-size:12px;font-weight:600;line-height:1.35;border:1px solid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.xl.okx{background:#e3f6ea!important;border-color:#0a7a3e;color:#0a5c30;font-style:normal}
+.xl.avx{background:#fff1c9!important;border-color:#c98a00;color:#7a5200;font-style:normal}
+.xl small{display:block;font-size:12px;font-weight:700}
+.sheet.foto .xl{font-size:17px;padding:5px 12px;margin:6px 0 8px}.sheet.foto .xl small{font-size:14px}
 .nomat{color:#b3261e;font-weight:800;font-size:12px;margin:8px 0 3px}
 .vacio{padding:10px;color:#666;font-size:13px}
 .foot{font-size:11px;color:#666;margin-top:8px}
@@ -303,6 +308,24 @@ function bloque(k, X){
   var vacioOk = !X.A[k].length && X.N[k].length;
   return (vacioOk ? '' : tablaHtml(X.A[k], X.cols, X.hayDesp, k === 'assy' ? 'assy' : k)) + tablaSinMat(X.N[k], k === 'assy' ? 'assy' : k);
 }
+// ===== Franja: ¿de qué Excel viene este plan? (sale también en la foto / impresión) =====
+function bannerExcel(){
+  var ks = [['assy','ASSY'],['medio','RGB'],['bundle','Bundle']].filter(function(p){ return AREAS[p[0]] && DATOS[p[0]]; });
+  if (!ks.length) return '';
+  var mala = false, vistos = {};
+  ks.forEach(function(p){
+    var d = DATOS[p[0]], pubMs = d.publicadoMs || Date.parse(d.publicadoEn) || 0, edadH = pubMs ? (Date.now() - pubMs) / 36e5 : 0;
+    if (!d.planCargadoEn || (!FIJO && (!pubMs || edadH > 12))) mala = true;
+    var clave = (d.planArchivo || '') + '|' + (d.planCargadoEn || '');
+    if (vistos[clave]) { vistos[clave].n.push(p[1]); return; }
+    vistos[clave] = { n: [p[1]], d: d };
+  });
+  var filas = Object.keys(vistos).map(function(k){
+    var v = vistos[k], d = v.d;
+    return '<div>' + esc(v.n.join(' + ')) + ' \u2192 Excel: <b>' + esc(d.planArchivo || '—') + '</b> \u00b7 cargado \u00b7 loaded \u00b7 \ubd88\ub7ec\uc634 ' + esc(fechaHora(d.planCargadoEn)) + '</div>';
+  }).join('');
+  return '<div class="xl ' + (mala ? 'avx' : 'okx') + '">' + (mala ? '\u26a0 ' : '\u2705 ') + filas + '</div>';
+}
 // ===== Pantalla =====
 function pintar(){
   if (!DATOS) { root.innerHTML = '<div class="msg">' + esc(T.cargando) + '</div>'; return; }
@@ -317,7 +340,7 @@ function pintar(){
     '<span class="noprint">' + ['assy','medio','bundle'].map(function(k){ return '<label class="chk"><input type="checkbox" ' + (AREAS[k] ? 'checked' : '') + ' onchange="AREAS.' + k + '=this.checked;pintar()"> ' + (k === 'assy' ? 'ASSY' : k === 'medio' ? 'Medio proceso' : 'Bundle') + '</label>'; }).join('') + '</span>' +
     '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn g" onclick="fijarPlan()">' + esc(T.fijar) + '</button><button class="btn g" onclick="verCambios()">' + esc(T.cambios) + '</button><button class="btn g" onclick="verVivo()">' + esc(T.act) + '</button></div>' +
     '<div class="msg" id="msg"></div>' +
-    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2><div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) + edadPlan(FIJO.en) : T.lbVivo) + '</b>' + (function(){ var n = X.A.assy.filter(function(r){ return r.alerta != null; }).length; return n ? '<br><b style="color:#b3261e">⚠ ' + n + ' ' + esc(tr3(T.difVivo)) + '</b>' : ''; })() + '<br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(T.nota) + '</div></div><div id="panelCambios" class="noprint"></div>';
+    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2>' + bannerExcel() + '<div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) + edadPlan(FIJO.en) : T.lbVivo) + '</b>' + (function(){ var n = X.A.assy.filter(function(r){ return r.alerta != null; }).length; return n ? '<br><b style="color:#b3261e">⚠ ' + n + ' ' + esc(tr3(T.difVivo)) + '</b>' : ''; })() + '<br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(T.nota) + '</div></div><div id="panelCambios" class="noprint"></div>';
 }
 function msg(t, cls){ var m = document.getElementById('msg'); if (m) { m.className = 'msg ' + (cls || ''); m.textContent = t || ''; } }
 

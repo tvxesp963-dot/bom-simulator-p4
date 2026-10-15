@@ -5945,14 +5945,14 @@ window._pendTotal = 0;
 async function aplicarPendientesIMS() {
   if (!db) return;
   try {
-    // 1) quitar lo aplicado antes (para no duplicar si se vuelve a ejecutar)
-    var prev = window._pendAplicado || {};
-    Object.keys(prev).forEach(function(k){ imsInventario[k] = (imsInventario[k] || 0) - prev[k]; });
-    window._pendAplicado = {};
-    // 2) leer los PENDING recientes
+    // 1) leer los PENDING recientes
     var d3 = new Date(); d3.setDate(d3.getDate() - 3);
     var desde = d3.getFullYear() + '-' + String(d3.getMonth()+1).padStart(2,'0') + '-' + String(d3.getDate()).padStart(2,'0');
     var snap = await db.collection('pallets_medio').where('status','==','PENDING').get();
+    // 2) quitar lo aplicado antes y aplicar lo nuevo SIN pausas de por medio (evita sumar dos veces si hay dos lecturas a la vez)
+    var prev = window._pendAplicado || {};
+    Object.keys(prev).forEach(function(k){ imsInventario[k] = (imsInventario[k] || 0) - prev[k]; });
+    window._pendAplicado = {};
     var tot = 0, add = function(k, q){ imsInventario[k] = (imsInventario[k] || 0) + q; window._pendAplicado[k] = (window._pendAplicado[k] || 0) + q; };
     snap.forEach(function(doc) {
       var d = doc.data();
@@ -5966,7 +5966,7 @@ async function aplicarPendientesIMS() {
     window._pendTotal = tot;
   } catch (e) { console.warn('pendientes IMS:', e.message); }
 }
-function sincIMSFresco(auto) {
+function _sincIMSFrescoReal(auto) {
   return new Promise(async (resolve) => {
     // AHORRO DE LECTURAS: en el ciclo automático no se relee todo el inventario si no hubo movimientos nuevos
     if (auto === true && db && window._imsSyncOk && window._ultimoSyncIMS && (Date.now() - window._ultimoSyncIMS) < 30 * 60000) {
@@ -6019,6 +6019,18 @@ function sincIMSFresco(auto) {
       resolve();
     }).catch(() => resolve());
   });
+}
+// Una sola lectura de inventario a la vez: si ya hay una en curso, el ciclo automático la reutiliza y el manual espera a que termine
+function sincIMSFresco(auto) {
+  if (window._sincIMSEnCurso) {
+    if (auto === true) return window._sincIMSEnCurso;
+    return window._sincIMSEnCurso.then(function () { return sincIMSFresco(auto); });
+  }
+  var p = _sincIMSFrescoReal(auto);
+  window._sincIMSEnCurso = p;
+  var libre = function () { if (window._sincIMSEnCurso === p) window._sincIMSEnCurso = null; };
+  p.then(libre, libre);
+  return p;
 }
 window.sincIMSFresco = sincIMSFresco;
 

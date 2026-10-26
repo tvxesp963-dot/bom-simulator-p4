@@ -343,6 +343,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           <option value="">— Agregar modelo a analizar —</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="agregarModeloMulti()">+ Agregar</button>
+        <button class="btn btn-secondary btn-sm" onclick="nuevoPlanDesdeCero()" title="Borra todo lo del plan anterior y abre la carga del Excel nuevo">🧹 Nuevo plan (borrar todo)</button>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('inputPlanMulti').click()">📥 Cargar plan desde Excel</button>
         <input type="file" id="inputPlanMulti" accept=".xlsx,.xls" style="display:none" onchange="cargarPlanMultiExcel(this.files[0])">
       </div>
@@ -1470,7 +1471,9 @@ function cargarPlanMultiExcel(file) {
 
       // Limpiar el plan anterior: al subir un archivo nuevo, éste reemplaza
       // por completo al anterior (ya no se queda "pegado"/mezclado con la carga previa).
-      multiModelosActivos.forEach(sm => { simTargetsPorModelo[sm] = 0; });
+      // [NUEVO-PLAN] Borra TODOS los targets guardados (no solo los del plan anterior) para que no quede basura.
+      Object.keys(simTargetsPorModelo).forEach(k => { delete simTargetsPorModelo[k]; });
+      try { localStorage.removeItem('simTargets_p4'); } catch (eL) {}
       multiModelosActivos = [];
       window.simPrioridadPorModelo = {};
       window.simFechaEntregaPorModelo = {};
@@ -1546,6 +1549,29 @@ function cargarPlanMultiExcel(file) {
   };
   reader.readAsArrayBuffer(file);
 }
+
+// [NUEVO-PLAN] Botón "Nuevo plan": borra todo lo del plan anterior (modelos, targets, prioridades, fechas, PO Balance)
+// en pantalla y en este navegador, y abre la ventana para elegir el Excel nuevo.
+// No toca: BOM cargado, inventario, ajustes de máquinas, master ni el plan ya publicado al piso.
+function nuevoPlanDesdeCero() {
+  if (!window.confirm('🧹 NUEVO PLAN\n\nSe borrará todo lo del plan anterior (modelos, cantidades, prioridades, fechas y PO Balance) y después elegirás el Excel nuevo.\n\nEl piso seguirá mostrando lo ya publicado hasta que des "Publicar TV".\n\n¿Continuar?')) return;
+  Object.keys(simTargetsPorModelo).forEach(k => { delete simTargetsPorModelo[k]; });
+  multiModelosActivos = [];
+  window.simPrioridadPorModelo = {};
+  window.simFechaEntregaPorModelo = {};
+  window.simPOBalancePorModelo = {};
+  window.simPlanCargadoEn = null;
+  window.simPlanArchivo = null;
+  try { localStorage.removeItem('simTargets_p4'); localStorage.removeItem('planCompleto_p4'); } catch (e) {}
+  guardarPlanCompleto();   // vuelve a guardar el plan ya vacío (conserva ajustes de máquinas y master)
+  try { renderMultiModelos(); } catch (e) {}
+  try { if (typeof renderCons === 'function') renderCons(); } catch (e) {}
+  const st = document.getElementById('planMultiStatus');
+  if (st) st.textContent = '🧹 Plan anterior borrado. Elige el Excel nuevo...';
+  const inp = document.getElementById('inputPlanMulti');
+  if (inp) { inp.value = ''; inp.click(); }
+}
+window.nuevoPlanDesdeCero = nuevoPlanDesdeCero;
 
 // Registro de la última carga de Excel (lo leen las pantallas de piso para avisar si lo publicado es viejo)
 function registrarCargaPlan() {

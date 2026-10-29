@@ -12,28 +12,28 @@
   window.__modeloRevisionCargado = true;
 
   var T = {
-    es: { btn: '🔍 Modelo en revisión', titulo: '🔍 Modelo en revisión',
-      aviso: 'Solo cálculo temporal de UN modelo: no cambia tu plan, targets, prioridades ni lo publicado al piso. No guarda nada.',
-      modelo: 'Modelo SM', cant: 'Cantidad a producir', yaProd: 'Ya producido (opcional)', calcular: 'Calcular', cerrar: '✕ Cerrar',
+    es: { btn: '🔍 Código padre en revisión', titulo: '🔍 Código padre en revisión',
+      aviso: 'Solo cálculo temporal de UN código padre: no cambia tu plan, targets, prioridades ni lo publicado al piso. No guarda nada.',
+      gh: 'Código padre (GH90)', todos: '— Todos —', modelo: 'Modelo SM', cant: 'Cantidad a producir', yaProd: 'Ya producido (opcional)', calcular: 'Calcular', cerrar: '✕ Cerrar',
       ims: 'Inventario IMS', nunca: 'sin sincronizar — presiona Sync IMS arriba', hace: function (m) { return 'actualizado hace ' + m + ' min'; },
       sec1: '1) Requerido vs inventario', sec2: '2) Qué pedir (Consolidado: +10% / +1% si pasa de 100,000)', sec3: '3) Producir / Ranurar',
-      excel: '⬇ Excel', sinBom: 'Primero carga un BOM.', elige: 'Elige un modelo y una cantidad mayor a 0.', calculando: '⏳ Calculando...',
+      excel: '⬇ Excel', sinBom: 'Primero carga un BOM.', elige: 'Elige un modelo SM y una cantidad mayor a 0.', calculando: '⏳ Calculando...',
       error: 'No se pudo calcular: ', listo: '✓ Listo — esto es solo una revisión, tu plan no cambió.', seleccionar: '— Seleccionar modelo —',
       c: ['N° Parte', 'Descripción', 'Familia', 'Destino', 'Inventario', 'Requerido', 'Diferencia', 'Precio USD', 'Estado'] },
-    en: { btn: '🔍 Model under review', titulo: '🔍 Model under review',
-      aviso: 'Temporary calculation of ONE model only: it does not change your plan, targets, priorities or what is published to the floor. Nothing is saved.',
-      modelo: 'SM model', cant: 'Quantity to produce', yaProd: 'Already produced (optional)', calcular: 'Calculate', cerrar: '✕ Close',
+    en: { btn: '🔍 Parent code under review', titulo: '🔍 Parent code under review',
+      aviso: 'Temporary calculation of ONE parent code only: it does not change your plan, targets, priorities or what is published to the floor. Nothing is saved.',
+      gh: 'Parent code (GH90)', todos: '— All —', modelo: 'SM model', cant: 'Quantity to produce', yaProd: 'Already produced (optional)', calcular: 'Calculate', cerrar: '✕ Close',
       ims: 'IMS inventory', nunca: 'not synced — press Sync IMS above', hace: function (m) { return 'updated ' + m + ' min ago'; },
       sec1: '1) Required vs inventory', sec2: '2) What to order (Consolidated: +10% / +1% above 100,000)', sec3: '3) Produce / Groove',
-      excel: '⬇ Excel', sinBom: 'Load a BOM first.', elige: 'Pick a model and a quantity greater than 0.', calculando: '⏳ Calculating...',
+      excel: '⬇ Excel', sinBom: 'Load a BOM first.', elige: 'Pick an SM model and a quantity greater than 0.', calculando: '⏳ Calculating...',
       error: 'Could not calculate: ', listo: '✓ Done — this is only a review, your plan did not change.', seleccionar: '— Select model —',
       c: ['Part No.', 'Description', 'Family', 'Dest.', 'Inventory', 'Required', 'Difference', 'Price USD', 'Status'] },
-    ko: { btn: '🔍 검토 모델', titulo: '🔍 검토 모델',
-      aviso: '모델 1개만 임시 계산합니다. 저장된 계획, 목표, 우선순위, 현장 게시 내용은 바뀌지 않으며 아무것도 저장되지 않습니다.',
-      modelo: 'SM 모델', cant: '생산 수량', yaProd: '이미 생산된 수량 (선택)', calcular: '계산', cerrar: '✕ 닫기',
+    ko: { btn: '🔍 상위 코드 검토', titulo: '🔍 상위 코드 검토',
+      aviso: '상위 코드 1개만 임시 계산합니다. 저장된 계획, 목표, 우선순위, 현장 게시 내용은 바뀌지 않으며 아무것도 저장되지 않습니다.',
+      gh: '상위 코드 (GH90)', todos: '— 전체 —', modelo: 'SM 모델', cant: '생산 수량', yaProd: '이미 생산된 수량 (선택)', calcular: '계산', cerrar: '✕ 닫기',
       ims: 'IMS 재고', nunca: '동기화 안 됨 — 위의 Sync IMS를 누르세요', hace: function (m) { return m + '분 전 업데이트'; },
       sec1: '1) 필요 수량 vs 재고', sec2: '2) 발주 내용 (통합: +10% / 100,000 초과 시 +1%)', sec3: '3) 생산 / 홈가공',
-      excel: '⬇ Excel', sinBom: '먼저 BOM을 불러오세요.', elige: '모델과 0보다 큰 수량을 선택하세요.', calculando: '⏳ 계산 중...',
+      excel: '⬇ Excel', sinBom: '먼저 BOM을 불러오세요.', elige: 'SM 모델과 0보다 큰 수량을 선택하세요.', calculando: '⏳ 계산 중...',
       error: '계산할 수 없습니다: ', listo: '✓ 완료 — 검토용일 뿐이며 계획은 바뀌지 않았습니다.', seleccionar: '— 모델 선택 —',
       c: ['부품 번호', '설명', '계열', '목적지', '재고', '필요', '차이', '가격 USD', '상태'] }
   };
@@ -43,7 +43,7 @@
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-  var S = { sm: '', qty: '', prod: '', res: null, ocupado: false };
+  var S = { gh: '', sm: '', qty: '', prod: '', res: null, ocupado: false };
 
   // ---------- Botón en la barra superior ----------
   function ponerBoton() {
@@ -82,12 +82,20 @@
     var min = Math.max(0, Math.round((Date.now() - ts) / 60000));
     return '<span style="color:' + (min > 120 ? '#FFBA00' : '#00e676') + '">' + esc(t('hace')(min)) + '</span>';
   }
+  function ghBOM() {
+    var set = {}; BOM.forEach(function (r) { if (r.familia === 'GH90' && r.pn) set[String(r.pn).trim()] = 1; });
+    return Object.keys(set).sort();
+  }
   function modelosBOM() {
-    var set = {}; BOM.forEach(function (r) { if (r.sm) set[r.sm] = 1; });
+    var set = {};
+    BOM.forEach(function (r) { if (r.sm && (!S.gh || (r.familia === 'GH90' && String(r.pn).trim() === S.gh))) set[r.sm] = 1; });
     return Object.keys(set).sort();
   }
   function marco() {
     var sel = 'background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:7px 9px;font-size:13px';
+    var ghOpts = '<option value="">' + esc(t('todos')) + '</option>' + ghBOM().map(function (g) {
+      return '<option value="' + esc(g) + '"' + (g === S.gh ? ' selected' : '') + '>' + esc(g) + '</option>';
+    }).join('');
     var opts = '<option value="">' + esc(t('seleccionar')) + '</option>' + modelosBOM().map(function (m) {
       return '<option value="' + esc(m) + '"' + (m === S.sm ? ' selected' : '') + '>' + esc(m) + '</option>';
     }).join('');
@@ -97,6 +105,7 @@
       '<div style="display:flex;gap:8px;align-items:center">' + banderas() + '<button class="btn btn-secondary btn-sm" onclick="mrCerrar()">' + esc(t('cerrar')) + '</button></div></div>' +
       '<div style="padding:.5rem .7rem;border-radius:8px;background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.35);color:#4da6ff;margin-bottom:.8rem">' + esc(t('aviso')) + '</div>' +
       '<div style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.4rem">' +
+      '<label>' + esc(t('gh')) + '<br><select id="mrGh" onchange="mrFiltrar()" style="' + sel + ';min-width:200px">' + ghOpts + '</select></label>' +
       '<label>' + esc(t('modelo')) + '<br><select id="mrSm" style="' + sel + ';min-width:220px">' + opts + '</select></label>' +
       '<label>' + esc(t('cant')) + '<br><input id="mrQty" type="number" min="1" value="' + esc(S.qty) + '" style="' + sel + ';width:140px" onkeydown="if(event.key===\'Enter\')mrCalcular()"></label>' +
       '<label>' + esc(t('yaProd')) + '<br><input id="mrProd" type="number" min="0" value="' + esc(S.prod) + '" style="' + sel + ';width:150px" onkeydown="if(event.key===\'Enter\')mrCalcular()"></label>' +
@@ -113,12 +122,18 @@
     el.textContent = txt;
   }
   function guardarCampos() {
-    if ($('mrSm')) { S.sm = $('mrSm').value; S.qty = $('mrQty').value; S.prod = $('mrProd').value; }
+    if ($('mrSm')) { if ($('mrGh')) S.gh = $('mrGh').value; S.sm = $('mrSm').value; S.qty = $('mrQty').value; S.prod = $('mrProd').value; }
   }
   function abrir() {
     if (typeof BOM === 'undefined' || !BOM.length) { alert(t('sinBom')); return; }
     if (!S.sm) { var s = $('simModelo'); if (s && s.value) S.sm = s.value; }
     caja().style.display = 'block';
+    marco();
+  }
+  function filtrar() {
+    guardarCampos();
+    var m = modelosBOM();
+    if (m.indexOf(S.sm) < 0) S.sm = (S.gh && m.length === 1) ? m[0] : '';
     marco();
   }
   function cerrar() { var m = $('mrModal'); if (m) m.style.display = 'none'; }
@@ -244,6 +259,6 @@
     XLSX.writeFile(out, 'BOM_Revision_' + String(S.res.sm).replace(/[^A-Za-z0-9_-]/g, '_') + '_' + f + '.xlsx');
   }
 
-  window.mrCalcular = calcular; window.mrCerrar = cerrar; window.mrIdioma = idioma; window.mrExcel = excel; window.mrAbrir = abrir;
+  window.mrCalcular = calcular; window.mrCerrar = cerrar; window.mrFiltrar = filtrar; window.mrIdioma = idioma; window.mrExcel = excel; window.mrAbrir = abrir;
   ponerBoton();
 })();

@@ -348,6 +348,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <input type="file" id="inputPlanMulti" accept=".xlsx,.xls" style="display:none" onchange="cargarPlanMultiExcel(this.files[0])">
       </div>
       <div id="planMultiStatus" style="font-size:11px;color:var(--text2);margin:-.4rem 0 .6rem"></div>
+      <div id="produccionDesdeBox" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:12px;color:var(--text2);margin:0 0 .7rem">
+        <span title="Solo cuentan como producido las tarimas creadas desde esta fecha y hora (corte del envío anterior) · Only pallets created from this date/time count as produced · 이 시각 이후 생성된 팔레트만 생산으로 집계됩니다">⏱ <b>Producción cuenta desde · Production counts from · 생산 집계 시작</b></span>
+        <input type="datetime-local" id="produccionDesdeInp" class="select" style="width:auto" onchange="cambiarProduccionDesde(this.value)">
+        <span id="produccionDesdeInfo" style="font-size:11px"></span>
+      </div>
       <div id="multiModelosWrap"></div>
     </div>
   </div>
@@ -919,6 +924,7 @@ function toggleTree(idx) {
 // ── COMPARACIÓN MULTI-MODELO (no modifica lógica existente del Simulador) ──
 let multiModelosActivos = [];
 window.simPrioridadPorModelo = window.simPrioridadPorModelo || {};
+window.simProduccionDesde = window.simProduccionDesde || null;   // [CORTE] la producción cuenta solo con tarimas CREADAS desde esta hora (ISO). Null = regla anterior
 window.simPlanCargadoEn = window.simPlanCargadoEn || null;   // fecha/hora en que se cargó el Excel del plan (piso cuenta lo enviado desde entonces)
 window.simPOBalancePorModelo = window.simPOBalancePorModelo || {};   // PO Balance abierto por modelo (columna PO Balance del Excel)
 window.simFechaEntregaPorModelo = window.simFechaEntregaPorModelo || {};
@@ -948,6 +954,7 @@ try {
     if (d.fechas) window.simFechaEntregaPorModelo = Object.assign(window.simFechaEntregaPorModelo, d.fechas);
     if (d.poBalance) window.simPOBalancePorModelo = Object.assign(window.simPOBalancePorModelo, d.poBalance);
     if (d.planCargadoEn) window.simPlanCargadoEn = d.planCargadoEn;
+    if (d.produccionDesde) window.simProduccionDesde = d.produccionDesde;
     if (d.planArchivo) window.simPlanArchivo = d.planArchivo;
     if (d.maquinasElegiblesPorCodigo) window.simMaquinasElegiblesPorCodigo = Object.assign(window.simMaquinasElegiblesPorCodigo, d.maquinasElegiblesPorCodigo);
     if (d.panelMaquinasColapsado !== undefined) window.simPanelMaquinasColapsado = d.panelMaquinasColapsado;
@@ -972,7 +979,7 @@ function guardarPlanCompleto() {
       prioridades: window.simPrioridadPorModelo || {},
       fechas: window.simFechaEntregaPorModelo || {},
       poBalance: window.simPOBalancePorModelo || {},
-      planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null,
+      planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null, produccionDesde: window.simProduccionDesde || null,
       maquinasElegiblesPorCodigo: window.simMaquinasElegiblesPorCodigo || {},
       panelMaquinasColapsado: !!window.simPanelMaquinasColapsado,
       masterMaquinas: window.simMasterMaquinas || {},
@@ -1481,9 +1488,11 @@ function cargarPlanMultiExcel(file) {
       window.simPOBalancePorModelo = {};
       window.simPlanCargadoEn = new Date().toISOString();   // marca de carga: piso cuenta como enviado lo que salga desde este momento
       window.simPlanArchivo = (file && file.name) || null;
+      window.simProduccionDesde = window.simPlanCargadoEn;   // [CORTE] por defecto = hora de carga; se ajusta con el campo "Producción cuenta desde"
+      window._cacheShipqr = null;
 
       const modelosBOM = [...new Set(BOM.map(r => r.sm))];
-      let agregados = 0, noEncontrados = [];
+      let agregados = 0, noEncontrados = [], porCode = [];
 
       filas.forEach((fila, idx) => {
         // Acepta encabezados en español o inglés, con o sin mayúsculas/acentos
@@ -1505,12 +1514,22 @@ function cargarPlanMultiExcel(file) {
         const prioridad = parseInt(buscar(['prioridad', 'priority']));
         const fechaRaw = buscar(['fecha entrega', 'fecha_entrega', 'entrega', 'delivery date', 'fecha']);
 
-        if (!sm) return;
+        const _codePlan = String(buscar(['code', 'código', 'codigo']) || '').trim().toUpperCase();
+        if (!sm && !_codePlan) return;
         // Coincidencia exacta o, si no existe, la más parecida por si faltan espacios/mayúsculas
-        if (!modelosBOM.includes(sm)) {
+        if (sm && !modelosBOM.includes(sm)) {
           const match = modelosBOM.find(m => m.toLowerCase() === sm.toLowerCase());
           if (match) sm = match;
         }
+        // [POR-CODE] Si el renglón no trae modelo (o no existe en el BOM), se busca por el code GH90 (Strip/Bundle de nivel 1)
+        if ((!sm || !modelosBOM.includes(sm)) && /^GH90/.test(_codePlan)) {
+          const _filas = BOM.filter(r => String(r.pn || '').trim().toUpperCase() === _codePlan && r.isLevel1);
+          const _strip = _filas.filter(r => (r.desc || '').toUpperCase().includes('STRIP'));
+          const _cand = [...new Set((_strip.length ? _strip : _filas).map(r => r.sm))];
+          if (_cand.length === 1) { porCode.push((sm || '(sin modelo)') + ' → ' + _cand[0]); sm = _cand[0]; }
+          else if (_cand.length > 1) { noEncontrados.push((sm || _codePlan) + ' (code en varios modelos: ' + _cand.join(' / ') + ')'); return; }
+        }
+        if (!sm) { noEncontrados.push(_codePlan + ' (sin modelo)'); return; }
         if (!modelosBOM.includes(sm)) {
           noEncontrados.push(sm);
           return;
@@ -1537,8 +1556,10 @@ function cargarPlanMultiExcel(file) {
 
       let msg = `✅ ${agregados} modelo(s) cargado(s) desde Excel.`;
       { const _nPO = Object.keys(window.simPOBalancePorModelo || {}).length; msg += _nPO ? ` · PO Balance: ${_nPO} modelo(s)` : ' · ⚠️ sin columna PO Balance'; }
+      if (porCode.length) msg += ` · 🔎 Encontrados por code: ${porCode.join(', ')}`;
       if (noEncontrados.length) msg += ` ⚠️ No encontrados en el BOM actual: ${noEncontrados.join(', ')}`;
       statusEl.textContent = msg;
+      try { pintarProduccionDesde(); } catch (eD) {}
       try { registrarCargaPlan(); } catch (eR) { console.warn('plan_carga', eR); }
       if (agregados > 0 && typeof adminAuthed !== 'undefined' && adminAuthed) setTimeout(function () {
         if (window.confirm('✅ Excel cargado: ' + agregados + ' modelo(s).\n\nEl piso (ASSY, medio proceso y Bundle) sigue mostrando el plan ANTERIOR hasta que se publique.\n\n¿Publicar al piso ahora?')) publicarPlanPiso();
@@ -1562,6 +1583,7 @@ function nuevoPlanDesdeCero() {
   window.simFechaEntregaPorModelo = {};
   window.simPOBalancePorModelo = {};
   window.simPlanCargadoEn = null;
+  window.simProduccionDesde = null;
   window.simPlanArchivo = null;
   try { localStorage.removeItem('simTargets_p4'); localStorage.removeItem('planCompleto_p4'); } catch (e) {}
   guardarPlanCompleto();   // vuelve a guardar el plan ya vacío (conserva ajustes de máquinas y master)
@@ -1573,6 +1595,33 @@ function nuevoPlanDesdeCero() {
   if (inp) { inp.value = ''; inp.click(); }
 }
 window.nuevoPlanDesdeCero = nuevoPlanDesdeCero;
+
+// [CORTE] Campo "Producción cuenta desde": hora del corte del envío anterior.
+function _isoALocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const z = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + 'T' + z(d.getHours()) + ':' + z(d.getMinutes());
+}
+function pintarProduccionDesde() {
+  const inp = document.getElementById('produccionDesdeInp'); if (!inp) return;
+  inp.value = _isoALocalInput(window.simProduccionDesde);
+  const info = document.getElementById('produccionDesdeInfo');
+  if (info) info.textContent = window.simProduccionDesde ? '' : '(sin corte: se usa la regla anterior · no cut: old rule · 컷 없음)';
+}
+function cambiarProduccionDesde(v) {
+  const d = v ? new Date(v) : null;
+  window.simProduccionDesde = (d && !isNaN(d)) ? d.toISOString() : null;
+  window._cacheShipqr = null;
+  try { guardarPlanCompleto(); } catch (e) {}
+  pintarProduccionDesde();
+  const info = document.getElementById('produccionDesdeInfo');
+  if (info && window.simProduccionDesde) info.textContent = '✅ Guardado. Da "Publicar TV" para que el piso lo use ya. · Saved. Press "Publish TV". · 저장됨';
+  try { if (typeof sincronizarProducidoDesdeMES === 'function' && adminAuthed) sincronizarProducidoDesdeMES(); } catch (e) {}
+}
+window.cambiarProduccionDesde = cambiarProduccionDesde; window.pintarProduccionDesde = pintarProduccionDesde;
+setTimeout(function () { try { pintarProduccionDesde(); } catch (e) {} }, 1500);
+setInterval(function () { try { const i = document.getElementById('produccionDesdeInp'); if (i && document.activeElement !== i && i.value !== _isoALocalInput(window.simProduccionDesde)) pintarProduccionDesde(); } catch (e) {} }, 5000);
 
 // Registro de la última carga de Excel (lo leen las pantallas de piso para avisar si lo publicado es viejo)
 function registrarCargaPlan() {
@@ -4757,6 +4806,21 @@ function getInvIMS(pn, desc, planta, level) {
     var keyPlantaDesc = pnUp+'||'+descUp+'||PLANTA:'+plantaUp;
     if (imsInventario[keyPlantaDesc] !== undefined) return imsInventario[keyPlantaDesc];
   }
+  // [FIX-M2 2026-11-02] Lower Box / Gift Box TERMINADO que comparte código GH69 con su Sheet (ej. GH69-46928A):
+  // el total por PN mezclaba las hojas crudas con el medio proceso terminado, y el simulador creía que ya había
+  // Bottom/Top y no lo programaba. Si el IMS tiene hojas (SHEET) con ese PN, solo cuenta el renglón terminado
+  // (desc con LOWER BOX / GIFT BOX y sin SHEET); si no existe, es 0.
+  if (plantaUp === 'P4' && descUp.indexOf('SHEET') < 0 && (descUp.indexOf('LOWER BOX') >= 0 || descUp.indexOf('LOWER BOT') >= 0 || descUp.indexOf('GIFT BOX') >= 0)) {
+    var reTipo = descUp.indexOf('GIFT BOX') >= 0 ? /GIFT BOX/ : /LOWER BOX|LOWER BOT/;
+    var hayHoja = false, keyTerm = null;
+    Object.keys(imsInventario).forEach(function(k) {
+      if (k.indexOf('||PLANTA:') >= 0 || k.indexOf(pnUp+'||') !== 0) return;
+      var dK = k.slice(pnUp.length + 2);
+      if (dK.indexOf('SHEET') >= 0) hayHoja = true;
+      else if (reTipo.test(dK)) keyTerm = k;
+    });
+    if (hayHoja) return keyTerm ? imsInventario[keyTerm] : 0;
+  }
   // 2. Buscar por PN+PLANTA
   if (plantaUp) {
     var keyPlanta = pnUp+'||PLANTA:'+plantaUp;
@@ -5477,12 +5541,13 @@ async function obtenerProduccionRealASSY1(auto) {
   const porModelo = {}; // { modelo: { total, cicloActual, arrastre } }
   if (!db) return porModelo;
   // AHORRO DE LECTURAS: en el ciclo automático se reutiliza la última lectura si tiene menos de 20 min
-  if (auto === true && window._cacheShipqr && window._cacheShipqr.plan === (window.simPlanCargadoEn || null) && (Date.now() - window._cacheShipqr.t) < 20 * 60000) { window._fuenteShipqr = { tipo: 'cache', t: window._cacheShipqr.t }; return window._cacheShipqr.d; }
+  if (auto === true && window._cacheShipqr && window._cacheShipqr.plan === ((window.simPlanCargadoEn || '') + '|' + (window.simProduccionDesde || '')) && (Date.now() - window._cacheShipqr.t) < 20 * 60000) { window._fuenteShipqr = { tipo: 'cache', t: window._cacheShipqr.t }; return window._cacheShipqr.d; }
   const ahora = new Date();
   const inicioCicloActual = corteAnteriorEnvio(ahora); // corte ya pasado más reciente = inicio del ciclo en curso
   try {
     const snap = await db.collection('shipqr_pallets').get();
     const desdePlan = window.simPlanCargadoEn ? Date.parse(window.simPlanCargadoEn) : NaN;
+    const desdeCorte = window.simProduccionDesde ? Date.parse(window.simProduccionDesde) : 0;
     snap.forEach(doc => {
       const d = doc.data();
       if (d.motivo === 'REMPLAZO') return; // producción de remplazo: no cuenta como avance del plan
@@ -5491,6 +5556,14 @@ async function obtenerProduccionRealASSY1(auto) {
       const parte = (d.part_number || '').toUpperCase();
       if (!parte.startsWith('GH90')) return;
       const qty = Number(d.quantity) || 0;
+      // [CORTE] Con "Producción cuenta desde": solo cuentan las tarimas CREADAS desde esa hora (embarcadas o no).
+      if (desdeCorte) {
+        const cr = (d.created_at && d.created_at.seconds) ? d.created_at.seconds * 1000 : 0;
+        if (cr < desdeCorte) return;
+        if (!porModelo[modelo]) porModelo[modelo] = { total: 0, cicloActual: 0, arrastre: 0 };
+        porModelo[modelo].total += qty; porModelo[modelo].cicloActual += qty;
+        return;
+      }
       // Embarcado (SHIPPED): ya salió de la planta, no es inventario disponible. Pero si se embarcó DESPUÉS de cargar
       // el Excel del plan, SÍ es producido contra el target (igual que piso.html). Si no, el requerido de material se infla.
       if (d.status === 'SHIPPED') {
@@ -5510,7 +5583,7 @@ async function obtenerProduccionRealASSY1(auto) {
       if (esDeEsteCiclo) porModelo[modelo].cicloActual += qty;
       else porModelo[modelo].arrastre += qty; // solo informativo: sigue sumando al total
     });
-    window._cacheShipqr = { t: Date.now(), d: porModelo, plan: window.simPlanCargadoEn || null }; window._fuenteShipqr = { tipo: 'lectura', t: window._cacheShipqr.t };
+    window._cacheShipqr = { t: Date.now(), d: porModelo, plan: (window.simPlanCargadoEn || '') + '|' + (window.simProduccionDesde || '') }; window._fuenteShipqr = { tipo: 'lectura', t: window._cacheShipqr.t };
   } catch (e) {
     console.error('Error leyendo pallets de ShipQR:', e);
     // Si falla la lectura NO se devuelve vacío (eso ponía "Producido = 0" y movía el plan): se conserva la última lectura buena
@@ -7676,7 +7749,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261014-1500';
+const BUILD_BOM='idx-20261106-1440';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {
@@ -7829,7 +7902,7 @@ async function publicarPlanPiso(auto) {
     await db.collection('bom_simulator_p4').doc('plan_piso').set({
       fuente: fuente, historial: historial,
       publicadoEn: new Date().toISOString(), publicadoPor: u, ver: verPub, modelos: salida, auto: auto,
-      planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null,
+      planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null, produccionDesde: window.simProduccionDesde || null,
       capacidadDia: (typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000,
       capacidadSabado: Math.round(((typeof CAPACIDAD_DIARIA_ASSY1 !== 'undefined') ? CAPACIDAD_DIARIA_ASSY1 : 13000) * factorDiaCal(new Date(2026, 9, 10))),
       cal: calSnapshot()
@@ -9011,6 +9084,5 @@ function lgnReset(){
   new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});
 })();
 </script>
-<script src='modelo-revision.js?v=6'></script>
 </body>
 </html>

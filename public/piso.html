@@ -425,6 +425,7 @@ firebase.initializeApp(cfg);
 var db = firebase.firestore(); try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
 var plan = null;            // documento publicado
 var enviosVivo = [];       // pallets SHIPPED de ShipQR: [{sm, q, ts}]
+var palletsVivo = [];      // [CORTE] todas las tarimas GH90 (no REMPLAZO): {sm, q, cr, ship, ts}
 var producidoVivo = null;   // { modelo: piezas } desde ShipQR
 var arrancado = false, unsubPlan = null;
 
@@ -485,11 +486,14 @@ function leerProducido(){
   unsubShipqr = db.collection('shipqr_pallets').onSnapshot(function(snap){
     snap.docChanges().forEach(function(ch){ if (ch.type === 'removed') delete shipDocs[ch.doc.id]; else shipDocs[ch.doc.id] = ch.doc.data(); });
     var pm = {}, envs = [];
+    palletsVivo = [];
     Object.keys(shipDocs).forEach(function(id){
       var d = shipDocs[id];
       if (d.motivo === 'REMPLAZO') return;
       var modelo = (d.modelo || '').trim();
       if (!modelo || !(d.part_number || '').toUpperCase().startsWith('GH90')) return;
+      var crx = d.created_at && d.created_at.seconds ? d.created_at.seconds * 1000 : 0;
+      palletsVivo.push({ sm: modelo, q: Number(d.quantity) || 0, cr: crx, ship: d.status === 'SHIPPED' });
       if (d.status === 'SHIPPED') {
         var tx = d.updated_at || d.created_at;
         envs.push({ sm: modelo, q: Number(d.quantity) || 0, ts: (tx && tx.seconds) ? tx.seconds * 1000 : 0 });
@@ -610,12 +614,17 @@ function pintar(){
   // Se suman al Producido para que el avance no baje cuando sale el trailer. Cada Excel nuevo reinicia este conteo.
   var desde = (plan && plan.planCargadoEn) ? Date.parse(plan.planCargadoEn) : NaN;
   var envMap = {};
-  if (producidoVivo && !isNaN(desde)) enviosVivo.forEach(function(e){ if (e.ts >= desde) envMap[e.sm] = (envMap[e.sm] || 0) + e.q; });
+  // [CORTE] Si el plan trae "Producción cuenta desde": solo cuentan las tarimas CREADAS desde esa hora (embarcadas o no).
+  var corte = (plan && plan.produccionDesde) ? Date.parse(plan.produccionDesde) : NaN;
+  var prodCorte = null;
+  if (!isNaN(corte) && producidoVivo) { prodCorte = {}; palletsVivo.forEach(function(p){ if (p.cr >= corte) prodCorte[p.sm] = (prodCorte[p.sm] || 0) + p.q; }); }
+  if (!prodCorte && producidoVivo && !isNaN(desde)) enviosVivo.forEach(function(e){ if (e.ts >= desde) envMap[e.sm] = (envMap[e.sm] || 0) + e.q; });
   var filas = mods.map(function(m0){
     var m = m0;
     var prod = (producidoVivo && producidoVivo[m.sm] !== undefined) ? producidoVivo[m.sm] : (m.producido || 0);
     if (producidoVivo && producidoVivo[m.sm] === undefined) prod = 0;
-    var env = envMap[m0.sm] || 0;
+    if (prodCorte) prod = prodCorte[m.sm] || 0;
+    var env = prodCorte ? 0 : (envMap[m0.sm] || 0);
     prod += env;
     // Si salió más de lo que pedía el envío (ej. 9,700 de 7,800), ese envío realmente fue de esa cantidad
     if (env > (m0.target || 0)) { m = Object.assign({}, m0); m.target = env; }

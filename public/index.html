@@ -623,7 +623,7 @@ function procesarBOM() {
 
     // SM model row: starts with SM- OR is a short model code like "S911 CRN"
     const isModelRow = /^SM-/i.test(codeVal) || 
-                       (/^[A-Z]\d{3,4}/.test(codeVal) && !codeVal.startsWith('GH') && !codeVal.startsWith('GH'));
+                       (/^[A-Z]\d{1,4}(\s|$)/.test(codeVal) && !codeVal.startsWith('GH'));
     if (isModelRow && !noRaw) {
       currentSM = codeVal;
       const tNum = typeof planRaw === 'number' ? planRaw : 
@@ -5070,7 +5070,7 @@ function adminCargarBOM(file) {
         var levelVal=lc?parseInt(String(lc.v||'')):NaN;
         var dc=ws2[XLSX.utils.encode_cell({r:R,c:COL_DESC})];
         var descVal=dc?String(dc.v||'').trim():'';
-        if (levelVal===0||/^SM-/i.test(codeVal)||(/^S\d{3,4}/.test(codeVal)&&!codeVal.startsWith('GH'))) {
+        if (levelVal===0||/^SM-/i.test(codeVal)||(/^[A-Z]\d{1,4}(\s|$)/.test(codeVal)&&!codeVal.startsWith('GH'))) {
           curSM=codeVal; continue;
         }
         if (!curSM) continue;
@@ -8175,6 +8175,10 @@ function abrirAdmEdit(idx) {
   document.getElementById('admEditOriginal').innerHTML =
     '<b style="color:var(--text)">Original:</b> ' + r.pn + ' · ' + (r.desc||'') + ' · ' + (r.familia||'—') + '<br>' +
     '<span style="color:var(--text2)">Modelo: '+(r.sm||'')+'</span>';
+  var _smList = [...new Set(BOM.map(function(x){return x.sm;}).filter(Boolean))];
+  document.getElementById('admEditSMList').innerHTML = _smList.map(function(m){return '<option value="'+String(m).replace(/"/g,'&quot;')+'">';}).join('');
+  document.getElementById('admEditSM').value = r.sm || '';
+  document.getElementById('admEditSMCascada').checked = false;
   document.getElementById('admEditPN').value = r.pn || '';
   document.getElementById('admEditDesc').value = r.desc || '';
   document.getElementById('admEditFam').value = r.familia || 'OTRO';
@@ -8193,6 +8197,14 @@ function abrirAdmEdit(idx) {
   document.getElementById('admEditModal').style.display = 'flex';
 }
 
+function admAutoFam() {
+  var pn = (document.getElementById('admEditPN').value||'').trim().toUpperCase();
+  var map = {GH90:'GH90', GH69:'GH69', GH96:'GH69', GH68:'GH68', GH64:'GH64', GH39:'GH39'};
+  var f = map[pn.substring(0,4)];
+  if (f) document.getElementById('admEditFam').value = f;
+}
+window.admAutoFam = admAutoFam;
+
 function cerrarAdmEditModal() {
   document.getElementById('admEditModal').style.display = 'none';
   _admEditIdx = -1;
@@ -8206,14 +8218,17 @@ async function guardarAdmEdit() {
   var newPN = (document.getElementById('admEditPN').value||'').trim();
   var newDesc = (document.getElementById('admEditDesc').value||'').trim();
   var newFam = document.getElementById('admEditFam').value;
+  var newSM = (document.getElementById('admEditSM').value||'').trim();
+  var cascadaSM = document.getElementById('admEditSMCascada').checked;
+  if (!newSM) { alert('El modelo no puede estar vacío'); return; }
   if (!newPN) { alert('El PN no puede estar vacío'); return; }
 
   var st = document.getElementById('admPartStatus');
   var btn = document.getElementById('admEditSaveBtn');
-  var oldPN = r.pn, oldDesc = r.desc||'', oldFam = r.familia||'';
+  var oldPN = r.pn, oldDesc = r.desc||'', oldFam = r.familia||'', oldSM = r.sm||'';
 
   // Si no cambió nada, cerrar
-  if (newPN === oldPN && newDesc === oldDesc && newFam === oldFam) {
+  if (newPN === oldPN && newDesc === oldDesc && newFam === oldFam && newSM === oldSM) {
     cerrarAdmEditModal();
     return;
   }
@@ -8254,6 +8269,13 @@ async function guardarAdmEdit() {
     BOM[_admEditIdx].pn = newPN;
     BOM[_admEditIdx].desc = newDesc;
     BOM[_admEditIdx].familia = newFam;
+    if (newSM !== oldSM) {
+      BOM[_admEditIdx].sm = newSM;
+      if (cascadaSM) {
+        for (var _i = _admEditIdx + 1; _i < BOM.length && BOM[_i].sm === oldSM; _i++) BOM[_i].sm = newSM;
+      }
+      if (!simTargetsPorModelo[newSM]) simTargetsPorModelo[newSM] = 0;
+    }
     await _admGuardarBomActivo();
 
     st.innerHTML = '✅ Parte actualizada: <b>'+newPN+'</b>';
@@ -8540,8 +8562,14 @@ window.addEventListener('DOMContentLoaded', function() {
         <div id="admEditOriginal" style="font-size:11px;color:var(--text2);margin-bottom:1rem;padding:.5rem;background:rgba(255,255,255,.03);border-radius:6px"></div>
         <div style="display:grid;gap:.6rem">
           <div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">Modelo</label>
+            <input id="admEditSM" list="admEditSMList" type="text" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px">
+            <datalist id="admEditSMList"></datalist>
+            <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:.4rem;margin-top:.35rem;cursor:pointer"><input id="admEditSMCascada" type="checkbox"> Aplicar también a los renglones siguientes que tengan el mismo modelo original</label>
+          </div>
+          <div>
             <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">PN</label>
-            <input id="admEditPN" type="text" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
+            <input id="admEditPN" type="text" oninput="admAutoFam()" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:.5rem;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace">
           </div>
           <div>
             <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:.2rem">Descripción</label>

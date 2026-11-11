@@ -1488,7 +1488,7 @@ function cargarPlanMultiExcel(file) {
       window.simPOBalancePorModelo = {};
       window.simPlanCargadoEn = new Date().toISOString();   // marca de carga: piso cuenta como enviado lo que salga desde este momento
       window.simPlanArchivo = (file && file.name) || null;
-      window.simProduccionDesde = window.simPlanCargadoEn;   // [CORTE] por defecto = hora de carga; se ajusta con el campo "Producción cuenta desde"
+      window.simProduccionDesde = _ultimoCierreEnvio(new Date()).toISOString();   // [CORTE] por defecto = último cierre de envío (viernes 1:00 pm); se ajusta con el campo "Producción cuenta desde"
       window._cacheShipqr = null;
 
       const modelosBOM = [...new Set(BOM.map(r => r.sm))];
@@ -1596,6 +1596,14 @@ function nuevoPlanDesdeCero() {
 }
 window.nuevoPlanDesdeCero = nuevoPlanDesdeCero;
 
+// [CORTE] Último cierre de envío: el viernes 1:00 pm más reciente (si hoy es viernes antes de la 1:00 pm, el viernes anterior).
+function _ultimoCierreEnvio(ahora) {
+  const d = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 13, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() - 5 + 7) % 7));   // retrocede hasta el viernes
+  if (d.getTime() > ahora.getTime()) d.setDate(d.getDate() - 7);
+  return d;
+}
+window._ultimoCierreEnvio = _ultimoCierreEnvio;
 // [CORTE] Campo "Producción cuenta desde": hora del corte del envío anterior.
 function _isoALocalInput(iso) {
   if (!iso) return '';

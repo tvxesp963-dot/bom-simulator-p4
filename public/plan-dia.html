@@ -530,7 +530,7 @@ function exportarExcel(){
   }).catch(function(e){ console.error(e); msg(T.errXls, 'er'); }).then(function(){ if (btn) btn.disabled = false; });
 }
 
-function descargar(blob, nombre){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+function descargar(blob, nombre){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 15000); }
 
 // ===== Arranque =====
 var arrancado = false;
@@ -538,8 +538,8 @@ firebase.auth().onAuthStateChanged(function(u){
   if (!u) { mostrarLogin(); return; }
   if (arrancado) return; arrancado = true; pintar();
   leerDatos().then(pintar).then(function(){
-    // Abierto desde piso.html con #excel: descarga el Excel solo y cierra la pestaña
-    if (location.hash === '#excel' && DATOS) return exportarExcel().then(function(){ if (window.__xlsOk) setTimeout(function(){ window.close(); }, 2000); });
+    // Abierto desde piso.html con #excel: descarga el Excel solo; la pestaña se queda abierta con el mensaje del resultado
+    if (location.hash === '#excel' && DATOS) return exportarExcel();
   }).catch(function(){ arrancado = false; });
 });
 </script>

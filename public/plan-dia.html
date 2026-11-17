@@ -18,7 +18,7 @@ body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-app
 .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .bar h1{font-size:18px;margin:0;flex:1;min-width:220px}
 .btn{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:700;font-size:14px;cursor:pointer}
-.btn.w{background:#128c7e}.btn.g{background:transparent;border:1px solid var(--bd);color:var(--tx)}
+.btn.w{background:#128c7e}.btn.x{background:#1d6f42}.btn.g{background:transparent;border:1px solid var(--bd);color:var(--tx)}
 .btn:disabled{opacity:.55;cursor:default}
 .chk{display:inline-flex;align-items:center;gap:6px;font-size:14px;margin-right:8px}
 .msg{font-size:13px;color:var(--t2);margin:6px 0}
@@ -98,6 +98,7 @@ var T = {
   areas: 'Áreas · Areas · 구역', cargando: '⏳ Cargando… · Loading… · 불러오는 중…',
   login: 'Inicia sesión · Sign in · 로그인', correo: 'Correo · Email · 이메일', pass: 'Contraseña · Password · 비밀번호', entrar: 'Entrar · Enter · 입장', errLogin: 'Correo o contraseña incorrectos · Wrong credentials · 잘못된 정보',
   genImg: '⏳ Generando imagen… · Building image… · 이미지 생성 중…', waCopiada: '✅ Imagen copiada. En WhatsApp pégala con Ctrl+V · Image copied: paste in WhatsApp · 이미지 복사됨: WhatsApp에 붙여넣기', waDescargada: '✅ Imagen descargada. Adjúntala en el chat de WhatsApp · Image downloaded: attach it in WhatsApp · 이미지 다운로드됨: WhatsApp에 첨부', errImg: '⚠ No se pudo generar la imagen · Could not build the image · 이미지 생성 실패',
+  excel: '📊 Excel', genXls: '⏳ Generando Excel… · Building Excel… · 엑셀 생성 중…', xlsOk: '✅ Excel descargado · Excel downloaded · 엑셀 다운로드됨', errXls: '⚠ No se pudo generar el Excel · Could not build the Excel · 엑셀 생성 실패',
   sinMat: '⚠ Sin material — fuera del plan por día · No material — not in daily plan · 자재 없음 — 일별 계획 제외',
   pend: ['Pendiente','Pending','잔량'],
   nota: 'Número normal = ya hay material · crema/cursiva (o +número crema) = guía, falta material. Producido ya descontado. Cada día se llena a la capacidad de la línea (ASSY 13,000): primero lo que ya tiene material y después el resto como guía. · Produced already deducted. Each day fills to line capacity (ASSY 13,000): available material first, the rest as a guide. · 생산량 차감 완료. 매일 라인 능력(ASSY 13,000)까지 채움: 자재 있는 모델 먼저, 나머지는 참고용.'
@@ -338,7 +339,7 @@ function pintar(){
   root.innerHTML =
     '<div class="bar"><h1>' + esc(T.titulo) + '</h1>' +
     '<span class="noprint">' + ['assy','medio','bundle'].map(function(k){ return '<label class="chk"><input type="checkbox" ' + (AREAS[k] ? 'checked' : '') + ' onchange="AREAS.' + k + '=this.checked;pintar()"> ' + (k === 'assy' ? 'ASSY' : k === 'medio' ? 'Medio proceso' : 'Bundle') + '</label>'; }).join('') + '</span>' +
-    '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn g" onclick="fijarPlan()">' + esc(T.fijar) + '</button><button class="btn g" onclick="verCambios()">' + esc(T.cambios) + '</button><button class="btn g" onclick="verVivo()">' + esc(T.act) + '</button></div>' +
+    '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn x" id="btnXl" onclick="exportarExcel()">' + esc(T.excel) + '</button><button class="btn g" onclick="fijarPlan()">' + esc(T.fijar) + '</button><button class="btn g" onclick="verCambios()">' + esc(T.cambios) + '</button><button class="btn g" onclick="verVivo()">' + esc(T.act) + '</button></div>' +
     '<div class="msg" id="msg"></div>' +
     '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2>' + bannerExcel() + '<div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) + edadPlan(FIJO.en) : T.lbVivo) + '</b>' + (function(){ var n = X.A.assy.filter(function(r){ return r.alerta != null; }).length; return n ? '<br><b style="color:#b3261e">⚠ ' + n + ' ' + esc(tr3(T.difVivo)) + '</b>' : ''; })() + '<br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(T.nota) + '</div></div><div id="panelCambios" class="noprint"></div>';
 }
@@ -418,6 +419,109 @@ function enviarWhatsApp(){
     descargar(blob, nombre); abrir(T.waDescargada);
   }).catch(function(){ msg(T.errImg, 'er'); }).then(function(){ if (btn) btn.disabled = false; });
 }
+
+// ===== Excel: el mismo plan por día que se ve en pantalla (ExcelJS) =====
+function cargarXL(){
+  if (window.ExcelJS) return Promise.resolve();
+  return new Promise(function(ok, no){ var s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.onload = ok; s.onerror = function(){ no(new Error('exceljs')); }; document.head.appendChild(s); });
+}
+function textoBannerExcel(){
+  var ks = [['assy','ASSY'],['medio','RGB'],['bundle','Bundle']].filter(function(p){ return AREAS[p[0]] && DATOS[p[0]]; }), vistos = {}, out = [];
+  ks.forEach(function(p){ var d = DATOS[p[0]], c = (d.planArchivo || '') + '|' + (d.planCargadoEn || ''); if (vistos[c]) { vistos[c].n.push(p[1]); return; } vistos[c] = { n: [p[1]], d: d }; out.push(vistos[c]); });
+  return out.map(function(v){ return v.n.join(' + ') + ' → Excel: ' + (v.d.planArchivo || '—') + ' · cargado · loaded · 불러옴 ' + fechaHora(v.d.planCargadoEn); }).join('\n');
+}
+function exportarExcel(){
+  var btn = document.getElementById('btnXl'); if (btn) btn.disabled = true; msg(T.genXls);
+  cargarXL().then(function(){
+    var X = armar(), sem = 'W' + isoSemana(new Date()), nd = X.cols.length, hD = X.hayDesp ? 1 : 0;
+    var cDesp = 4 + nd, cTot = 4 + nd + hD, cEst = cTot + 1, nC = cEst;
+    var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Plan ' + sem, { views: [{ showGridLines: false }], pageSetup: { orientation: 'landscape', paperSize: 1, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .3, right: .3, top: .4, bottom: .4, header: .2, footer: .2 } } });
+    ws.getColumn(1).width = 34; ws.getColumn(2).width = 18; ws.getColumn(3).width = 10;
+    for (var i = 0; i < nd + hD + 1; i++) ws.getColumn(4 + i).width = 12;
+    ws.getColumn(cEst).width = 52;
+    var L = { style: 'thin', color: { argb: 'FF9AA6BF' } }, BORDE = { top: L, left: L, bottom: L, right: L };
+    var r = 0;
+    function fila(){ r++; return ws.getRow(r); }
+    function unir(row, txt, o){
+      ws.mergeCells(r, 1, r, nC); var c = row.getCell(1); c.value = txt;
+      c.font = { name: 'Calibri', size: o.size || 11, bold: !!o.bold, color: { argb: o.color || 'FF111111' } };
+      c.alignment = { vertical: 'middle', wrapText: true, horizontal: 'left' };
+      if (o.fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } };
+      if (o.h) row.height = o.h;
+    }
+    unir(fila(), T.titulo + ' — ' + sem, { size: 18, bold: true, color: 'FF1A3A6B', h: 30 });
+    var bn = textoBannerExcel();
+    if (bn) { var nl = bn.split('\n').length; unir(fila(), bn, { bold: true, color: 'FF0A5C30', fill: 'FFE3F6EA', h: 18 * nl + 4 }); }
+    unir(fila(), (FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) : T.lbVivo), { bold: true, color: FIJO ? 'FF0A7A3E' : 'FFB3261E', h: 20 });
+    var pubs = [];
+    if (AREAS.assy && DATOS.assy) pubs.push('ASSY ' + fechaHora(DATOS.assy.publicadoEn));
+    if (AREAS.medio && DATOS.medio) pubs.push('RGB ' + fechaHora(DATOS.medio.publicadoEn));
+    if (AREAS.bundle && DATOS.bundle) pubs.push('Bundle ' + fechaHora(DATOS.bundle.publicadoEn));
+    unir(fila(), T.pub + ': ' + (pubs.join(' · ') || '—'), { color: 'FF555555', size: 10, h: 18 });
+
+    function hdr(row, col, txt, izq){
+      var c = row.getCell(col); c.value = txt; c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A6B' } }; c.border = BORDE;
+      c.alignment = { vertical: 'middle', horizontal: izq ? 'left' : 'center', wrapText: true };
+    }
+    function h3(a){ return a[0] + '\n' + a[1] + ' · ' + a[2]; }
+    function area(k, titulo, color){
+      if (!AREAS[k]) return;
+      var rows = X.A[k], nomat = X.N[k] || [];
+      fila(); r++; var sr = ws.getRow(r); unir(sr, titulo, { size: 12, bold: true, color: 'FFFFFFFF', fill: color, h: 22 });
+      if (rows.length) {
+        var hr = fila(); hr.height = 36;
+        hdr(hr, 1, h3(k === 'assy' ? T.modelo : T.linea), true); hdr(hr, 2, h3(T.pieza)); hdr(hr, 3, h3(T.envio));
+        X.cols.forEach(function(c, i){ var d = fechaD(c), w = DIAS[d.getDay()]; hdr(hr, 4 + i, w[0] + ' ' + d.getDate() + '\n' + w[1] + ' · ' + w[2]); });
+        if (hD) hdr(hr, cDesp, h3(T.desp));
+        hdr(hr, cTot, h3(T.total)); hdr(hr, cEst, h3(T.estado), true);
+        var tot = X.cols.map(function(){ return 0; }), totD = 0, totT = 0;
+        rows.forEach(function(x){
+          var row = fila(), dosL = (!!x.sub && k !== 'assy') || x.alerta != null; row.height = dosL ? 34 : 22;
+          function base(c, v, o){ var cell = row.getCell(c); cell.value = v; cell.border = BORDE; cell.alignment = { vertical: 'middle', horizontal: o.h || 'right', wrapText: true }; cell.font = { name: 'Calibri', size: 11, bold: !!o.b, italic: !!o.i, color: { argb: o.col || 'FF111111' } }; if (o.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } }; if (o.fmt) cell.numFmt = o.fmt; return cell; }
+          base(1, x.et + (x.sub && k !== 'assy' ? '\n' + x.sub : ''), { h: 'left', b: true });
+          base(2, x.pieza || '', { h: 'left' });
+          base(3, fechaEnvio(x.fecha), { h: 'center' });
+          X.cols.forEach(function(c, i){
+            var q = x.porDia.filter(function(z){ return z.f === c; }).reduce(function(s, z){ return s + (z.q || 0); }, 0);
+            var qa = x.porDia.filter(function(z){ return z.f === c && !z.g; }).reduce(function(s, z){ return s + (z.q || 0); }, 0);
+            tot[i] += q;
+            if (!(q > 0)) { base(4 + i, '–', { h: 'center', col: 'FFB0B6C4' }); return; }
+            if (qa > 0 && qa < q) { var cell = base(4 + i, null, { fill: 'FFFFF6E0' }); cell.value = { richText: [{ text: num(qa), font: { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF111111' } } }, { text: '\n+' + num(q - qa), font: { name: 'Calibri', size: 10, bold: true, italic: true, color: { argb: 'FF946200' } } }] }; row.height = 34; }
+            else if (qa === 0) base(4 + i, q, { b: true, i: true, col: 'FF946200', fill: 'FFFFF6E0', fmt: '#,##0' });
+            else base(4 + i, q, { b: true, fill: 'FFEAF3FF', fmt: '#,##0' });
+          });
+          if (hD) { var dq = x.porDia.filter(function(z){ return X.cols.indexOf(z.f) < 0; }).reduce(function(s, z){ return s + (z.q || 0); }, 0); totD += dq; if (dq > 0) base(cDesp, dq, { b: true, fill: 'FFEAF3FF', fmt: '#,##0' }); else base(cDesp, '–', { h: 'center', col: 'FFB0B6C4' }); }
+          totT += x.total; base(cTot, x.total, { b: true, fill: 'FFEAF3FF', fmt: '#,##0' });
+          var colE = x.cls === 'ok' ? 'FF0A7A3E' : x.cls === 'mid' ? 'FF946200' : 'FFB3261E';
+          base(cEst, x.est + (x.alerta != null ? '\n' + tr3(T.hoySolo) + ' ' + num(x.alerta) : ''), { h: 'left', b: true, col: colE });
+        });
+        var tr = fila(); tr.height = 22;
+        function bt(c, v, h, fmt){ var cell = tr.getCell(c); cell.value = v; cell.border = BORDE; cell.font = { name: 'Calibri', size: 11, bold: true }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F4F9' } }; cell.alignment = { vertical: 'middle', horizontal: h || 'right' }; if (fmt) cell.numFmt = fmt; }
+        bt(1, tr3(T.total), 'left'); bt(2, ''); bt(3, '');
+        tot.forEach(function(q, i){ if (q > 0) bt(4 + i, q, 'right', '#,##0'); else bt(4 + i, '–', 'center'); });
+        if (hD) { if (totD > 0) bt(cDesp, totD, 'right', '#,##0'); else bt(cDesp, '–', 'center'); }
+        bt(cTot, totT, 'right', '#,##0'); bt(cEst, '');
+      } else if (!nomat.length) { unir(fila(), T.sinPlan, { color: 'FF666666', h: 20 }); }
+      if (nomat.length) {
+        unir(fila(), T.sinMat, { bold: true, color: 'FFB3261E', h: 22 });
+        var h2 = fila(); h2.height = 36;
+        hdr(h2, 1, h3(k === 'assy' ? T.modelo : T.linea), true); hdr(h2, 2, h3(T.pieza)); hdr(h2, 3, h3(T.envio)); hdr(h2, 4, h3(T.pend)); ws.mergeCells(r, 5, r, nC); hdr(h2, 5, h3(T.estado), true);
+        nomat.forEach(function(x){
+          var row = fila(); row.height = x.sub ? 34 : 22;
+          function b2(c, v, o){ var cell = row.getCell(c); cell.value = v; cell.border = BORDE; cell.alignment = { vertical: 'middle', horizontal: o.h || 'left', wrapText: true }; cell.font = { name: 'Calibri', size: 11, bold: !!o.b, color: { argb: o.col || 'FF111111' } }; if (o.fmt) cell.numFmt = o.fmt; }
+          b2(1, x.et + (x.sub && k !== 'assy' ? '\n' + x.sub : ''), { b: true }); b2(2, x.pieza || '', {}); b2(3, fechaEnvio(x.fecha), { h: 'center' }); b2(4, x.total, { h: 'right', fmt: '#,##0' });
+          ws.mergeCells(r, 5, r, nC); b2(5, x.est, { b: true, col: 'FFB3261E' });
+        });
+      }
+    }
+    area('assy', T.assy, 'FF0F6B3C'); area('medio', T.medio, 'FF1A4F9C'); area('bundle', T.bundle, 'FF7A4A00');
+    fila(); r++; var fr = ws.getRow(r); unir(fr, textoFuente() + '\n' + T.nota, { size: 9, color: 'FF666666', h: 90 });
+    var nombre = 'Plan_Dia_' + sem + '_' + isoLocal(new Date()) + '.xlsx';
+    return wb.xlsx.writeBuffer().then(function(buf){ descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre); msg(T.xlsOk, 'ok'); });
+  }).catch(function(e){ console.error(e); msg(T.errXls, 'er'); }).then(function(){ if (btn) btn.disabled = false; });
+}
+
 function descargar(blob, nombre){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
 
 // ===== Arranque =====

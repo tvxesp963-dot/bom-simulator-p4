@@ -453,9 +453,9 @@ function arrancar(){
     var nuevo = doc.exists ? doc.data() : { modelos: [] };
     // GUARDIA: si llega un plan más viejo que el último visto, se ignora (no pisar el plan nuevo)
     var pc = nuevo.planCargadoEn || '', visto = '';
-    try { visto = localStorage.getItem('piso_planVisto') || ''; } catch(e){}
+    visto = window._planVisto || '';   // solo en memoria: al recargar la pantalla siempre toma el plan publicado
     if (visto && pc && pc < visto) { console.warn('Plan viejo ignorado', pc, '<', visto); return; }
-    if (pc && pc > visto) { try { localStorage.setItem('piso_planVisto', pc); } catch(e){} }
+    if (pc && pc > visto) window._planVisto = pc;
     plan = nuevo;
     pintar();
   }, function(e){ arrancado = false; errorLectura(e); });

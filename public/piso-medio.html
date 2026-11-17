@@ -984,9 +984,9 @@ function arrancar(){
     var nuevo=d.exists?d.data():null;
     // GUARDIA: ignorar un plan más viejo que el último visto
     var pc=(nuevo&&nuevo.planCargadoEn)||'', visto='';
-    try{ visto=localStorage.getItem('medio_planVisto')||''; }catch(e){}
+    visto=window._planVisto||'';   // solo en memoria: al recargar la pantalla siempre toma el plan publicado
     if(visto && pc && pc<visto){ console.warn('Plan viejo ignorado',pc,'<',visto); return; }
-    if(pc && pc>visto){ try{ localStorage.setItem('medio_planVisto',pc); }catch(e){} }
+    if(pc && pc>visto) window._planVisto=pc;
     plan=nuevo; pintar(); },
     function(e){ arrancado=false; console.warn('plan_piso_medio:',e); });
   db.collection('bom_simulator_p4').doc('linea_medio').onSnapshot(function(d){ lineaConf=(d.exists && d.data().maq) ? d.data().maq : {}; pintar(); }, function(e){ console.warn('linea_medio:',e); });

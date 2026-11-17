@@ -432,7 +432,7 @@ function textoBannerExcel(){
 }
 function exportarExcel(){
   var btn = document.getElementById('btnXl'); if (btn) btn.disabled = true; msg(T.genXls);
-  cargarXL().then(function(){
+  return cargarXL().then(function(){
     var X = armar(), sem = 'W' + isoSemana(new Date()), nd = X.cols.length, hD = X.hayDesp ? 1 : 0;
     var cDesp = 4 + nd, cTot = 4 + nd + hD, cEst = cTot + 1, nC = cEst;
     var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Plan ' + sem, { views: [{ showGridLines: false }], pageSetup: { orientation: 'landscape', paperSize: 1, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .3, right: .3, top: .4, bottom: .4, header: .2, footer: .2 } } });
@@ -518,7 +518,7 @@ function exportarExcel(){
     area('assy', T.assy, 'FF0F6B3C'); area('medio', T.medio, 'FF1A4F9C'); area('bundle', T.bundle, 'FF7A4A00');
     fila(); r++; var fr = ws.getRow(r); unir(fr, textoFuente() + '\n' + T.nota, { size: 9, color: 'FF666666', h: 90 });
     var nombre = 'Plan_Dia_' + sem + '_' + isoLocal(new Date()) + '.xlsx';
-    return wb.xlsx.writeBuffer().then(function(buf){ descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre); msg(T.xlsOk, 'ok'); });
+    return wb.xlsx.writeBuffer().then(function(buf){ descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre); window.__xlsOk = true; msg(T.xlsOk, 'ok'); });
   }).catch(function(e){ console.error(e); msg(T.errXls, 'er'); }).then(function(){ if (btn) btn.disabled = false; });
 }
 
@@ -529,7 +529,10 @@ var arrancado = false;
 firebase.auth().onAuthStateChanged(function(u){
   if (!u) { mostrarLogin(); return; }
   if (arrancado) return; arrancado = true; pintar();
-  leerDatos().then(pintar).catch(function(){ arrancado = false; });
+  leerDatos().then(pintar).then(function(){
+    // Abierto desde piso.html con #excel: descarga el Excel solo y cierra la pestaña
+    if (location.hash === '#excel' && DATOS) return exportarExcel().then(function(){ if (window.__xlsOk) setTimeout(function(){ window.close(); }, 2000); });
+  }).catch(function(){ arrancado = false; });
 });
 </script>
 </body>

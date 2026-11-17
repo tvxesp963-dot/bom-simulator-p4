@@ -3005,7 +3005,7 @@ function renderCons() {
         const mU = mapaModelo(gU), mT = mapaModelo(gTT);
         const txtU = [], txtA = [];
         Object.keys(mT).concat(Object.keys(mU).filter(x => !(x in mT))).forEach(sm => {
-          const corto = sm.replace('SM-F976UZKA','').replace('SM-F976UZK','');
+          const corto = sm;   // modelo completo (antes se recortaba a XAU/VZW/CHA)
           const u = mU[sm] || 0, a = Math.max(0, (mT[sm] || 0) - u);
           if (u > 0) txtU.push(corto + ': -' + u.toLocaleString('en-US'));
           if (a > 0) txtA.push(corto + ': -' + a.toLocaleString('en-US'));
@@ -3052,7 +3052,7 @@ function renderCons() {
         const colP = f.esBundle ? '#a78bfa' : pl.tc;
         return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
         <td class="pn-cell" style="color:${colP};font-size:12px">${f.pn}</td>
-        <td style="font-size:12px">${f.desc}${f.txtU?`<div style="font-size:9px;color:var(--text2);margin-top:2px">${capT('urg')}: ${f.txtU}</div>`:''}${f.txtA?`<div style="font-size:9px;color:var(--amber);margin-top:1px">${capT('antc')}: ${f.txtA}</div>`:''}</td>
+        <td style="font-size:12px">${f.desc}${f.txtU?`<div style="font-size:9px;color:var(--text2);margin-top:2px">${capT('urg')}:<br>${f.txtU.split(' · ').join('<br>')}</div>`:''}${f.txtA?`<div style="font-size:9px;color:var(--amber);margin-top:1px">${capT('antc')}:<br>${f.txtA.split(' · ').join('<br>')}</div>`:''}</td>
         ${tdN(f.inv>0?f.inv.toLocaleString('en-US'):'0', f.inv>0?'var(--text)':'var(--red)')}
         ${f.fU>0 ? tdN('-'+f.fU.toLocaleString('en-US'),'var(--red)') : tdN(cubierto?capT('cub'):'OK','var(--green)')}
         ${f.fA>0 ? tdN('-'+f.fA.toLocaleString('en-US'),'var(--amber)') : tdN('—','var(--text2)')}
@@ -3104,7 +3104,7 @@ function renderCons() {
 
     const renderRowConsolidada = (g, i, color) => {
       const aPedirConsolidado = g.faltaAcumulada > 0 ? calcularAPedir(g.faltaAcumulada) : 0;
-      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString('en-US'):'OK'}`).join(' · ');
+      const modelosTexto = g.modelos.map(m => `${m.sm}: ${m.falta>0?'-'+m.falta.toLocaleString('en-US'):'OK'}`).join('<br>');
       const esRanuradoInfo = ((g.desc||'').toUpperCase().includes('CHIP BOARD BOTTOM') || (g.desc||'').toUpperCase().includes('CHIP BOARD TOP')) && (g.desc||'').toUpperCase().includes('RANURADO');
       return `<tr style="${i%2?'background:rgba(255,255,255,.02)':''}">
       <td class="pn-cell" style="color:${color||pl.tc};font-size:12px">${g.pn}</td>
@@ -3760,7 +3760,7 @@ function exportarExcel(opts) {
       const d = (g.desc||'').toUpperCase();
       const esRanuradoInfo = (d.includes('CHIP BOARD BOTTOM') || d.includes('CHIP BOARD TOP')) && d.includes('RANURADO');
       const aPedir = esRanuradoInfo ? 0 : (g.faltaAcumulada > 0 ? calcularAPedir(g.faltaAcumulada) : 0);
-      const modelosTexto = g.modelos.map(m => `${m.sm.replace('SM-F976UZKA','').replace('SM-F976UZK','')}: ${m.falta>0?'-'+m.falta.toLocaleString('en-US'):'OK'}`).join(' · ');
+      const modelosTexto = g.modelos.map(m => `${m.sm}: ${m.falta>0?'-'+m.falta.toLocaleString('en-US'):'OK'}`).join('\n');
       return { pn:g.pn, desc:g.desc, inv:g.inv, falta:g.faltaMostrada, aPedir, isBundle:g.isBundle, esRanuradoInfo, modelosTexto };
     }).filter(r => !r.esRanuradoInfo && (r.falta > 0 || r.aPedir > 0));
   };
@@ -3796,7 +3796,8 @@ function exportarExcel(opts) {
       rows.forEach((row,i) => {
         const bg = i%2===1 ? ALT_BG : null;
         const esHB = row.esBundle && !(row.desc||'').toUpperCase().includes('MANUAL');
-        const txt = [row.txtU ? `${capT('urg')}: ${row.txtU}` : '', row.txtA ? `${capT('antc')}: ${row.txtA}` : ''].filter(Boolean).join('  |  ');
+        const listaM = (lbl, t) => t ? `${lbl}:\n` + t.split(' · ').join('\n') : '';   // un modelo por renglón
+        const txt = [listaM(capT('urg'), row.txtU), listaM(capT('antc'), row.txtA)].filter(Boolean).join('\n');
         const nota = row.total>0 ? `${pl.key} ${capT('pedir')}: ${capT('ya')} ${row.pYA.toLocaleString('en-US')} + ${capT('ant')} ${row.pAnt.toLocaleString('en-US')}` : (esHB ? (row.fU>0||row.fA>0 ? `${pl.key} PRODUCIR: ${capT('ya')} ${row.fU.toLocaleString('en-US')} + ${capT('ant')} ${row.fA.toLocaleString('en-US')}` : 'OK') : 'OK');
         pushX([
           n(noX++,false,null,bg,'center'),

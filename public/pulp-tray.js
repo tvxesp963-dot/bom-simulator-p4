@@ -432,26 +432,26 @@
     var numFmt = function (ws) { Object.keys(ws).forEach(function (k) { if (k[0] !== '!' && ws[k].t === 'n') ws[k].z = '#,##0'; }); };
     var cw = function (ws, w) { ws['!cols'] = w.map(function (x) { return { wch: x }; }); };
     // Resumen
-    var a1 = [['Pulp Tray PN', 'Descripción', 'Modelos', 'Forecast', 'Producido', 'Bottom hecho', 'Requerido', 'Inventario IMS P4', 'Falta', 'Pedir sugerido (con margen)']];
+    var a1 = [['Pulp Tray PN', 'Description', 'Models', 'Forecast', 'Produced', 'Bottom built', 'Required', 'IMS P4 Inventory', 'Short', 'Suggested order (with margin)']];
     R.grupos.forEach(function (g) { a1.push([g.pn, g.desc, g.modelos.join(', '), g.totFc, g.totProd, g.totBot, g.totNet, g.inv, g.falta, g.pedirSug]); });
-    var w1 = XLSX.utils.aoa_to_sheet(a1); head(w1, 10); numFmt(w1); cw(w1, [18, 28, 40, 12, 12, 12, 12, 16, 12, 18]); XLSX.utils.book_append_sheet(wb, w1, 'Resumen');
+    var w1 = XLSX.utils.aoa_to_sheet(a1); head(w1, 10); numFmt(w1); cw(w1, [18, 28, 40, 12, 12, 12, 12, 16, 12, 18]); XLSX.utils.book_append_sheet(wb, w1, 'Summary');
     // Semanal
-    var a2 = [['Pulp Tray PN', 'Concepto'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
+    var a2 = [['Pulp Tray PN', 'Item'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
     R.grupos.forEach(function (g) {
-      [['Forecast', g.fc, g.totFc], ['(-) Producido', g.prod, g.totProd], ['(-) Bottom hecho', g.bot, g.totBot], ['Requerido', g.net, g.totNet], ['Saldo con inventario', g.saldo, null], ['Pedir esa semana', g.pedir, g.falta]]
-        .forEach(function (r) { if (r[0] === '(-) Bottom hecho' && !S.desc) return; a2.push([g.pn, r[0]].concat(r[1], [r[2] == null ? '' : r[2]])); });
+      [['Forecast', g.fc, g.totFc], ['(-) Produced', g.prod, g.totProd], ['(-) Bottom built', g.bot, g.totBot], ['Required', g.net, g.totNet], ['Balance with inventory', g.saldo, null], ['Order this week', g.pedir, g.falta]]
+        .forEach(function (r) { if (r[0] === '(-) Bottom built' && !S.desc) return; a2.push([g.pn, r[0]].concat(r[1], [r[2] == null ? '' : r[2]])); });
     });
-    var w2 = XLSX.utils.aoa_to_sheet(a2); head(w2, 3 + R.semanas.length - 1 + 1); numFmt(w2); cw(w2, [18, 22].concat(R.semanas.map(function () { return 10; }), [12])); XLSX.utils.book_append_sheet(wb, w2, 'Semanal');
+    var w2 = XLSX.utils.aoa_to_sheet(a2); head(w2, 3 + R.semanas.length - 1 + 1); numFmt(w2); cw(w2, [18, 22].concat(R.semanas.map(function () { return 10; }), [12])); XLSX.utils.book_append_sheet(wb, w2, 'Weekly');
     // Por modelo
-    var a3 = [['Código Forecast', 'Descripción', 'Modelo BOM', 'Pulp Tray PN', 'Forecast', 'Producido', 'Bottom hecho', 'Requerido']];
+    var a3 = [['Forecast Code', 'Description', 'BOM Model', 'Pulp Tray PN', 'Forecast', 'Produced', 'Bottom built', 'Required']];
     R.items.forEach(function (it) { a3.push([it.code, it.desc, it.sm, it.pn, it.tot, it.prodT, it.botT, it.net.reduce(function (a, b) { return a + b; }, 0)]); });
-    var w3 = XLSX.utils.aoa_to_sheet(a3); head(w3, 8); numFmt(w3); cw(w3, [16, 44, 22, 18, 12, 12, 12, 12]); XLSX.utils.book_append_sheet(wb, w3, 'Por modelo');
+    var w3 = XLSX.utils.aoa_to_sheet(a3); head(w3, 8); numFmt(w3); cw(w3, [16, 44, 22, 18, 12, 12, 12, 12]); XLSX.utils.book_append_sheet(wb, w3, 'By model');
     // Pendientes
     if (R.sinModelo.length || R.sinPulp.length) {
-      var a4 = [['Estado', 'Código Forecast', 'Descripción', 'Modelo BOM', 'Forecast']];
-      R.sinModelo.forEach(function (x) { a4.push(['No está en el BOM', x.code, x.desc, '', x.tot]); });
-      R.sinPulp.forEach(function (x) { a4.push(['Sin Pulp Tray en BOM', x.code, x.desc, x.sm, x.tot]); });
-      var w4 = XLSX.utils.aoa_to_sheet(a4); head(w4, 5); numFmt(w4); cw(w4, [22, 16, 44, 22, 12]); XLSX.utils.book_append_sheet(wb, w4, 'Pendientes');
+      var a4 = [['Status', 'Forecast Code', 'Description', 'BOM Model', 'Forecast']];
+      R.sinModelo.forEach(function (x) { a4.push(['Not found in BOM', x.code, x.desc, '', x.tot]); });
+      R.sinPulp.forEach(function (x) { a4.push(['No Pulp Tray in BOM', x.code, x.desc, x.sm, x.tot]); });
+      var w4 = XLSX.utils.aoa_to_sheet(a4); head(w4, 5); numFmt(w4); cw(w4, [22, 16, 44, 22, 12]); XLSX.utils.book_append_sheet(wb, w4, 'Pending');
     }
     var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
     XLSX.writeFile(wb, 'Pulp_Tray_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.xlsx');

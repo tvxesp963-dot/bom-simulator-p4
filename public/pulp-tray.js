@@ -435,17 +435,52 @@
     var a1 = [['Pulp Tray PN', 'Description', 'Models', 'Forecast', 'Produced', 'Bottom built', 'Required', 'IMS P4 Inventory', 'Short', 'Suggested order (with margin)']];
     R.grupos.forEach(function (g) { a1.push([g.pn, g.desc, g.modelos.join(', '), g.totFc, g.totProd, g.totBot, g.totNet, g.inv, g.falta, g.pedirSug]); });
     var w1 = XLSX.utils.aoa_to_sheet(a1); head(w1, 10); numFmt(w1); cw(w1, [18, 28, 40, 12, 12, 12, 12, 16, 12, 18]); XLSX.utils.book_append_sheet(wb, w1, 'Summary');
-    // Semanal
+    // Estilos para separar cada código (Pulp Tray PN) en bloques
+    var BORDE = { style: 'medium', color: { rgb: '000000' } };
+    var estiloFila = function (ws, r, nc, st) { for (var c = 0; c < nc; c++) { var a = XLSX.utils.encode_cell({ r: r, c: c }); if (!ws[a]) ws[a] = { t: 's', v: '' }; ws[a].s = st; } };
+    var BANDA = { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 12 }, fill: { fgColor: { rgb: '1F3A5F' } }, alignment: { vertical: 'center' } };
+    var RESALTE = { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } } };
+    var CIERRE = { border: { bottom: BORDE } };
+    var SUBTOT = { font: { bold: true }, fill: { fgColor: { rgb: 'EDEDED' } }, border: { top: { style: 'thin', color: { rgb: '000000' } }, bottom: BORDE } };
+    var nW = R.semanas.length, nc2 = 3 + nW;
+    // Semanal: un bloque por Pulp Tray PN (banda azul con el código, sus filas y una línea gruesa al cerrar)
     var a2 = [['Pulp Tray PN', 'Item'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
+    var marcas = []; // {r, tipo}
     R.grupos.forEach(function (g) {
-      [['Forecast', g.fc, g.totFc], ['(-) Produced', g.prod, g.totProd], ['(-) Bottom built', g.bot, g.totBot], ['Required', g.net, g.totNet], ['Balance with inventory', g.saldo, null], ['Order this week', g.pedir, g.falta]]
-        .forEach(function (r) { if (r[0] === '(-) Bottom built' && !S.desc) return; a2.push([g.pn, r[0]].concat(r[1], [r[2] == null ? '' : r[2]])); });
+      var vacio = []; for (var k = 0; k < nW + 1; k++) vacio.push('');
+      a2.push([g.pn, g.desc + '  |  ' + g.modelos.join(', ')].concat(vacio)); marcas.push({ r: a2.length - 1, t: 'banda' });
+      var filas = [['Forecast', g.fc, g.totFc, ''], ['(-) Produced', g.prod, g.totProd, ''], ['(-) Bottom built', g.bot, g.totBot, ''], ['Required', g.net, g.totNet, 'resalte'], ['Balance with inventory', g.saldo, null, ''], ['Order this week', g.pedir, g.falta, 'resalte']]
+        .filter(function (r) { return !(r[0] === '(-) Bottom built' && !S.desc); });
+      filas.forEach(function (r, idx) {
+        a2.push([g.pn, r[0]].concat(r[1], [r[2] == null ? '' : r[2]]));
+        marcas.push({ r: a2.length - 1, t: idx === filas.length - 1 ? 'cierre' : r[3] });
+      });
+      a2.push([]); // renglón en blanco entre códigos
     });
-    var w2 = XLSX.utils.aoa_to_sheet(a2); head(w2, 3 + R.semanas.length - 1 + 1); numFmt(w2); cw(w2, [18, 22].concat(R.semanas.map(function () { return 10; }), [12])); XLSX.utils.book_append_sheet(wb, w2, 'Weekly');
-    // Por modelo
+    var w2 = XLSX.utils.aoa_to_sheet(a2); numFmt(w2); head(w2, nc2); cw(w2, [18, 40].concat(R.semanas.map(function () { return 10; }), [12]));
+    marcas.forEach(function (m) {
+      if (m.t === 'banda') estiloFila(w2, m.r, nc2, BANDA);
+      else if (m.t === 'resalte') estiloFila(w2, m.r, nc2, RESALTE);
+      else if (m.t === 'cierre') estiloFila(w2, m.r, nc2, { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } }, border: { bottom: BORDE } });
+    });
+    numFmt(w2); XLSX.utils.book_append_sheet(wb, w2, 'Weekly');
+    // Por modelo: agrupado por Pulp Tray PN, con subtotal por código
     var a3 = [['Forecast Code', 'Description', 'BOM Model', 'Pulp Tray PN', 'Forecast', 'Produced', 'Bottom built', 'Required']];
-    R.items.forEach(function (it) { a3.push([it.code, it.desc, it.sm, it.pn, it.tot, it.prodT, it.botT, it.net.reduce(function (a, b) { return a + b; }, 0)]); });
-    var w3 = XLSX.utils.aoa_to_sheet(a3); head(w3, 8); numFmt(w3); cw(w3, [16, 44, 22, 18, 12, 12, 12, 12]); XLSX.utils.book_append_sheet(wb, w3, 'By model');
+    var m3 = [];
+    R.grupos.forEach(function (g) {
+      a3.push([g.pn, g.desc, '', '', '', '', '', '']); m3.push({ r: a3.length - 1, t: 'banda' });
+      var sF = 0, sP = 0, sB = 0, sN = 0;
+      g.items.forEach(function (it) {
+        var net = it.net.reduce(function (a, b) { return a + b; }, 0);
+        a3.push([it.code, it.desc, it.sm, it.pn, it.tot, it.prodT, it.botT, net]);
+        sF += it.tot; sP += it.prodT; sB += it.botT; sN += net;
+      });
+      a3.push(['', 'Total ' + g.pn, '', '', sF, sP, sB, sN]); m3.push({ r: a3.length - 1, t: 'sub' });
+      a3.push([]);
+    });
+    var w3 = XLSX.utils.aoa_to_sheet(a3); numFmt(w3); head(w3, 8); cw(w3, [16, 44, 22, 18, 12, 12, 12, 12]);
+    m3.forEach(function (m) { estiloFila(w3, m.r, 8, m.t === 'banda' ? BANDA : SUBTOT); });
+    numFmt(w3); XLSX.utils.book_append_sheet(wb, w3, 'By model');
     // Pendientes
     if (R.sinModelo.length || R.sinPulp.length) {
       var a4 = [['Status', 'Forecast Code', 'Description', 'BOM Model', 'Forecast']];

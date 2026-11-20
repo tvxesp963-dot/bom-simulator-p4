@@ -153,16 +153,12 @@
   function filaPulp(bom, sm) {
     return bom.find(function (r) { var d = norm(r.desc); return r.sm === sm && d.indexOf('PULP') >= 0 && d.indexOf('TRAY') >= 0; });
   }
-  // Bottom terminado del modelo. 1) El renglón con código GH96 del modelo (así lo maneja el simulador);
-  // 2) si no hay GH96, un único renglón "Lower Box + Bottom" (sin Sheet / Chip Board / Pulp Tray).
-  // Si hay duda (varios o ninguno) NO descuenta y lo avisa en el reporte.
+  // Bottom terminado del modelo: el renglón "Lower Box (Bottom)" del BOM (NO se usa GH96).
+  // Sin Sheet / Chip Board / Pulp Tray / Top. Si hay duda (varios o ninguno) NO descuenta y lo avisa.
   function buscarBottom(bom, sm) {
-    var g96 = bom.filter(function (r) { return r.sm === sm && /^GH96/i.test(String(r.pn || '').trim()) && norm(r.desc).indexOf('TOP') < 0; });
-    if (g96.length === 1) return { row: g96[0], why: '' };
-    if (g96.length > 1) return { row: null, why: 'Several GH96 rows' };
     var c = bom.filter(function (r) {
       var d = norm(r.desc);
-      return r.sm === sm && d.indexOf('LOWER BOX') >= 0 && d.indexOf('BOTTOM') >= 0 && d.indexOf('SHEET') < 0 && d.indexOf('CHIP') < 0 && d.indexOf('PULP') < 0;
+      return r.sm === sm && d.indexOf('LOWER BOX') >= 0 && d.indexOf('BOTTOM') >= 0 && d.indexOf('SHEET') < 0 && d.indexOf('CHIP') < 0 && d.indexOf('PULP') < 0 && d.indexOf('TOP') < 0;
     });
     if (c.length === 1) return { row: c[0], why: '' };
     return { row: null, why: c.length ? 'Several Lower Box rows' : 'Bottom not found in BOM' };

@@ -344,9 +344,9 @@
         '<div style="font-size:11px;color:var(--text2);margin-bottom:.3rem">' + esc(t('usadoEn')) + ': ' + esc(g.modelos.join(', ')) + '</div>' +
         '<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr><th style="' + TH + ';text-align:left"></th>' +
         act.map(function (w) { return '<th style="' + TH + '">' + esc(t('semana')) + R.semanas[w] + '</th>'; }).join('') + '<th style="' + TH + '">' + esc(t('total')) + '</th></tr></thead><tbody>';
-      var fila = function (nom, arr, tot, estilo, colorFn) {
+      var fila = function (nom, arr, tot, estilo, colorFn, bgFn) {
         return '<tr><td style="' + TD + ';text-align:left;' + estilo + '">' + esc(nom) + '</td>' +
-          act.map(function (w) { return '<td style="' + TD + ';' + estilo + (colorFn ? ';color:' + colorFn(arr[w]) : '') + '">' + (arr[w] ? fmt(arr[w]) : '–') + '</td>'; }).join('') +
+          act.map(function (w) { return '<td style="' + TD + ';' + estilo + (colorFn ? ';color:' + colorFn(arr[w]) : '') + (bgFn ? ';background:' + bgFn(w) : '') + '">' + (arr[w] ? fmt(arr[w]) : '–') + '</td>'; }).join('') +
           '<td style="' + TD + ';font-weight:700;' + estilo + '">' + (tot == null ? '' : fmt(tot)) + '</td></tr>';
       };
       h += fila(t('rFc'), g.fc, g.totFc, 'color:var(--text2)');
@@ -354,8 +354,9 @@
       h += fila(t('rProd'), g.prod, g.totProd, 'color:var(--text2)');
       if (S.desc) h += fila(t('rBot'), g.bot, g.totBot, 'color:var(--text2)');
       h += fila(t('rNet'), g.net, g.totNet, 'font-weight:700;background:rgba(77,166,255,.08)');
-      h += fila(t('rSaldo'), g.saldo, null, '', function (v) { return v < 0 ? '#ff4444' : '#00e676'; });
-      h += fila(t('rPedir'), g.pedir, g.falta, 'font-weight:700', function (v) { return v > 0 ? '#FFBA00' : 'inherit'; });
+      var bgEst = function (w) { return g.saldo[w] >= 0 ? 'rgba(0,230,118,.13)' : 'rgba(255,152,0,.16)'; }; // verde = cubierto, naranja = falta cubrir
+      h += fila(t('rSaldo'), g.saldo, null, '', function (v) { return v < 0 ? '#ff4444' : '#00e676'; }, bgEst);
+      h += fila(t('rPedir'), g.pedir, g.falta, 'font-weight:700', function (v) { return v > 0 ? '#FFBA00' : 'inherit'; }, bgEst);
       h += '</tbody></table></div>';
     });
     if (!R.grupos.length) h += '<div style="padding:1rem;color:#FFBA00">' + esc(t('sinPulp')) + '</div>';
@@ -494,6 +495,18 @@
     var CIERRE = { border: { bottom: BORDE } };
     var SUBTOT = { font: { bold: true }, fill: { fgColor: { rgb: 'EDEDED' } }, border: { top: { style: 'thin', color: { rgb: '000000' } }, bottom: BORDE } };
     var nW = R.semanas.length, nc2 = 4 + nW + 1;
+    // Color tenue por semana: verde = cubierto con inventario, naranja = falta cubrir (renglones Balance y Order this week)
+    var estadoSem = function (ws, ms, c0) {
+      ms.forEach(function (m) {
+        if (!m.sal) return;
+        for (var w = 0; w < nW; w++) {
+          var a = XLSX.utils.encode_cell({ r: m.r, c: c0 + w }); if (!ws[a]) continue;
+          var base = ws[a].s || {}; var st = {}; for (var k in base) st[k] = base[k];
+          st.fill = { fgColor: { rgb: m.sal[w] >= 0 ? 'DFF0DB' : 'FFE5CC' } };
+          ws[a].s = st;
+        }
+      });
+    };
     var CODIGO = { border: { bottom: { style: 'thin', color: { rgb: '888888' } } } };
     var CODIGO_RES = { font: { bold: true }, fill: { fgColor: { rgb: 'EEF4FB' } }, border: { bottom: { style: 'thin', color: { rgb: '888888' } } } };
     var ncN = 3 + nW;
@@ -507,7 +520,7 @@
         .filter(function (r) { return !(r[0] === '(-) Bottom built' && !S.desc); });
       filas.forEach(function (r, idx) {
         aN.push([g.pn, r[0]].concat(r[1], [r[2] == null ? '' : r[2]]));
-        marcasN.push({ r: aN.length - 1, t: idx === filas.length - 1 ? 'cierre' : r[3] });
+        marcasN.push({ r: aN.length - 1, t: idx === filas.length - 1 ? 'cierre' : r[3], sal: (r[0] === 'Balance with inventory' || r[0] === 'Order this week') ? g.saldo : null });
       });
       aN.push([]); // renglón en blanco entre códigos
     });
@@ -517,6 +530,7 @@
       else if (m.t === 'resalte') estiloFila(wN, m.r, ncN, RESALTE);
       else if (m.t === 'cierre') estiloFila(wN, m.r, ncN, { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } }, border: { bottom: BORDE } });
     });
+    estadoSem(wN, marcasN, 2);
     numFmt(wN); XLSX.utils.book_append_sheet(wb, wN, 'By number');
     // Weekly: un bloque por Pulp Tray PN. Dentro, cada código GH90 del Forecast con sus propias semanas; al final el total del Pulp Tray.
     var a2 = [['Pulp Tray PN', 'Forecast Code (GH90)', 'BOM Model', 'Item'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
@@ -535,7 +549,7 @@
       });
       [['TOTAL Required', g.net, g.totNet, 'res'], ['Balance with inventory', g.saldo, null, ''], ['Order this week', g.pedir, g.falta, 'res']].forEach(function (r, idx) {
         a2.push([g.pn, 'TOTAL ' + g.pn, '', r[0]].concat(r[1], [r[2] == null ? '' : r[2]]));
-        marcas.push({ r: a2.length - 1, t: idx === 2 ? 'cierre' : (r[3] === 'res' ? 'resalte' : '') });
+        marcas.push({ r: a2.length - 1, t: idx === 2 ? 'cierre' : (r[3] === 'res' ? 'resalte' : ''), sal: (r[0] === 'Balance with inventory' || r[0] === 'Order this week') ? g.saldo : null });
       });
       a2.push([]);
     });
@@ -547,6 +561,7 @@
       else if (m.t === 'codigoFin') estiloFila(w2, m.r, nc2, CODIGO_RES);
       else if (m.t === 'cierre') estiloFila(w2, m.r, nc2, { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } }, border: { bottom: BORDE } });
     });
+    estadoSem(w2, marcas, 4);
     numFmt(w2); XLSX.utils.book_append_sheet(wb, w2, 'By model');
     // By model: agrupado por Pulp Tray PN, con subtotal y el Bottom (GH96) de cada modelo
     var a3 = [['Forecast Code', 'Description', 'BOM Model', 'Pulp Tray PN', 'Forecast', 'Dallas SEA O/H', 'Produced', 'Bottom built', 'Required', 'Bottom PN (IMS)', 'Bottom in IMS', 'Bottom status']];

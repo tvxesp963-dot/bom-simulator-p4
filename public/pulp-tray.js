@@ -20,7 +20,7 @@
       archivo: 'Forecast', ims: 'Inventario IMS P4', nunca: 'sin sincronizar — presiona "Sync IMS" arriba y luego Recalcular',
       hace: function (m) { return 'actualizado hace ' + m + ' min'; },
       descBottom: 'Restar el Bottom (Lower Box) ya hecho en IMS — igual que el Simulador',
-      descBottomAyuda: 'El Bottom terminado ya trae su Pulp Tray adentro, por eso no se vuelve a pedir. Desmárcalo para no restarlo.',
+      desde: 'Producido desde', desdeAyuda: 'Cuenta TODO lo producido en ShipQR desde esta fecha (embarcado o no). Por defecto: el lunes de la primera semana del Forecast.', descBottomAyuda: 'El Bottom terminado ya trae su Pulp Tray adentro, por eso no se vuelve a pedir. Desmárcalo para no restarlo.',
       cReq: 'Pulp Tray requerido', cReqS: 'Forecast − producido', cInv: 'Inventario IMS P4', cFalta: 'Falta', cFaltaS: 'Requerido − inventario', cPedir: 'Pedir sugerido', cPedirS: 'con margen (+10% / +1% si pasa de 100,000)',
       rFc: 'Forecast (pzas de modelo)', rProd: '(−) Ya producido', rBot: '(−) Bottom ya hecho', rSea: '(−) Inventario Dallas (SEA O/H)', rNet: 'Pulp Tray requerido', rSaldo: 'Saldo con inventario', rPedir: 'Pedir esta semana', total: 'Total',
       inv: 'Inventario', usadoEn: 'Se usa en', semana: 'S',
@@ -44,7 +44,7 @@
       archivo: 'Forecast', ims: 'IMS P4 inventory', nunca: 'not synced — press "Sync IMS" above, then Recalculate',
       hace: function (m) { return 'updated ' + m + ' min ago'; },
       descBottom: 'Subtract the Bottom (Lower Box) already built in IMS — same as the Simulator',
-      descBottomAyuda: 'A finished Bottom already contains its Pulp Tray, so it is not ordered again. Uncheck it to not subtract it.',
+      desde: 'Produced since', desdeAyuda: 'Counts ALL production in ShipQR since this date (shipped or not). Default: the Monday of the first Forecast week.', descBottomAyuda: 'A finished Bottom already contains its Pulp Tray, so it is not ordered again. Uncheck it to not subtract it.',
       cReq: 'Pulp Tray required', cReqS: 'Forecast − produced', cInv: 'IMS P4 inventory', cFalta: 'Short', cFaltaS: 'Required − inventory', cPedir: 'Suggested order', cPedirS: 'with margin (+10% / +1% above 100,000)',
       rFc: 'Forecast (model units)', rProd: '(−) Already produced', rBot: '(−) Bottom already built', rSea: '(−) Dallas inventory (SEA O/H)', rNet: 'Pulp Tray required', rSaldo: 'Balance with inventory', rPedir: 'Order this week', total: 'Total',
       inv: 'Inventory', usadoEn: 'Used in', semana: 'W',
@@ -68,7 +68,7 @@
       archivo: 'Forecast', ims: 'IMS P4 재고', nunca: '동기화 안 됨 — 위의 "Sync IMS"를 누른 후 다시 계산하세요',
       hace: function (m) { return m + '분 전 업데이트'; },
       descBottom: 'IMS에 이미 만들어진 Bottom(Lower Box) 차감 — 시뮬레이터와 동일',
-      descBottomAyuda: '완성된 Bottom에는 이미 Pulp Tray가 들어 있어 다시 발주하지 않습니다. 차감하지 않으려면 체크를 해제하세요.',
+      desde: '생산 집계 시작일', desdeAyuda: '이 날짜 이후 ShipQR의 모든 생산(출하 여부 무관)을 집계합니다. 기본값: Forecast 첫 주의 월요일.', descBottomAyuda: '완성된 Bottom에는 이미 Pulp Tray가 들어 있어 다시 발주하지 않습니다. 차감하지 않으려면 체크를 해제하세요.',
       cReq: '필요 Pulp Tray', cReqS: 'Forecast − 생산 완료', cInv: 'IMS P4 재고', cFalta: '부족', cFaltaS: '필요 − 재고', cPedir: '권장 발주', cPedirS: '여유 포함 (+10% / 100,000 초과 시 +1%)',
       rFc: 'Forecast (모델 수량)', rProd: '(−) 이미 생산', rBot: '(−) 이미 만든 Bottom', rSea: '(−) 달라스 재고 (SEA O/H)', rNet: '필요 Pulp Tray', rSaldo: '재고 반영 잔량', rPedir: '이번 주 발주', total: '합계',
       inv: '재고', usadoEn: '사용 모델', semana: 'W',
@@ -98,7 +98,7 @@
   function leerMapeo() { try { return JSON.parse(localStorage.getItem(MAPEO_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function guardarMapeo(m) { try { localStorage.setItem(MAPEO_KEY, JSON.stringify(m)); } catch (e) {} }
 
-  var S = { fc: null, nombre: '', prod: null, prodOk: true, desc: true, res: null, ocupado: false };
+  var S = { fc: null, nombre: '', desde: null, _cp: null, prod: null, prodOk: true, desc: true, res: null, ocupado: false };
 
   // ============================ LECTURA DEL FORECAST ============================
   // Formato esperado: renglón con "Row Labels" y semanas (47,48,...,53,1,2,...) en columnas; códigos GH90-xxxxx en la 1a columna.
@@ -293,6 +293,8 @@
       '<span id="ptNombre" style="color:var(--text2)">' + (S.nombre ? esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>' : '') + '</span></div>' +
       '<label style="display:flex;gap:6px;align-items:center;margin:.2rem 0" title="' + esc(t('descBottomAyuda')) + '"><input type="checkbox" id="ptDesc" onchange="ptToggleDesc(this.checked)"' + (S.desc ? ' checked' : '') + '> ' + esc(t('descBottom')) + '</label>' +
       '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 22px">' + esc(t('descBottomAyuda')) + '</div>' +
+      '<label style="display:flex;gap:8px;align-items:center;margin:.2rem 0;flex-wrap:wrap" title="' + esc(t('desdeAyuda')) + '">' + esc(t('desde')) + ': <input type="date" id="ptDesde" value="' + (S.fc ? fechaISO(new Date(desdeMs())) : '') + '" onchange="ptDesde(this.value)" style="background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px"></label>' +
+      '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 2px">' + esc(t('desdeAyuda')) + '</div>' +
       '<div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">' + esc(t('ims')) + ': <span id="ptEdad">' + edadIMS() + '</span></div>' +
       '<div id="ptMsg" style="display:none"></div><div id="ptRes"></div>';
     pintar();
@@ -384,13 +386,50 @@
   }
 
   // ============================ ACCIONES ============================
+  // Lunes (00:00) de la semana ISO n; el año se elige para quedar cerca de hoy
+  function lunesDeSemana(n) {
+    var hoy = new Date(), y = hoy.getFullYear();
+    var calc = function (yy) { var j4 = new Date(yy, 0, 4), dow = (j4.getDay() + 6) % 7; var l1 = new Date(yy, 0, 4 - dow); return new Date(l1.getFullYear(), l1.getMonth(), l1.getDate() + (n - 1) * 7); };
+    var d = calc(y);
+    if (d.getTime() - hoy.getTime() > 60 * 86400000) d = calc(y - 1);
+    else if (hoy.getTime() - d.getTime() > 300 * 86400000) d = calc(y + 1);
+    return d;
+  }
+  function fechaISO(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  function desdeMs() {
+    if (S.desde) return S.desde;
+    return S.fc && S.fc.semanas.length ? lunesDeSemana(S.fc.semanas[0]).getTime() : 0;
+  }
+  // Producido para Pulp Tray: TODO pallet creado en ShipQR desde la fecha (embarcado o no), mismas exclusiones que el simulador
+  async function leerProduccionDesde(ms, forzar) {
+    var key = String(ms);
+    if (!forzar && S._cp && S._cp.key === key && (Date.now() - S._cp.t) < 20 * 60000) return S._cp.d;
+    var por = {};
+    var snap = await db.collection('shipqr_pallets').get();
+    snap.forEach(function (doc) {
+      var d = doc.data();
+      if (d.motivo === 'REMPLAZO') return;
+      var modelo = (d.modelo || '').trim(); if (!modelo) return;
+      if (!String(d.part_number || '').toUpperCase().startsWith('GH90')) return;
+      var cr = (d.created_at && d.created_at.seconds) ? d.created_at.seconds * 1000 : 0;
+      if (cr < ms) return;
+      var q = Number(d.quantity) || 0;
+      if (!por[modelo]) por[modelo] = { total: 0 };
+      por[modelo].total += q;
+    });
+    S._cp = { key: key, t: Date.now(), d: por };
+    return por;
+  }
   async function traerProducido(forzar) {
     S.prodOk = true;
     try {
-      if (typeof obtenerProduccionRealASSY1 !== 'function' || typeof db === 'undefined' || !db) { S.prodOk = false; S.prod = {}; return; }
-      var d = await obtenerProduccionRealASSY1(!forzar); // auto=true reutiliza el caché de 20 min (ahorra lecturas)
-      if (!d) { S.prodOk = false; S.prod = {}; } else S.prod = d;
+      if (typeof db === 'undefined' || !db) { S.prodOk = false; S.prod = {}; return; }
+      S.prod = await leerProduccionDesde(desdeMs(), forzar);
     } catch (e) { S.prodOk = false; S.prod = {}; }
+  }
+  function cambiarDesde(v) {
+    if (!v) { S.desde = null; } else { var d = new Date(v + 'T00:00:00'); S.desde = isNaN(d.getTime()) ? null : d.getTime(); }
+    if (S.fc) correr(false);
   }
   function recalcLocal() {
     S.res = calcular(S.fc, BOM, S.prod, leerMapeo(), { descBottom: S.desc });
@@ -409,6 +448,7 @@
       msg(t('leyendo'), 'warn');
       await refrescarIMS(); // inventario IMS al momento (el Bottom y el Pulp Tray cambian cuando se da entrada a un pallet)
       await traerProducido(forzar);
+      var dd = $('ptDesde'); if (dd) dd.value = fechaISO(new Date(desdeMs()));
       recalcLocal();
       var b = $('ptNombre'); if (b) b.innerHTML = esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>';
     } catch (e) { msg(t('error') + (e && e.message ? e.message : e), 'err'); }
@@ -423,7 +463,7 @@
         var fc = leerForecast(wb);
         if (!fc) { msg(t('formato'), 'err'); return; }
         if (!fc.filas.length) { msg(t('sinDatos'), 'err'); return; }
-        S.fc = fc; S.nombre = f.name; inp.value = '';
+        S.fc = fc; S.nombre = f.name; S.desde = null; inp.value = '';
         correr(false);
       } catch (e) { msg(t('error') + (e && e.message ? e.message : e), 'err'); }
     };
@@ -537,7 +577,7 @@
   }
 
   window.ptIdioma = idioma; window.ptArchivo = archivo; window.ptRecalcular = function () { correr(true); };
-  window.ptAsignar = asignar; window.ptToggleDesc = toggleDesc; window.ptExcel = excel;
+  window.ptAsignar = asignar; window.ptToggleDesc = toggleDesc; window.ptDesde = cambiarDesde; window.ptExcel = excel;
   window.__ptCore = { leerForecast: leerForecast, calcular: calcular, margen: margen }; // para pruebas
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ponerPestana); else ponerPestana();
 })();

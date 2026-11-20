@@ -325,11 +325,11 @@
     var cont = $('ptRes'); if (!cont) return;
     if (!S.res) { cont.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text2)">' + esc(t('vacio')) + '</div>'; return; }
     var R = S.res, h = '';
-    var tReq = 0, tInv = 0, tFalta = 0, tPed = 0;
-    R.grupos.forEach(function (g) { tReq += g.totNet; tInv += g.inv; tFalta += g.falta; tPed += g.pedirSug; });
+    var tReq = 0, tInv = 0, tFalta = 0;
+    R.grupos.forEach(function (g) { tReq += g.totNet; tInv += g.inv; tFalta += g.falta; });
     h += '<div style="display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:.8rem">' +
       card(t('cReq'), tReq, t('cReqS'), '#4da6ff') + card(t('cInv'), tInv, '', '#00e676') +
-      card(t('cFalta'), tFalta, t('cFaltaS'), tFalta > 0 ? '#ff4444' : '#00e676') + card(t('cPedir'), tPed, t('cPedirS'), '#FFBA00') + '</div>';
+      card(t('cFalta'), tFalta, t('cFaltaS'), tFalta > 0 ? '#ff4444' : '#00e676') + '</div>';
     h += '<div style="font-size:11px;color:var(--text2);margin-bottom:.6rem">' + esc(t('resumen')(R.items.length)) + '</div>';
     var sob = Object.keys(R.sobra); if (sob.length) h += '<div style="font-size:11px;color:var(--text2);margin-bottom:.6rem">' + esc(t('sobra')(sob.map(function (k) { return k + ' ' + fmt(R.sobra[k]); }).join(', '))) + '</div>';
 
@@ -495,9 +495,9 @@
     var numFmt = function (ws) { Object.keys(ws).forEach(function (k) { if (k[0] !== '!' && ws[k].t === 'n') ws[k].z = '#,##0'; }); };
     var cw = function (ws, w) { ws['!cols'] = w.map(function (x) { return { wch: x }; }); };
     // Resumen
-    var a1 = [['Pulp Tray PN', 'Description', 'Models', 'Forecast', 'Dallas SEA O/H', 'Produced', 'Bottom built', 'Required', 'IMS P4 Inventory', 'Short', 'Suggested order (with margin)']];
-    R.grupos.forEach(function (g) { a1.push([g.pn, g.desc, g.modelos.join(', '), g.totFc, g.totSea, g.totProd, g.totBot, g.totNet, g.inv, g.falta, g.pedirSug]); });
-    var w1 = XLSX.utils.aoa_to_sheet(a1); head(w1, 11); numFmt(w1); cw(w1, [18, 28, 40, 12, 12, 12, 14, 12, 16, 12, 18]); XLSX.utils.book_append_sheet(wb, w1, 'Summary');
+    var a1 = [['Pulp Tray PN', 'Description', 'Models', 'Forecast', 'Dallas SEA O/H', 'Produced', 'Bottom built', 'Required', 'IMS P4 Inventory', 'Short']];
+    R.grupos.forEach(function (g) { a1.push([g.pn, g.desc, g.modelos.join(', '), g.totFc, g.totSea, g.totProd, g.totBot, g.totNet, g.inv, g.falta]); });
+    var w1 = XLSX.utils.aoa_to_sheet(a1); head(w1, 10); numFmt(w1); cw(w1, [18, 28, 40, 12, 12, 12, 14, 12, 16, 12]); XLSX.utils.book_append_sheet(wb, w1, 'Summary');
     // Estilos para separar cada código (Pulp Tray PN) en bloques
     var BORDE = { style: 'medium', color: { rgb: '000000' } };
     var estiloFila = function (ws, r, nc, st) { for (var c = 0; c < nc; c++) { var a = XLSX.utils.encode_cell({ r: r, c: c }); if (!ws[a]) ws[a] = { t: 's', v: '' }; ws[a].s = st; } };

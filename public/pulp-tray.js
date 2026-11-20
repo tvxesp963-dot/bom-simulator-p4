@@ -25,11 +25,11 @@
       rFc: 'Forecast (pzas de modelo)', rProd: '(−) Ya producido', rBot: '(−) Bottom ya hecho', rNet: 'Pulp Tray requerido', rSaldo: 'Saldo con inventario', rPedir: 'Pedir esta semana', total: 'Total',
       inv: 'Inventario', usadoEn: 'Se usa en', semana: 'S',
       ok: '✓ Alcanza', falta: '✗ Falta',
-      sinBomT: '⚠ Códigos del Forecast que NO se encontraron en el BOM cargado',
-      sinBomA: 'Elige a qué modelo del BOM corresponde cada uno (se recuerda en este navegador). Mientras no lo elijas, NO se cuentan.',
+      sinBomT: function (n) { return 'ℹ ' + n + ' códigos del Forecast no están en el BOM cargado (no se cuentan) — ver'; },
+      sinBomA: 'Si alguno sí lleva Pulp Tray, elige a qué modelo del BOM corresponde (se recuerda en este navegador). Mientras no lo elijas, NO se cuenta.',
       elige: '— elegir modelo —', sinPulpT: 'ℹ Modelos sin Pulp Tray en su BOM (no se cuentan)', detalleT: 'Ver detalle por modelo',
       cDet: ['Código (Forecast)', 'Descripción', 'Modelo en BOM', 'Pulp Tray', 'Forecast', 'Producido', 'Bottom hecho', 'Requerido', 'Bottom en IMS'],
-      resumen: function (a, b, c, d) { return 'Forecast leído: ' + a + ' códigos con demanda · ' + b + ' con Pulp Tray · ' + c + ' sin Pulp Tray · ' + d + ' sin encontrar en el BOM'; },
+      resumen: function (n) { return 'Solo modelos que llevan Pulp Tray según el BOM: ' + n + ' códigos del Forecast'; },
       ignorados: function (n) { return n + ' renglones que no son GH90 (ej. Cross Pad) se omitieron.'; },
       sobra: function (s) { return 'Producido mayor al Forecast (sobra): ' + s; },
       prodErr: '⚠ No se pudo leer el Producido de ShipQR: el cálculo salió SIN restar lo producido.',
@@ -49,11 +49,11 @@
       rFc: 'Forecast (model units)', rProd: '(−) Already produced', rBot: '(−) Bottom already built', rNet: 'Pulp Tray required', rSaldo: 'Balance with inventory', rPedir: 'Order this week', total: 'Total',
       inv: 'Inventory', usadoEn: 'Used in', semana: 'W',
       ok: '✓ Enough', falta: '✗ Short',
-      sinBomT: '⚠ Forecast codes NOT found in the loaded BOM',
-      sinBomA: 'Pick which BOM model each one belongs to (remembered in this browser). Until you pick, they are NOT counted.',
+      sinBomT: function (n) { return 'ℹ ' + n + ' Forecast codes are not in the loaded BOM (not counted) — view'; },
+      sinBomA: 'If one of them does carry a Pulp Tray, pick its BOM model (remembered in this browser). Until you pick, it is NOT counted.',
       elige: '— pick model —', sinPulpT: 'ℹ Models without Pulp Tray in their BOM (not counted)', detalleT: 'See detail by model',
       cDet: ['Code (Forecast)', 'Description', 'BOM model', 'Pulp Tray', 'Forecast', 'Produced', 'Bottom built', 'Required', 'Bottom in IMS'],
-      resumen: function (a, b, c, d) { return 'Forecast read: ' + a + ' codes with demand · ' + b + ' with Pulp Tray · ' + c + ' without Pulp Tray · ' + d + ' not found in BOM'; },
+      resumen: function (n) { return 'Only models that carry a Pulp Tray per the BOM: ' + n + ' Forecast codes'; },
       ignorados: function (n) { return n + ' rows that are not GH90 (e.g. Cross Pad) were skipped.'; },
       sobra: function (s) { return 'Produced above Forecast (surplus): ' + s; },
       prodErr: '⚠ Could not read Produced from ShipQR: the result was calculated WITHOUT subtracting produced units.',
@@ -73,11 +73,11 @@
       rFc: 'Forecast (모델 수량)', rProd: '(−) 이미 생산', rBot: '(−) 이미 만든 Bottom', rNet: '필요 Pulp Tray', rSaldo: '재고 반영 잔량', rPedir: '이번 주 발주', total: '합계',
       inv: '재고', usadoEn: '사용 모델', semana: 'W',
       ok: '✓ 충분', falta: '✗ 부족',
-      sinBomT: '⚠ 현재 BOM에서 찾지 못한 Forecast 코드',
-      sinBomA: '각 코드가 어느 BOM 모델인지 선택하세요 (이 브라우저에 저장됨). 선택하기 전까지는 계산에 포함되지 않습니다.',
+      sinBomT: function (n) { return 'ℹ 현재 BOM에 없는 Forecast 코드 ' + n + '개 (계산 제외) — 보기'; },
+      sinBomA: 'Pulp Tray를 사용하는 코드가 있으면 해당 BOM 모델을 선택하세요 (이 브라우저에 저장됨). 선택 전에는 계산에 포함되지 않습니다.',
       elige: '— 모델 선택 —', sinPulpT: 'ℹ BOM에 Pulp Tray가 없는 모델 (계산 제외)', detalleT: '모델별 상세 보기',
       cDet: ['코드 (Forecast)', '설명', 'BOM 모델', 'Pulp Tray', 'Forecast', '생산 완료', '만든 Bottom', '필요', 'IMS Bottom'],
-      resumen: function (a, b, c, d) { return 'Forecast 읽음: 수요 있는 코드 ' + a + '개 · Pulp Tray 있음 ' + b + '개 · Pulp Tray 없음 ' + c + '개 · BOM에서 못 찾음 ' + d + '개'; },
+      resumen: function (n) { return 'BOM 기준 Pulp Tray를 사용하는 모델만: Forecast 코드 '+ n + '개'; },
       ignorados: function (n) { return 'GH90이 아닌 ' + n + '개 행(예: Cross Pad)은 제외했습니다.'; },
       sobra: function (s) { return 'Forecast보다 많이 생산됨(초과): ' + s; },
       prodErr: '⚠ ShipQR 생산량을 읽지 못해 생산 완료 수량을 차감하지 않고 계산했습니다.',
@@ -323,8 +323,7 @@
     h += '<div style="display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:.8rem">' +
       card(t('cReq'), tReq, t('cReqS'), '#4da6ff') + card(t('cInv'), tInv, '', '#00e676') +
       card(t('cFalta'), tFalta, t('cFaltaS'), tFalta > 0 ? '#ff4444' : '#00e676') + card(t('cPedir'), tPed, t('cPedirS'), '#FFBA00') + '</div>';
-    h += '<div style="font-size:11px;color:var(--text2);margin-bottom:.6rem">' + esc(t('resumen')(R.items.length + R.sinPulp.length + R.sinModelo.length, R.items.length, R.sinPulp.length, R.sinModelo.length)) +
-      (S.fc.omitidos ? ' · ' + esc(t('ignorados')(S.fc.omitidos)) : '') + '</div>';
+    h += '<div style="font-size:11px;color:var(--text2);margin-bottom:.6rem">' + esc(t('resumen')(R.items.length)) + '</div>';
     var sob = Object.keys(R.sobra); if (sob.length) h += '<div style="font-size:11px;color:var(--text2);margin-bottom:.6rem">' + esc(t('sobra')(sob.map(function (k) { return k + ' ' + fmt(R.sobra[k]); }).join(', '))) + '</div>';
 
     // semanas con demanda
@@ -356,18 +355,14 @@
     // no encontrados en el BOM
     if (R.sinModelo.length) {
       var modelos = []; BOM.forEach(function (r) { if (r.sm && modelos.indexOf(r.sm) < 0) modelos.push(r.sm); }); modelos.sort();
-      h += '<div style="margin-top:1rem;padding:.6rem .8rem;border-radius:8px;background:rgba(255,186,0,.1);border:1px solid #FFBA00"><b style="color:#FFBA00">' + esc(t('sinBomT')) + '</b>' +
-        '<div style="font-size:11px;color:var(--text2);margin:.2rem 0 .5rem">' + esc(t('sinBomA')) + '</div>' +
+      h += '<details style="margin-top:1rem;padding:.4rem .8rem;border-radius:8px;border:1px solid var(--border,#334)"><summary style="cursor:pointer;color:var(--text2);font-size:12px">' + esc(t('sinBomT')(R.sinModelo.length)) + '</summary>' +
+        '<div style="font-size:11px;color:var(--text2);margin:.4rem 0 .5rem">' + esc(t('sinBomA')) + '</div>' +
         R.sinModelo.map(function (x) {
           var cands = x.cand.length ? x.cand : [];
           var opts = '<option value="">' + esc(t('elige')) + '</option>' + cands.concat(modelos.filter(function (m) { return cands.indexOf(m) < 0; })).map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join('');
           return '<div style="display:flex;gap:.6rem;align-items:center;margin:3px 0;flex-wrap:wrap"><b>' + esc(x.code) + '</b><span style="color:var(--text2);flex:1;min-width:180px">' + esc(x.desc) + '</span><span>' + fmt(x.tot) + '</span>' +
             '<select onchange="ptAsignar(\'' + esc(x.code) + '\',this.value)" style="background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px">' + opts + '</select></div>';
-        }).join('') + '</div>';
-    }
-    if (R.sinPulp.length) {
-      h += '<div style="margin-top:.8rem;padding:.5rem .8rem;border-radius:8px;border:1px solid var(--border,#334);color:var(--text2);font-size:12px"><b>' + esc(t('sinPulpT')) + '</b><br>' +
-        R.sinPulp.map(function (x) { return esc(x.code) + ' · ' + esc(x.sm) + ' · ' + fmt(x.tot); }).join('<br>') + '</div>';
+        }).join('') + '</details>';
     }
     // detalle por modelo
     var c = T[lang()].cDet;
@@ -504,10 +499,9 @@
     m3.forEach(function (m) { estiloFila(w3, m.r, 11, m.t === 'banda' ? BANDA : SUBTOT); });
     numFmt(w3); XLSX.utils.book_append_sheet(wb, w3, 'By model');
     // Pendientes
-    if (R.sinModelo.length || R.sinPulp.length) {
+    if (R.sinModelo.length) {
       var a4 = [['Status', 'Forecast Code', 'Description', 'BOM Model', 'Forecast']];
       R.sinModelo.forEach(function (x) { a4.push(['Not found in BOM', x.code, x.desc, '', x.tot]); });
-      R.sinPulp.forEach(function (x) { a4.push(['No Pulp Tray in BOM', x.code, x.desc, x.sm, x.tot]); });
       var w4 = XLSX.utils.aoa_to_sheet(a4); head(w4, 5); numFmt(w4); cw(w4, [22, 16, 44, 22, 12]); XLSX.utils.book_append_sheet(wb, w4, 'Pending');
     }
     var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };

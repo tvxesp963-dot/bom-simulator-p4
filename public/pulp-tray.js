@@ -184,7 +184,7 @@
 
     // Producido (y Bottom hecho) se descuenta UNA vez por modelo, desde las primeras semanas
     var porSm = {}; items.forEach(function (it) { (porSm[it.sm] = porSm[it.sm] || []).push(it); });
-    var sobra = {};
+    var sobra = {}, botDisp = {};
     Object.keys(porSm).forEach(function (sm) {
       var g = porSm[sm];
       g.forEach(function (it) { if (it.oh > 0) consumir([it], it.oh, 'sea'); }); // 1º: inventario Dallas (SEA O/H) del propio código
@@ -193,7 +193,11 @@
       if (pr > usado) sobra[sm] = pr - usado;
       var b = buscarBottom(bom, sm);
       g.forEach(function (it) { it.botPn = b.row ? String(b.row.pn).trim() : ''; it.botInv = b.row ? Number(b.row.inv) || 0 : 0; it.botMsg = b.why; });
-      if (opts.descBottom && b.row) consumir(g, Number(b.row.inv) || 0, 'bot');
+      if (opts.descBottom && b.row) { // el mismo Bottom (mismo PN) puede servir a varios modelos: su inventario se usa UNA sola vez
+        var kb = norm(String(b.row.pn).trim());
+        if (botDisp[kb] === undefined) botDisp[kb] = Number(b.row.inv) || 0;
+        botDisp[kb] -= consumir(g, botDisp[kb], 'bot');
+      }
     });
 
     // Agrupar por Pulp Tray (el inventario se resta UNA vez por número de parte)

@@ -450,6 +450,28 @@
     var nW = R.semanas.length, nc2 = 4 + nW + 1;
     var CODIGO = { border: { bottom: { style: 'thin', color: { rgb: '888888' } } } };
     var CODIGO_RES = { font: { bold: true }, fill: { fgColor: { rgb: 'EEF4FB' } }, border: { bottom: { style: 'thin', color: { rgb: '888888' } } } };
+    var ncN = 3 + nW;
+    // Semanal: un bloque por Pulp Tray PN (banda azul con el código, sus filas y una línea gruesa al cerrar)
+    var aN = [['Pulp Tray PN', 'Item'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
+    var marcasN = []; // {r, tipo}
+    R.grupos.forEach(function (g) {
+      var vacio = []; for (var k = 0; k < nW + 1; k++) vacio.push('');
+      aN.push([g.pn, g.desc + '  |  ' + g.modelos.join(', ')].concat(vacio)); marcasN.push({ r: aN.length - 1, t: 'banda' });
+      var filas = [['Forecast', g.fc, g.totFc, ''], ['(-) Produced', g.prod, g.totProd, ''], ['(-) Bottom built', g.bot, g.totBot, ''], ['Required', g.net, g.totNet, 'resalte'], ['Balance with inventory', g.saldo, null, ''], ['Order this week', g.pedir, g.falta, 'resalte']]
+        .filter(function (r) { return !(r[0] === '(-) Bottom built' && !S.desc); });
+      filas.forEach(function (r, idx) {
+        aN.push([g.pn, r[0]].concat(r[1], [r[2] == null ? '' : r[2]]));
+        marcasN.push({ r: aN.length - 1, t: idx === filas.length - 1 ? 'cierre' : r[3] });
+      });
+      aN.push([]); // renglón en blanco entre códigos
+    });
+    var wN = XLSX.utils.aoa_to_sheet(aN); numFmt(wN); head(wN, ncN); cw(wN, [18, 40].concat(R.semanas.map(function () { return 10; }), [12]));
+    marcasN.forEach(function (m) {
+      if (m.t === 'banda') estiloFila(wN, m.r, ncN, BANDA);
+      else if (m.t === 'resalte') estiloFila(wN, m.r, ncN, RESALTE);
+      else if (m.t === 'cierre') estiloFila(wN, m.r, ncN, { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } }, border: { bottom: BORDE } });
+    });
+    numFmt(wN); XLSX.utils.book_append_sheet(wb, wN, 'By number');
     // Weekly: un bloque por Pulp Tray PN. Dentro, cada código GH90 del Forecast con sus propias semanas; al final el total del Pulp Tray.
     var a2 = [['Pulp Tray PN', 'Forecast Code (GH90)', 'BOM Model', 'Item'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
     var marcas = [];
@@ -479,7 +501,7 @@
       else if (m.t === 'codigoFin') estiloFila(w2, m.r, nc2, CODIGO_RES);
       else if (m.t === 'cierre') estiloFila(w2, m.r, nc2, { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } }, border: { bottom: BORDE } });
     });
-    numFmt(w2); XLSX.utils.book_append_sheet(wb, w2, 'By number');
+    numFmt(w2); XLSX.utils.book_append_sheet(wb, w2, 'By model');
     // By model: agrupado por Pulp Tray PN, con subtotal y el Bottom (GH96) de cada modelo
     var a3 = [['Forecast Code', 'Description', 'BOM Model', 'Pulp Tray PN', 'Forecast', 'Produced', 'Bottom built', 'Required', 'Bottom PN (IMS)', 'Bottom in IMS', 'Bottom status']];
     var m3 = [];
@@ -497,7 +519,7 @@
     });
     var w3 = XLSX.utils.aoa_to_sheet(a3); numFmt(w3); head(w3, 11); cw(w3, [16, 44, 22, 18, 12, 12, 12, 12, 18, 14, 40]);
     m3.forEach(function (m) { estiloFila(w3, m.r, 11, m.t === 'banda' ? BANDA : SUBTOT); });
-    numFmt(w3); XLSX.utils.book_append_sheet(wb, w3, 'By model');
+    numFmt(w3); XLSX.utils.book_append_sheet(wb, w3, 'Model list');
     // Pendientes
     if (R.sinModelo.length) {
       var a4 = [['Status', 'Forecast Code', 'Description', 'BOM Model', 'Forecast']];

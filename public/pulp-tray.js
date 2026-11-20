@@ -479,7 +479,7 @@
       else if (m.t === 'codigoFin') estiloFila(w2, m.r, nc2, CODIGO_RES);
       else if (m.t === 'cierre') estiloFila(w2, m.r, nc2, { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } }, border: { bottom: BORDE } });
     });
-    numFmt(w2); XLSX.utils.book_append_sheet(wb, w2, 'Weekly');
+    numFmt(w2); XLSX.utils.book_append_sheet(wb, w2, 'By number');
     // By model: agrupado por Pulp Tray PN, con subtotal y el Bottom (GH96) de cada modelo
     var a3 = [['Forecast Code', 'Description', 'BOM Model', 'Pulp Tray PN', 'Forecast', 'Produced', 'Bottom built', 'Required', 'Bottom PN (IMS)', 'Bottom in IMS', 'Bottom status']];
     var m3 = [];

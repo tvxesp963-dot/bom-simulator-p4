@@ -19,8 +19,8 @@
       cargar: '📂 Cargar Forecast (Excel)', recalc: '🔄 Recalcular con datos actuales', excel: '⬇ Excel', cerrar: '✕ Cerrar',
       archivo: 'Forecast', ims: 'Inventario IMS P4', nunca: 'sin sincronizar — presiona "Sync IMS" arriba y luego Recalcular',
       hace: function (m) { return 'actualizado hace ' + m + ' min'; },
-      descBottom: 'Restar también el Bottom (Lower Box) ya fabricado en IMS',
-      descBottomAyuda: 'El Bottom terminado ya trae su Pulp Tray adentro. Actívalo si quieres no contar esas piezas.',
+      descBottom: 'Restar el Bottom (Lower Box) ya hecho en IMS — igual que el Simulador',
+      descBottomAyuda: 'El Bottom terminado ya trae su Pulp Tray adentro, por eso no se vuelve a pedir. Desmárcalo para no restarlo.',
       cReq: 'Pulp Tray requerido', cReqS: 'Forecast − producido', cInv: 'Inventario IMS P4', cFalta: 'Falta', cFaltaS: 'Requerido − inventario', cPedir: 'Pedir sugerido', cPedirS: 'con margen (+10% / +1% si pasa de 100,000)',
       rFc: 'Forecast (pzas de modelo)', rProd: '(−) Ya producido', rBot: '(−) Bottom ya hecho', rNet: 'Pulp Tray requerido', rSaldo: 'Saldo con inventario', rPedir: 'Pedir esta semana', total: 'Total',
       inv: 'Inventario', usadoEn: 'Se usa en', semana: 'S',
@@ -28,7 +28,7 @@
       sinBomT: '⚠ Códigos del Forecast que NO se encontraron en el BOM cargado',
       sinBomA: 'Elige a qué modelo del BOM corresponde cada uno (se recuerda en este navegador). Mientras no lo elijas, NO se cuentan.',
       elige: '— elegir modelo —', sinPulpT: 'ℹ Modelos sin Pulp Tray en su BOM (no se cuentan)', detalleT: 'Ver detalle por modelo',
-      cDet: ['Código (Forecast)', 'Descripción', 'Modelo en BOM', 'Pulp Tray', 'Forecast', 'Producido', 'Bottom hecho', 'Requerido'],
+      cDet: ['Código (Forecast)', 'Descripción', 'Modelo en BOM', 'Pulp Tray', 'Forecast', 'Producido', 'Bottom hecho', 'Requerido', 'Bottom en IMS'],
       resumen: function (a, b, c, d) { return 'Forecast leído: ' + a + ' códigos con demanda · ' + b + ' con Pulp Tray · ' + c + ' sin Pulp Tray · ' + d + ' sin encontrar en el BOM'; },
       ignorados: function (n) { return n + ' renglones que no son GH90 (ej. Cross Pad) se omitieron.'; },
       sobra: function (s) { return 'Producido mayor al Forecast (sobra): ' + s; },
@@ -43,8 +43,8 @@
       cargar: '📂 Load Forecast (Excel)', recalc: '🔄 Recalculate with current data', excel: '⬇ Excel', cerrar: '✕ Close',
       archivo: 'Forecast', ims: 'IMS P4 inventory', nunca: 'not synced — press "Sync IMS" above, then Recalculate',
       hace: function (m) { return 'updated ' + m + ' min ago'; },
-      descBottom: 'Also subtract Bottom (Lower Box) already built in IMS',
-      descBottomAyuda: 'A finished Bottom already contains its Pulp Tray. Turn it on if you do not want to count those pieces.',
+      descBottom: 'Subtract the Bottom (Lower Box) already built in IMS — same as the Simulator',
+      descBottomAyuda: 'A finished Bottom already contains its Pulp Tray, so it is not ordered again. Uncheck it to not subtract it.',
       cReq: 'Pulp Tray required', cReqS: 'Forecast − produced', cInv: 'IMS P4 inventory', cFalta: 'Short', cFaltaS: 'Required − inventory', cPedir: 'Suggested order', cPedirS: 'with margin (+10% / +1% above 100,000)',
       rFc: 'Forecast (model units)', rProd: '(−) Already produced', rBot: '(−) Bottom already built', rNet: 'Pulp Tray required', rSaldo: 'Balance with inventory', rPedir: 'Order this week', total: 'Total',
       inv: 'Inventory', usadoEn: 'Used in', semana: 'W',
@@ -52,7 +52,7 @@
       sinBomT: '⚠ Forecast codes NOT found in the loaded BOM',
       sinBomA: 'Pick which BOM model each one belongs to (remembered in this browser). Until you pick, they are NOT counted.',
       elige: '— pick model —', sinPulpT: 'ℹ Models without Pulp Tray in their BOM (not counted)', detalleT: 'See detail by model',
-      cDet: ['Code (Forecast)', 'Description', 'BOM model', 'Pulp Tray', 'Forecast', 'Produced', 'Bottom built', 'Required'],
+      cDet: ['Code (Forecast)', 'Description', 'BOM model', 'Pulp Tray', 'Forecast', 'Produced', 'Bottom built', 'Required', 'Bottom in IMS'],
       resumen: function (a, b, c, d) { return 'Forecast read: ' + a + ' codes with demand · ' + b + ' with Pulp Tray · ' + c + ' without Pulp Tray · ' + d + ' not found in BOM'; },
       ignorados: function (n) { return n + ' rows that are not GH90 (e.g. Cross Pad) were skipped.'; },
       sobra: function (s) { return 'Produced above Forecast (surplus): ' + s; },
@@ -67,8 +67,8 @@
       cargar: '📂 Forecast 불러오기 (Excel)', recalc: '🔄 최신 데이터로 다시 계산', excel: '⬇ Excel', cerrar: '✕ 닫기',
       archivo: 'Forecast', ims: 'IMS P4 재고', nunca: '동기화 안 됨 — 위의 "Sync IMS"를 누른 후 다시 계산하세요',
       hace: function (m) { return m + '분 전 업데이트'; },
-      descBottom: 'IMS에 이미 만들어진 Bottom(Lower Box)도 차감',
-      descBottomAyuda: '완성된 Bottom에는 이미 Pulp Tray가 들어 있습니다. 해당 수량을 제외하려면 켜세요.',
+      descBottom: 'IMS에 이미 만들어진 Bottom(Lower Box) 차감 — 시뮬레이터와 동일',
+      descBottomAyuda: '완성된 Bottom에는 이미 Pulp Tray가 들어 있어 다시 발주하지 않습니다. 차감하지 않으려면 체크를 해제하세요.',
       cReq: '필요 Pulp Tray', cReqS: 'Forecast − 생산 완료', cInv: 'IMS P4 재고', cFalta: '부족', cFaltaS: '필요 − 재고', cPedir: '권장 발주', cPedirS: '여유 포함 (+10% / 100,000 초과 시 +1%)',
       rFc: 'Forecast (모델 수량)', rProd: '(−) 이미 생산', rBot: '(−) 이미 만든 Bottom', rNet: '필요 Pulp Tray', rSaldo: '재고 반영 잔량', rPedir: '이번 주 발주', total: '합계',
       inv: '재고', usadoEn: '사용 모델', semana: 'W',
@@ -76,7 +76,7 @@
       sinBomT: '⚠ 현재 BOM에서 찾지 못한 Forecast 코드',
       sinBomA: '각 코드가 어느 BOM 모델인지 선택하세요 (이 브라우저에 저장됨). 선택하기 전까지는 계산에 포함되지 않습니다.',
       elige: '— 모델 선택 —', sinPulpT: 'ℹ BOM에 Pulp Tray가 없는 모델 (계산 제외)', detalleT: '모델별 상세 보기',
-      cDet: ['코드 (Forecast)', '설명', 'BOM 모델', 'Pulp Tray', 'Forecast', '생산 완료', '만든 Bottom', '필요'],
+      cDet: ['코드 (Forecast)', '설명', 'BOM 모델', 'Pulp Tray', 'Forecast', '생산 완료', '만든 Bottom', '필요', 'IMS Bottom'],
       resumen: function (a, b, c, d) { return 'Forecast 읽음: 수요 있는 코드 ' + a + '개 · Pulp Tray 있음 ' + b + '개 · Pulp Tray 없음 ' + c + '개 · BOM에서 못 찾음 ' + d + '개'; },
       ignorados: function (n) { return 'GH90이 아닌 ' + n + '개 행(예: Cross Pad)은 제외했습니다.'; },
       sobra: function (s) { return 'Forecast보다 많이 생산됨(초과): ' + s; },
@@ -98,7 +98,7 @@
   function leerMapeo() { try { return JSON.parse(localStorage.getItem(MAPEO_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function guardarMapeo(m) { try { localStorage.setItem(MAPEO_KEY, JSON.stringify(m)); } catch (e) {} }
 
-  var S = { fc: null, nombre: '', prod: null, prodOk: true, desc: false, res: null, ocupado: false };
+  var S = { fc: null, nombre: '', prod: null, prodOk: true, desc: true, res: null, ocupado: false };
 
   // ============================ LECTURA DEL FORECAST ============================
   // Formato esperado: renglón con "Row Labels" y semanas (47,48,...,53,1,2,...) en columnas; códigos GH90-xxxxx en la 1a columna.
@@ -151,13 +151,19 @@
   function filaPulp(bom, sm) {
     return bom.find(function (r) { var d = norm(r.desc); return r.sm === sm && d.indexOf('PULP') >= 0 && d.indexOf('TRAY') >= 0; });
   }
-  // Bottom terminado del modelo: solo si hay UN renglón claro (no Sheet, no Chip Board, no Pulp). Si hay duda → null (no descuenta).
-  function filaBottom(bom, sm) {
+  // Bottom terminado del modelo. 1) El renglón con código GH96 del modelo (así lo maneja el simulador);
+  // 2) si no hay GH96, un único renglón "Lower Box + Bottom" (sin Sheet / Chip Board / Pulp Tray).
+  // Si hay duda (varios o ninguno) NO descuenta y lo avisa en el reporte.
+  function buscarBottom(bom, sm) {
+    var g96 = bom.filter(function (r) { return r.sm === sm && /^GH96/i.test(String(r.pn || '').trim()) && norm(r.desc).indexOf('TOP') < 0; });
+    if (g96.length === 1) return { row: g96[0], why: '' };
+    if (g96.length > 1) return { row: null, why: 'Several GH96 rows' };
     var c = bom.filter(function (r) {
       var d = norm(r.desc);
       return r.sm === sm && d.indexOf('LOWER BOX') >= 0 && d.indexOf('BOTTOM') >= 0 && d.indexOf('SHEET') < 0 && d.indexOf('CHIP') < 0 && d.indexOf('PULP') < 0;
     });
-    return c.length === 1 ? c[0] : null;
+    if (c.length === 1) return { row: c[0], why: '' };
+    return { row: null, why: c.length ? 'Several Lower Box rows' : 'Bottom not found in BOM' };
   }
 
   function calcular(fc, bom, produc, mapeo, opts) {
@@ -175,7 +181,7 @@
       if (!p) { sinPulp.push({ code: f.code, desc: f.desc, sm: sm, tot: tot }); return; }
       var z = function () { var a = []; for (var i = 0; i < nW; i++) a.push(0); return a; };
       items.push({ code: f.code, desc: f.desc, sm: sm, pn: String(p.pn).trim(), pdesc: p.desc || '', pinv: Number(p.inv) || 0,
-        fcw: f.q.slice(), net: f.q.slice(), prod: z(), prodT: 0, bot: z(), botT: 0, tot: tot });
+        fcw: f.q.slice(), net: f.q.slice(), prod: z(), prodT: 0, bot: z(), botT: 0, botPn: '', botInv: 0, botMsg: '', tot: tot });
     });
 
     // Producido (y Bottom hecho) se descuenta UNA vez por modelo, desde las primeras semanas
@@ -186,11 +192,9 @@
       var pr = produc[sm] ? Number(produc[sm].total) || 0 : 0;
       var usado = consumir(g, pr, 'prod');
       if (pr > usado) sobra[sm] = pr - usado;
-      if (opts.descBottom) {
-        var b = filaBottom(bom, sm);
-        g.forEach(function (it) { it.botInv = b ? Number(b.inv) || 0 : 0; });
-        if (b) consumir(g, Number(b.inv) || 0, 'bot');
-      }
+      var b = buscarBottom(bom, sm);
+      g.forEach(function (it) { it.botPn = b.row ? String(b.row.pn).trim() : ''; it.botInv = b.row ? Number(b.row.inv) || 0 : 0; it.botMsg = b.why; });
+      if (opts.descBottom && b.row) consumir(g, Number(b.row.inv) || 0, 'bot');
     });
 
     // Agrupar por Pulp Tray (el inventario se resta UNA vez por número de parte)
@@ -284,7 +288,7 @@
       '<span id="ptNombre" style="color:var(--text2)">' + (S.nombre ? esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>' : '') + '</span></div>' +
       '<label style="display:flex;gap:6px;align-items:center;margin:.2rem 0" title="' + esc(t('descBottomAyuda')) + '"><input type="checkbox" id="ptDesc" onchange="ptToggleDesc(this.checked)"' + (S.desc ? ' checked' : '') + '> ' + esc(t('descBottom')) + '</label>' +
       '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 22px">' + esc(t('descBottomAyuda')) + '</div>' +
-      '<div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">' + esc(t('ims')) + ': ' + edadIMS() + '</div>' +
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">' + esc(t('ims')) + ': <span id="ptEdad">' + edadIMS() + '</span></div>' +
       '<div id="ptMsg" style="display:none"></div><div id="ptRes"></div>';
     pintar();
   }
@@ -372,7 +376,8 @@
       R.items.map(function (it) {
         var net = it.net.reduce(function (a, b) { return a + b; }, 0);
         return '<tr><td style="' + TD + ';text-align:left">' + esc(it.code) + '</td><td style="' + TD + ';text-align:left;color:var(--text2)">' + esc(it.desc) + '</td><td style="' + TD + ';text-align:left">' + esc(it.sm) + '</td><td style="' + TD + ';text-align:left">' + esc(it.pn) + '</td>' +
-          '<td style="' + TD + '">' + fmt(it.tot) + '</td><td style="' + TD + '">' + fmt(it.prodT) + '</td><td style="' + TD + '">' + fmt(it.botT) + '</td><td style="' + TD + ';font-weight:700">' + fmt(net) + '</td></tr>';
+          '<td style="' + TD + '">' + fmt(it.tot) + '</td><td style="' + TD + '">' + fmt(it.prodT) + '</td><td style="' + TD + '">' + fmt(it.botT) + '</td><td style="' + TD + ';font-weight:700">' + fmt(net) + '</td>' +
+          '<td style="' + TD + (it.botPn ? '' : ';color:#FFBA00') + '" title="' + esc(it.botPn || it.botMsg) + '">' + (it.botPn ? fmt(it.botInv) + ' <span style="color:var(--text2);font-size:10px">' + esc(it.botPn) + '</span>' : '?') + '</td></tr>';
       }).join('') + '</tbody></table></div></details>';
     cont.innerHTML = h;
   }
@@ -391,12 +396,17 @@
     msg(S.prodOk ? '' : t('prodErr'), 'warn');
     pintar();
   }
+  async function refrescarIMS() {
+    try { if (typeof sincIMSFresco === 'function') await sincIMSFresco(true); } catch (e) {}
+    var el = $('ptEdad'); if (el) el.innerHTML = edadIMS();
+  }
   async function correr(forzar) {
     if (S.ocupado) return; S.ocupado = true;
     try {
       if (typeof BOM === 'undefined' || !BOM.length) { msg(t('sinBom'), 'err'); return; }
       if (!S.fc) { msg(t('vacio'), 'warn'); return; }
       msg(t('leyendo'), 'warn');
+      await refrescarIMS(); // inventario IMS al momento (el Bottom y el Pulp Tray cambian cuando se da entrada a un pallet)
       await traerProducido(forzar);
       recalcLocal();
       var b = $('ptNombre'); if (b) b.innerHTML = esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>';
@@ -442,44 +452,56 @@
     var RESALTE = { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } } };
     var CIERRE = { border: { bottom: BORDE } };
     var SUBTOT = { font: { bold: true }, fill: { fgColor: { rgb: 'EDEDED' } }, border: { top: { style: 'thin', color: { rgb: '000000' } }, bottom: BORDE } };
-    var nW = R.semanas.length, nc2 = 3 + nW;
-    // Semanal: un bloque por Pulp Tray PN (banda azul con el código, sus filas y una línea gruesa al cerrar)
-    var a2 = [['Pulp Tray PN', 'Item'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
-    var marcas = []; // {r, tipo}
+    var nW = R.semanas.length, nc2 = 4 + nW + 1;
+    var CODIGO = { border: { bottom: { style: 'thin', color: { rgb: '888888' } } } };
+    var CODIGO_RES = { font: { bold: true }, fill: { fgColor: { rgb: 'EEF4FB' } }, border: { bottom: { style: 'thin', color: { rgb: '888888' } } } };
+    // Weekly: un bloque por Pulp Tray PN. Dentro, cada código GH90 del Forecast con sus propias semanas; al final el total del Pulp Tray.
+    var a2 = [['Pulp Tray PN', 'Forecast Code (GH90)', 'BOM Model', 'Item'].concat(R.semanas.map(function (s) { return 'W' + s; }), ['Total'])];
+    var marcas = [];
+    var vac = function (n) { var a = []; for (var k = 0; k < n; k++) a.push(''); return a; };
+    var suma = function (a) { return a.reduce(function (x, y) { return x + y; }, 0); };
     R.grupos.forEach(function (g) {
-      var vacio = []; for (var k = 0; k < nW + 1; k++) vacio.push('');
-      a2.push([g.pn, g.desc + '  |  ' + g.modelos.join(', ')].concat(vacio)); marcas.push({ r: a2.length - 1, t: 'banda' });
-      var filas = [['Forecast', g.fc, g.totFc, ''], ['(-) Produced', g.prod, g.totProd, ''], ['(-) Bottom built', g.bot, g.totBot, ''], ['Required', g.net, g.totNet, 'resalte'], ['Balance with inventory', g.saldo, null, ''], ['Order this week', g.pedir, g.falta, 'resalte']]
-        .filter(function (r) { return !(r[0] === '(-) Bottom built' && !S.desc); });
-      filas.forEach(function (r, idx) {
-        a2.push([g.pn, r[0]].concat(r[1], [r[2] == null ? '' : r[2]]));
-        marcas.push({ r: a2.length - 1, t: idx === filas.length - 1 ? 'cierre' : r[3] });
+      a2.push([g.pn, g.desc + '   |   IMS P4 inventory: ' + fmt(g.inv)].concat(vac(nW + 3))); marcas.push({ r: a2.length - 1, t: 'banda' });
+      g.items.forEach(function (it) {
+        var lin = [['Forecast', it.fcw, it.tot, ''], ['(-) Produced', it.prod, it.prodT, ''], ['(-) Bottom built', it.bot, it.botT, ''], ['Required', it.net, suma(it.net), 'res']]
+          .filter(function (r) { return !(r[0] === '(-) Bottom built' && !S.desc); });
+        lin.forEach(function (r, idx) {
+          a2.push([g.pn, it.code, it.sm, r[0]].concat(r[1], [r[2]]));
+          marcas.push({ r: a2.length - 1, t: idx === lin.length - 1 ? 'codigoFin' : (r[3] === 'res' ? 'codigoRes' : '') });
+        });
       });
-      a2.push([]); // renglón en blanco entre códigos
+      [['TOTAL Required', g.net, g.totNet, 'res'], ['Balance with inventory', g.saldo, null, ''], ['Order this week', g.pedir, g.falta, 'res']].forEach(function (r, idx) {
+        a2.push([g.pn, 'TOTAL ' + g.pn, '', r[0]].concat(r[1], [r[2] == null ? '' : r[2]]));
+        marcas.push({ r: a2.length - 1, t: idx === 2 ? 'cierre' : (r[3] === 'res' ? 'resalte' : '') });
+      });
+      a2.push([]);
     });
-    var w2 = XLSX.utils.aoa_to_sheet(a2); numFmt(w2); head(w2, nc2); cw(w2, [18, 40].concat(R.semanas.map(function () { return 10; }), [12]));
+    var w2 = XLSX.utils.aoa_to_sheet(a2); numFmt(w2); head(w2, nc2); cw(w2, [18, 22, 24, 24].concat(R.semanas.map(function () { return 10; }), [12]));
     marcas.forEach(function (m) {
       if (m.t === 'banda') estiloFila(w2, m.r, nc2, BANDA);
       else if (m.t === 'resalte') estiloFila(w2, m.r, nc2, RESALTE);
+      else if (m.t === 'codigoRes') estiloFila(w2, m.r, nc2, { font: { bold: true }, fill: { fgColor: { rgb: 'EEF4FB' } } });
+      else if (m.t === 'codigoFin') estiloFila(w2, m.r, nc2, CODIGO_RES);
       else if (m.t === 'cierre') estiloFila(w2, m.r, nc2, { font: { bold: true }, fill: { fgColor: { rgb: 'DCE9F7' } }, border: { bottom: BORDE } });
     });
     numFmt(w2); XLSX.utils.book_append_sheet(wb, w2, 'Weekly');
-    // Por modelo: agrupado por Pulp Tray PN, con subtotal por código
-    var a3 = [['Forecast Code', 'Description', 'BOM Model', 'Pulp Tray PN', 'Forecast', 'Produced', 'Bottom built', 'Required']];
+    // By model: agrupado por Pulp Tray PN, con subtotal y el Bottom (GH96) de cada modelo
+    var a3 = [['Forecast Code', 'Description', 'BOM Model', 'Pulp Tray PN', 'Forecast', 'Produced', 'Bottom built', 'Required', 'Bottom PN (IMS)', 'Bottom in IMS', 'Bottom status']];
     var m3 = [];
     R.grupos.forEach(function (g) {
-      a3.push([g.pn, g.desc, '', '', '', '', '', '']); m3.push({ r: a3.length - 1, t: 'banda' });
+      a3.push([g.pn, g.desc].concat(vac(9))); m3.push({ r: a3.length - 1, t: 'banda' });
       var sF = 0, sP = 0, sB = 0, sN = 0;
       g.items.forEach(function (it) {
-        var net = it.net.reduce(function (a, b) { return a + b; }, 0);
-        a3.push([it.code, it.desc, it.sm, it.pn, it.tot, it.prodT, it.botT, net]);
+        var net = suma(it.net);
+        var est = !it.botPn ? ('NOT IDENTIFIED - ' + (it.botMsg || '')) : (S.desc ? 'Subtracted' : 'Found, not subtracted (switch is off)');
+        a3.push([it.code, it.desc, it.sm, it.pn, it.tot, it.prodT, it.botT, net, it.botPn, it.botPn ? it.botInv : '', est]);
         sF += it.tot; sP += it.prodT; sB += it.botT; sN += net;
       });
-      a3.push(['', 'Total ' + g.pn, '', '', sF, sP, sB, sN]); m3.push({ r: a3.length - 1, t: 'sub' });
+      a3.push(['', 'Total ' + g.pn, '', '', sF, sP, sB, sN, '', '', '']); m3.push({ r: a3.length - 1, t: 'sub' });
       a3.push([]);
     });
-    var w3 = XLSX.utils.aoa_to_sheet(a3); numFmt(w3); head(w3, 8); cw(w3, [16, 44, 22, 18, 12, 12, 12, 12]);
-    m3.forEach(function (m) { estiloFila(w3, m.r, 8, m.t === 'banda' ? BANDA : SUBTOT); });
+    var w3 = XLSX.utils.aoa_to_sheet(a3); numFmt(w3); head(w3, 11); cw(w3, [16, 44, 22, 18, 12, 12, 12, 12, 18, 14, 40]);
+    m3.forEach(function (m) { estiloFila(w3, m.r, 11, m.t === 'banda' ? BANDA : SUBTOT); });
     numFmt(w3); XLSX.utils.book_append_sheet(wb, w3, 'By model');
     // Pendientes
     if (R.sinModelo.length || R.sinPulp.length) {

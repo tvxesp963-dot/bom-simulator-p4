@@ -20,7 +20,7 @@
       archivo: 'Forecast', ims: 'Inventario IMS P4', nunca: 'sin sincronizar — presiona "Sync IMS" arriba y luego Recalcular',
       hace: function (m) { return 'actualizado hace ' + m + ' min'; },
       descBottom: 'Restar el Bottom (Lower Box) ya hecho en IMS — igual que el Simulador',
-      desde: 'Producido desde', desdeAyuda: 'Cuenta TODO lo producido en ShipQR desde esta fecha (embarcado o no). Por defecto: el lunes de la primera semana del Forecast.', descBottomAyuda: 'El Bottom terminado ya trae su Pulp Tray adentro, por eso no se vuelve a pedir. Desmárcalo para no restarlo.',
+      desdeCorte: '← Tomado del corte de envío del simulador.', desdeLunes: '← Lunes (no se encontró el corte del simulador).', desde: 'Producido desde', desdeAyuda: 'Cuenta TODO lo producido en ShipQR desde esta fecha y hora (embarcado o no). Por defecto: el último corte de envío del BOM Simulator antes de la primera semana del Forecast (respeta los cortes especiales que muevas en Admin BOM). Puedes cambiarla.', descBottomAyuda: 'El Bottom terminado ya trae su Pulp Tray adentro, por eso no se vuelve a pedir. Desmárcalo para no restarlo.',
       cReq: 'Pulp Tray requerido', cReqS: 'Forecast − producido', cInv: 'Inventario IMS P4', cFalta: 'Falta', cFaltaS: 'Requerido − inventario', cPedir: 'Pedir sugerido', cPedirS: 'con margen (+10% / +1% si pasa de 100,000)',
       rFc: 'Forecast (pzas de modelo)', rProd: '(−) Ya producido', rBot: '(−) Bottom ya hecho', rSea: '(−) Inventario Dallas (SEA O/H)', rNet: 'Pulp Tray requerido', rSaldo: 'Saldo con inventario', rPedir: 'Pedir esta semana', total: 'Total',
       inv: 'Inventario', usadoEn: 'Se usa en', semana: 'S',
@@ -44,7 +44,7 @@
       archivo: 'Forecast', ims: 'IMS P4 inventory', nunca: 'not synced — press "Sync IMS" above, then Recalculate',
       hace: function (m) { return 'updated ' + m + ' min ago'; },
       descBottom: 'Subtract the Bottom (Lower Box) already built in IMS — same as the Simulator',
-      desde: 'Produced since', desdeAyuda: 'Counts ALL production in ShipQR since this date (shipped or not). Default: the Monday of the first Forecast week.', descBottomAyuda: 'A finished Bottom already contains its Pulp Tray, so it is not ordered again. Uncheck it to not subtract it.',
+      desdeCorte: '← Taken from the simulator shipping cut.', desdeLunes: '← Monday (simulator cut not found).', desde: 'Produced since', desdeAyuda: 'Counts ALL production in ShipQR since this date and time (shipped or not). Default: the last shipping cut of the BOM Simulator before the first Forecast week (it follows the special cuts you move in Admin BOM). You can change it.', descBottomAyuda: 'A finished Bottom already contains its Pulp Tray, so it is not ordered again. Uncheck it to not subtract it.',
       cReq: 'Pulp Tray required', cReqS: 'Forecast − produced', cInv: 'IMS P4 inventory', cFalta: 'Short', cFaltaS: 'Required − inventory', cPedir: 'Suggested order', cPedirS: 'with margin (+10% / +1% above 100,000)',
       rFc: 'Forecast (model units)', rProd: '(−) Already produced', rBot: '(−) Bottom already built', rSea: '(−) Dallas inventory (SEA O/H)', rNet: 'Pulp Tray required', rSaldo: 'Balance with inventory', rPedir: 'Order this week', total: 'Total',
       inv: 'Inventory', usadoEn: 'Used in', semana: 'W',
@@ -68,7 +68,7 @@
       archivo: 'Forecast', ims: 'IMS P4 재고', nunca: '동기화 안 됨 — 위의 "Sync IMS"를 누른 후 다시 계산하세요',
       hace: function (m) { return m + '분 전 업데이트'; },
       descBottom: 'IMS에 이미 만들어진 Bottom(Lower Box) 차감 — 시뮬레이터와 동일',
-      desde: '생산 집계 시작일', desdeAyuda: '이 날짜 이후 ShipQR의 모든 생산(출하 여부 무관)을 집계합니다. 기본값: Forecast 첫 주의 월요일.', descBottomAyuda: '완성된 Bottom에는 이미 Pulp Tray가 들어 있어 다시 발주하지 않습니다. 차감하지 않으려면 체크를 해제하세요.',
+      desdeCorte: '← 시뮬레이터 출하 마감에서 가져옴.', desdeLunes: '← 월요일 (시뮬레이터 마감 없음).', desde: '생산 집계 시작일', desdeAyuda: '이 날짜·시간 이후 ShipQR의 모든 생산(출하 여부 무관)을 집계합니다. 기본값: Forecast 첫 주 이전 BOM Simulator의 마지막 출하 마감(Admin BOM에서 옮긴 특별 마감 반영). 변경할 수 있습니다.', descBottomAyuda: '완성된 Bottom에는 이미 Pulp Tray가 들어 있어 다시 발주하지 않습니다. 차감하지 않으려면 체크를 해제하세요.',
       cReq: '필요 Pulp Tray', cReqS: 'Forecast − 생산 완료', cInv: 'IMS P4 재고', cFalta: '부족', cFaltaS: '필요 − 재고', cPedir: '권장 발주', cPedirS: '여유 포함 (+10% / 100,000 초과 시 +1%)',
       rFc: 'Forecast (모델 수량)', rProd: '(−) 이미 생산', rBot: '(−) 이미 만든 Bottom', rSea: '(−) 달라스 재고 (SEA O/H)', rNet: '필요 Pulp Tray', rSaldo: '재고 반영 잔량', rPedir: '이번 주 발주', total: '합계',
       inv: '재고', usadoEn: '사용 모델', semana: 'W',
@@ -293,8 +293,8 @@
       '<span id="ptNombre" style="color:var(--text2)">' + (S.nombre ? esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>' : '') + '</span></div>' +
       '<label style="display:flex;gap:6px;align-items:center;margin:.2rem 0" title="' + esc(t('descBottomAyuda')) + '"><input type="checkbox" id="ptDesc" onchange="ptToggleDesc(this.checked)"' + (S.desc ? ' checked' : '') + '> ' + esc(t('descBottom')) + '</label>' +
       '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 22px">' + esc(t('descBottomAyuda')) + '</div>' +
-      '<label style="display:flex;gap:8px;align-items:center;margin:.2rem 0;flex-wrap:wrap" title="' + esc(t('desdeAyuda')) + '">' + esc(t('desde')) + ': <input type="date" id="ptDesde" value="' + (S.fc ? fechaISO(new Date(desdeMs())) : '') + '" onchange="ptDesde(this.value)" style="background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px"></label>' +
-      '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 2px">' + esc(t('desdeAyuda')) + '</div>' +
+      '<label style="display:flex;gap:8px;align-items:center;margin:.2rem 0;flex-wrap:wrap" title="' + esc(t('desdeAyuda')) + '">' + esc(t('desde')) + ': <input type="datetime-local" id="ptDesde" value="' + (S.fc ? fechaHora(new Date(desdeMs())) : '') + '" onchange="ptDesde(this.value)" style="background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px"></label>' +
+      '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 2px">' + esc(t('desdeAyuda')) + ' <b id="ptDesdeFuente" style="color:#4da6ff"></b></div>' +
       '<div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">' + esc(t('ims')) + ': <span id="ptEdad">' + edadIMS() + '</span></div>' +
       '<div id="ptMsg" style="display:none"></div><div id="ptRes"></div>';
     pintar();
@@ -396,10 +396,20 @@
     else if (hoy.getTime() - d.getTime() > 300 * 86400000) d = calc(y + 1);
     return d;
   }
+  function fechaHora(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function fechaISO(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
-  function desdeMs() {
-    if (S.desde) return S.desde;
-    return S.fc && S.fc.semanas.length ? lunesDeSemana(S.fc.semanas[0]).getTime() : 0;
+  // Inicio del conteo: el que el usuario fijó, o el último corte de envío del simulador antes del lunes de la 1ª semana del Forecast
+  function desdeInfo() {
+    if (S.desde) return { ms: S.desde, fuente: 'manual' };
+    if (!S.fc || !S.fc.semanas.length) return { ms: 0, fuente: '' };
+    var lunes = lunesDeSemana(S.fc.semanas[0]);
+    try { if (typeof corteAnteriorEnvio === 'function') { var c = corteAnteriorEnvio(lunes); if (c && !isNaN(c.getTime())) return { ms: c.getTime(), fuente: 'corte' }; } } catch (e) {}
+    return { ms: lunes.getTime(), fuente: 'lunes' };
+  }
+  function desdeMs() { return desdeInfo().ms; }
+  function textoFuente() {
+    var f = desdeInfo().fuente;
+    return f === 'corte' ? t('desdeCorte') : f === 'lunes' ? t('desdeLunes') : '';
   }
   // Producido para Pulp Tray: TODO pallet creado en ShipQR desde la fecha (embarcado o no), mismas exclusiones que el simulador
   async function leerProduccionDesde(ms, forzar) {
@@ -429,7 +439,7 @@
     } catch (e) { S.prodOk = false; S.prod = {}; }
   }
   function cambiarDesde(v) {
-    if (!v) { S.desde = null; } else { var d = new Date(v + 'T00:00:00'); S.desde = isNaN(d.getTime()) ? null : d.getTime(); }
+    if (!v) { S.desde = null; } else { var d = new Date(v.length > 10 ? v : v + 'T00:00:00'); S.desde = isNaN(d.getTime()) ? null : d.getTime(); }
     if (S.fc) correr(false);
   }
   function recalcLocal() {
@@ -449,7 +459,8 @@
       msg(t('leyendo'), 'warn');
       await refrescarIMS(); // inventario IMS al momento (el Bottom y el Pulp Tray cambian cuando se da entrada a un pallet)
       await traerProducido(forzar);
-      var dd = $('ptDesde'); if (dd) dd.value = fechaISO(new Date(desdeMs()));
+      var dd = $('ptDesde'); if (dd) dd.value = fechaHora(new Date(desdeMs()));
+      var ft = $('ptDesdeFuente'); if (ft) ft.textContent = textoFuente();
       recalcLocal();
       var b = $('ptNombre'); if (b) b.innerHTML = esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>';
     } catch (e) { msg(t('error') + (e && e.message ? e.message : e), 'err'); }

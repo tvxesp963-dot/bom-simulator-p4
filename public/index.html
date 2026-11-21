@@ -8233,18 +8233,23 @@ async function verificarBOMvsIMS() {
       } else {
         if (e4) { est = '✅ En IMS P4'; ord = 3; } else { est = '❌ Falta crear'; ord = 0; }
       }
-      filas.push({pn: r.pn, desc: r.desc || '', familia: r.familia || '', destino: dd, est: est, ord: ord, e3: e3, e4: e4});
+      var docRef = (dd === 'P3' ? e3 : null) || e4 || e3, h0 = docRef && docRef.d.historial && docRef.d.historial[0];
+      var nueva = !!(h0 && h0.user === 'BOM Simulator' && String(h0.ref || '').indexOf('Alta desde BOM') === 0);
+      filas.push({pn: r.pn, desc: r.desc || '', familia: r.familia || '', destino: dd, est: est, ord: ord, e3: e3, e4: e4, nueva: nueva});
     });
     filas.sort(function(a, b){ return a.ord - b.ord; });
     window._verifBOM = filas;
     var mal = filas.filter(function(f){ return f.ord < 3; });
     var corregibles = mal.filter(function(f){ return f.destino === 'P3' && f.e4; });
-    var h = '<div style="font-size:12px;margin-bottom:.4rem"><b style="color:' + (mal.length ? '#FFBA00' : '#00e676') + '">' + (filas.length - mal.length) + ' de ' + filas.length + ' partes están bien ubicadas</b>' + (mal.length ? ' · ' + mal.length + ' con problema (arriba en la tabla)' : '') + '</div>';
+    var verTodas = !!window._verifVerTodas;
+    var mostrar = filas.filter(function(f){ return verTodas || f.nueva || f.ord < 3; });
+    var nNuevas = filas.filter(function(f){ return f.nueva; }).length;
+    var h = '<div style="font-size:12px;margin-bottom:.4rem"><b style="color:' + (mal.length ? '#FFBA00' : '#00e676') + '">' + (filas.length - mal.length) + ' de ' + filas.length + ' partes del BOM están bien ubicadas</b> · Nuevas creadas por el BOM: <b>' + nNuevas + '</b>' + (mal.length ? ' · Con problema: <b style="color:#FFBA00">' + mal.length + '</b>' : '') + '</div>' +
+      '<label style="font-size:12px;cursor:pointer;display:inline-block;margin-bottom:.5rem"><input type="checkbox" ' + (verTodas ? 'checked' : '') + ' onchange="window._verifVerTodas=this.checked;verificarBOMvsIMS()"> Mostrar también las que ya existían (todas)</label><br>';
     if (corregibles.length) h += '<button type="button" onclick="corregirPlantaIMS()" style="margin-bottom:.5rem;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,186,0,.5);background:rgba(255,186,0,.12);color:#FFBA00;cursor:pointer;font-size:12px">🧹 Pasar a IMS P3 las ' + corregibles.length + ' partes que están en P4 (solo si tienen stock 0 y estatus Pendiente)</button>';
-    h += '<div style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="text-align:left;position:sticky;top:0;background:var(--bg3)"><th style="padding:5px 6px">Destino BOM</th><th style="padding:5px 6px">PN</th><th style="padding:5px 6px">Descripción</th><th style="padding:5px 6px">Familia IMS P4</th><th style="padding:5px 6px">Estado</th></tr></thead><tbody>';
-    filas.forEach(function(f){
-      var fam4 = f.e4 ? (f.e4.d.familia || '') : '';
-      h += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px">' + _escSyncIMS(f.destino) + '</td><td style="padding:4px 6px;white-space:nowrap"><b>' + _escSyncIMS(f.pn) + '</b></td><td style="padding:4px 6px">' + _escSyncIMS(f.desc) + '</td><td style="padding:4px 6px;color:var(--text2)">' + _escSyncIMS(fam4) + '</td><td style="padding:4px 6px;white-space:nowrap">' + f.est + '</td></tr>';
+    h += '<div style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="text-align:left;position:sticky;top:0;background:var(--bg3)"><th style="padding:5px 6px">Destino BOM</th><th style="padding:5px 6px">PN</th><th style="padding:5px 6px">Descripción</th><th style="padding:5px 6px">Nueva</th><th style="padding:5px 6px">Estado</th></tr></thead><tbody>';
+    mostrar.forEach(function(f){
+      h += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px">' + _escSyncIMS(f.destino) + '</td><td style="padding:4px 6px;white-space:nowrap"><b>' + _escSyncIMS(f.pn) + '</b></td><td style="padding:4px 6px">' + _escSyncIMS(f.desc) + '</td><td style="padding:4px 6px">' + (f.nueva ? '🆕' : '') + '</td><td style="padding:4px 6px;white-space:nowrap">' + f.est + '</td></tr>';
     });
     h += '</tbody></table></div><div id="corrigeIMSStatus" style="margin-top:.5rem;font-size:12px"></div>';
     box.innerHTML = h;

@@ -2157,7 +2157,7 @@ function getDestino(r) {
   }
   // GH68
   if (fam === 'GH68') {
-    if (d.includes('QSG') || d.includes('HAC') || d.includes('IBG') || d.includes('GUIDE') || d.includes('INSERT')) return 'P3';
+    if (d.includes('QSG') || d.includes('HAC') || d.includes('IBG') || d.includes('GUIDE') || d.includes('INSERT') || d.includes('T&C') || d.includes('TMO') || /\bICI\b/.test(d)) return 'P3';
     return 'P1'; // Back Sticker, otros
   }
   // OTRO — Data Cable y Ejection Pin van a ALIBER por default
@@ -8022,8 +8022,21 @@ async function crearPartesNuevasIMS(auto) {
     // Por eso se da de alta en P4 (flujo normal) y TAMBIÉN en P3 si ese PN no existe allá.
     var nuevasP3Pad = 0;
     var pnsP3EnCola = new Set();
+    // Destino = el MISMO que muestra el BOM Simulator: lo que cuelga de un Bundle (nivel 2 bajo un GH90 Bundle) es P3
+    // (excepto GH64 = ALIBER); lo demás se decide con getDestino() (valor del renglón o regla por familia).
+    var destinoFila = new Map();
+    var ultimoNivel1 = {};
+    BOM.forEach(function(rb){
+      if (rb.isLevel1) ultimoNivel1[rb.sm] = rb;
+      var padre = ultimoNivel1[rb.sm];
+      var pnU = (rb.pn || '').toUpperCase();
+      var bajoBundle = !!(rb.isLevel2 && padre && padre.familia === 'GH90' && (padre.desc || '').toUpperCase().indexOf('BUNDLE') >= 0 && pnU.indexOf('GH90') !== 0);
+      var dd = (typeof getDestino === 'function') ? getDestino(rb) : 'P4';
+      if (bajoBundle && pnU.indexOf('GH64') !== 0 && rb.familia !== 'GH64') dd = 'P3';
+      destinoFila.set(rb, dd);
+    });
     partesBOM.forEach(function(r){
-      var destino = (typeof getDestino === 'function') ? getDestino(r) : 'P4';
+      var destino = destinoFila.has(r) ? destinoFila.get(r) : ((typeof getDestino === 'function') ? getDestino(r) : 'P4');
       if (destino === 'P3') {
         var keyP3 = r.pn.trim().toUpperCase();
         if (!clavesExistentesP3.has(keyP3) && !pnsP3EnCola.has(keyP3)) { nuevasP3.push(r); pnsP3EnCola.add(keyP3); }
@@ -8604,7 +8617,7 @@ window.addEventListener('DOMContentLoaded', function() {
         Al subir un BOM nuevo, las partes que falten se crean solas en el IMS (P4 o P3, según corresponda), con estatus <b style="color:var(--text)">Pendiente</b> y stock 0.<br>
         Las partes que ya existen en el IMS <b style="color:var(--text)">NO se modifican</b> (se preserva su stock real).
       </div>
-      <button id="btnCrearIMS" style="display:none"></button>
+      <button id="btnCrearIMS" type="button" onclick="crearPartesNuevasIMS()" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(0,230,118,.35);background:transparent;color:#00e676;cursor:pointer;font-size:11px">↻ Volver a sincronizar ahora (con el BOM activo)</button>
       <div id="crearIMSStatus" style="margin-top:.75rem;font-size:13px"></div>
       <div id="syncDetalleIMS" style="margin-top:.75rem"></div>
     </div>

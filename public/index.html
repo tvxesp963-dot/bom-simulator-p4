@@ -8046,6 +8046,7 @@ async function crearPartesNuevasIMS(auto) {
         '<span style="font-size:11px;color:var(--text2)">Verificadas: '+partesBOM.length+'</span>';
       st.style.color = '#00e676';
       window._syncIMSTexto = 'IMS P4 +0 · IMS P3 +0 (todo ya existía)';
+      _mostrarDetalleSyncIMS({fecha: new Date().toISOString(), semana: (document.getElementById('semanaRef')||{}).value || '', detalle: []});
       btn.disabled = false;
       return;
     }
@@ -8090,13 +8091,38 @@ async function crearPartesNuevasIMS(auto) {
     });
     await batch.commit();
 
+    // ── Detalle: qué códigos se crearon y comprobación de que cada documento quedó realmente en el IMS ──
+    var modelosPorKey = {};
+    BOM.forEach(function(b){
+      if (!b.pn) return;
+      var kk = b.pn.trim().toUpperCase() + '||' + (b.desc||'').trim().toUpperCase();
+      (modelosPorKey[kk] = modelosPorKey[kk] || {})[b.sm || ''] = 1;
+    });
+    var detalle = [];
+    function _addDet(r, planta, col) {
+      var kk = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+      detalle.push({planta: planta, col: col, id: _getDocIdIMS(r.pn, r.desc || ''), pn: r.pn, desc: r.desc || '',
+        familia: r.familia || '', modelos: Object.keys(modelosPorKey[kk] || {}).filter(Boolean).join(', '), ok: false});
+    }
+    nuevasP4.forEach(function(r){ _addDet(r, 'IMS P4', 'planta4_inventario'); });
+    nuevasP3.forEach(function(r){ _addDet(r, 'IMS P3', 'planta3_inventario'); });
+    for (var vi = 0; vi < detalle.length; vi += 40) {
+      await Promise.all(detalle.slice(vi, vi + 40).map(function(d){
+        return db.collection(d.col).doc(d.id).get().then(function(s){ d.ok = !!s.exists; }).catch(function(){ d.ok = false; });
+      }));
+    }
+    var verificadas = detalle.filter(function(d){ return d.ok; }).length;
+    var logSync = {fecha: fechaISO, semana: semana, detalle: detalle};
+    _mostrarDetalleSyncIMS(logSync);
+    try { db.collection('bom_simulator_p4').doc('ultima_sincronizacion_ims').set(logSync).catch(function(e){ console.warn('No se guardó el log de sincronización:', e); }); } catch(eLog) {}
+
     st.innerHTML = '✅ Sincronización completa<br>' +
       '<span style="font-size:11px;color:var(--text2)">Nuevas en P4: <b style="color:#00e676">'+nuevasP4.length+'</b> · ' +
       'Nuevas en P3: <b style="color:#00e676">'+nuevasP3.length+'</b>' + (nuevasP3Pad ? ' <span style="color:#ffb300">(Set Pad: '+nuevasP3Pad+')</span>' : '') + ' · ' +
       'Ya existían: <b>'+(partesBOM.length-nuevasP4.length-(nuevasP3.length-nuevasP3Pad))+'</b> · ' +
       'Total BOM: '+partesBOM.length+'</span>';
     st.style.color = '#00e676';
-    window._syncIMSTexto = 'IMS P4 +' + nuevasP4.length + ' · IMS P3 +' + nuevasP3.length;
+    window._syncIMSTexto = 'IMS P4 +' + nuevasP4.length + ' · IMS P3 +' + nuevasP3.length + ' · verificadas ' + verificadas + '/' + detalle.length + (verificadas < detalle.length ? ' ⚠️' : ' ✅');
 
     // Refrescar sincronización para que el header IMS muestre el nuevo total
     if (typeof sincIMS === 'function') sincIMS();
@@ -8110,6 +8136,52 @@ async function crearPartesNuevasIMS(auto) {
     btn.disabled = false;
   }
 }
+/* ── Lista de códigos creados en el IMS por la última sincronización (con verificación) ── */
+function _escSyncIMS(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _mostrarDetalleSyncIMS(log) {
+  window._syncIMSLog = log;
+  var box = document.getElementById('syncDetalleIMS');
+  if (!box || !log) return;
+  var det = log.detalle || [];
+  var cuando = log.fecha ? new Date(log.fecha).toLocaleString() : '';
+  var cab = 'Última sincronización: ' + cuando + (log.semana ? ' · ' + _escSyncIMS(log.semana) : '');
+  if (!det.length) { box.innerHTML = '<div style="font-size:12px;color:var(--text2)">' + cab + ' — no había partes nuevas.</div>'; return; }
+  var ok = det.filter(function(d){ return d.ok; }).length;
+  var h = '<div style="font-size:12px;margin-bottom:.4rem;color:var(--text2)">' + cab + '<br><b style="color:' + (ok === det.length ? '#00e676' : '#FFBA00') + '">' + ok + ' de ' + det.length + ' códigos verificados en el IMS</b></div>' +
+    '<div style="max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;font-size:11px;border-collapse:collapse">' +
+    '<thead><tr style="text-align:left;position:sticky;top:0;background:var(--bg3)"><th style="padding:5px 6px">IMS</th><th style="padding:5px 6px">PN</th><th style="padding:5px 6px">Descripción</th><th style="padding:5px 6px">Modelos</th><th style="padding:5px 6px">Estado</th></tr></thead><tbody>';
+  det.forEach(function(d){
+    h += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px;white-space:nowrap">' + _escSyncIMS(d.planta) + '</td><td style="padding:4px 6px;white-space:nowrap"><b>' + _escSyncIMS(d.pn) + '</b></td><td style="padding:4px 6px">' + _escSyncIMS(d.desc) + '</td><td style="padding:4px 6px;color:var(--text2)">' + _escSyncIMS(d.modelos) + '</td><td style="padding:4px 6px;white-space:nowrap">' + (d.ok ? '✅ En el IMS' : '❌ No encontrada') + '</td></tr>';
+  });
+  h += '</tbody></table></div><button type="button" onclick="descargarDetalleSyncIMS()" style="margin-top:.5rem;padding:6px 12px;border-radius:8px;border:1px solid rgba(0,230,118,.4);background:rgba(0,230,118,.12);color:#00e676;cursor:pointer;font-size:12px">⬇️ Descargar lista (CSV)</button>';
+  box.innerHTML = h;
+}
+function descargarDetalleSyncIMS() {
+  var log = window._syncIMSLog; if (!log || !log.detalle || !log.detalle.length) return;
+  var q = function(v){ return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  var filas = [['IMS','PN','Descripcion','Familia','Modelos','Verificada en IMS'].map(q).join(',')];
+  log.detalle.forEach(function(d){ filas.push([d.planta, d.pn, d.desc, d.familia, d.modelos, d.ok ? 'SI' : 'NO'].map(q).join(',')); });
+  var blob = new Blob(['﻿' + filas.join('\r\n')], {type: 'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'partes_nuevas_IMS_' + String(log.fecha || '').slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+async function cargarUltimaSyncIMS() {
+  if (!db) return;
+  try {
+    var s = await db.collection('bom_simulator_p4').doc('ultima_sincronizacion_ims').get();
+    if (s.exists) _mostrarDetalleSyncIMS(s.data());
+  } catch (e) { console.warn('cargarUltimaSyncIMS:', e); }
+}
+window._mostrarDetalleSyncIMS = _mostrarDetalleSyncIMS;
+window.descargarDetalleSyncIMS = descargarDetalleSyncIMS;
+window.cargarUltimaSyncIMS = cargarUltimaSyncIMS;
+// Cuando se dibuja la tarjeta en Admin, muestra la última lista guardada
+setInterval(function(){
+  var d = document.getElementById('syncDetalleIMS');
+  if (d && !d.dataset.cargado) { d.dataset.cargado = '1'; cargarUltimaSyncIMS(); }
+}, 2000);
 window.crearPartesNuevasIMS = crearPartesNuevasIMS;
 
 // ── ADMINISTRAR PARTES DEL BOM ACTIVO ──
@@ -8534,6 +8606,7 @@ window.addEventListener('DOMContentLoaded', function() {
       </div>
       <button id="btnCrearIMS" style="display:none"></button>
       <div id="crearIMSStatus" style="margin-top:.75rem;font-size:13px"></div>
+      <div id="syncDetalleIMS" style="margin-top:.75rem"></div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(212,87,140,.06);border-color:rgba(212,87,140,.25)">
       <div class="card-title" style="color:#D4578C">🗂️ Administrar Partes del BOM Activo</div>

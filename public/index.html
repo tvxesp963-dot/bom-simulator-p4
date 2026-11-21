@@ -8059,7 +8059,7 @@ async function crearPartesNuevasIMS(auto) {
         '<span style="font-size:11px;color:var(--text2)">Verificadas: '+partesBOM.length+'</span>';
       st.style.color = '#00e676';
       window._syncIMSTexto = 'IMS P4 +0 · IMS P3 +0 (todo ya existía)';
-      _mostrarDetalleSyncIMS({fecha: new Date().toISOString(), semana: (document.getElementById('semanaRef')||{}).value || '', detalle: []});
+      if (typeof cargarUltimaSyncIMS === 'function') cargarUltimaSyncIMS();   // conserva a la vista la última lista de códigos creados
       btn.disabled = false;
       return;
     }
@@ -8196,6 +8196,90 @@ setInterval(function(){
   if (d && !d.dataset.cargado) { d.dataset.cargado = '1'; cargarUltimaSyncIMS(); }
 }, 2000);
 window.crearPartesNuevasIMS = crearPartesNuevasIMS;
+
+/* ── Verificación completa: dónde está cada parte del BOM (P3 / P4) y corrección de las que están en la planta equivocada ── */
+function _destinosBOM() {
+  var m = new Map(), ult = {};
+  BOM.forEach(function(rb){
+    if (rb.isLevel1) ult[rb.sm] = rb;
+    var padre = ult[rb.sm], pnU = (rb.pn || '').toUpperCase();
+    var bajo = !!(rb.isLevel2 && padre && padre.familia === 'GH90' && (padre.desc || '').toUpperCase().indexOf('BUNDLE') >= 0 && pnU.indexOf('GH90') !== 0);
+    var dd = (typeof getDestino === 'function') ? getDestino(rb) : 'P4';
+    if (bajo && pnU.indexOf('GH64') !== 0 && rb.familia !== 'GH64') dd = 'P3';
+    m.set(rb, dd);
+  });
+  return m;
+}
+async function verificarBOMvsIMS() {
+  var box = document.getElementById('verifBOMIMS'); if (!box) return;
+  if (!db || !BOM || !BOM.length) { box.innerHTML = '<span style="color:#FFBA00;font-size:12px">⚠️ Carga un BOM primero</span>'; return; }
+  box.innerHTML = '<span style="font-size:12px;color:#FFBA00">⏳ Revisando IMS P3 e IMS P4...</span>';
+  try {
+    var s4 = await db.collection('planta4_inventario').get(), s3 = await db.collection('planta3_inventario').get();
+    var p4 = {}, p3 = {};
+    s4.forEach(function(d){ var x = d.data(); if (x.pn) p4[x.pn.trim().toUpperCase() + '||' + (x.desc||'').trim().toUpperCase()] = {id: d.id, d: x}; });
+    s3.forEach(function(d){ var x = d.data(); if (x.pn) p3[x.pn.trim().toUpperCase()] = {id: d.id, d: x}; });
+    var dest = _destinosBOM(), vistas = new Set(), filas = [];
+    BOM.forEach(function(r){
+      if (!r.pn) return;
+      var pn = r.pn.trim().toUpperCase(), k = pn + '||' + (r.desc||'').trim().toUpperCase();
+      if (vistas.has(k)) return; vistas.add(k);
+      var dd = dest.get(r) || 'P4', e3 = p3[pn], e4 = p4[k], est, ord;
+      if (dd === 'P3') {
+        if (e3 && !e4) { est = '✅ En IMS P3'; ord = 3; }
+        else if (e3 && e4) { est = '⚠️ Está en P3 y también en P4 (sobra en P4)'; ord = 1; }
+        else if (e4) { est = '❌ Solo está en IMS P4 (debe ir en P3)'; ord = 0; }
+        else { est = '❌ Falta crear'; ord = 0; }
+      } else {
+        if (e4) { est = '✅ En IMS P4'; ord = 3; } else { est = '❌ Falta crear'; ord = 0; }
+      }
+      filas.push({pn: r.pn, desc: r.desc || '', familia: r.familia || '', destino: dd, est: est, ord: ord, e3: e3, e4: e4});
+    });
+    filas.sort(function(a, b){ return a.ord - b.ord; });
+    window._verifBOM = filas;
+    var mal = filas.filter(function(f){ return f.ord < 3; });
+    var corregibles = mal.filter(function(f){ return f.destino === 'P3' && f.e4; });
+    var h = '<div style="font-size:12px;margin-bottom:.4rem"><b style="color:' + (mal.length ? '#FFBA00' : '#00e676') + '">' + (filas.length - mal.length) + ' de ' + filas.length + ' partes están bien ubicadas</b>' + (mal.length ? ' · ' + mal.length + ' con problema (arriba en la tabla)' : '') + '</div>';
+    if (corregibles.length) h += '<button type="button" onclick="corregirPlantaIMS()" style="margin-bottom:.5rem;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,186,0,.5);background:rgba(255,186,0,.12);color:#FFBA00;cursor:pointer;font-size:12px">🧹 Pasar a IMS P3 las ' + corregibles.length + ' partes que están en P4 (solo si tienen stock 0 y estatus Pendiente)</button>';
+    h += '<div style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="text-align:left;position:sticky;top:0;background:var(--bg3)"><th style="padding:5px 6px">Destino BOM</th><th style="padding:5px 6px">PN</th><th style="padding:5px 6px">Descripción</th><th style="padding:5px 6px">Familia IMS P4</th><th style="padding:5px 6px">Estado</th></tr></thead><tbody>';
+    filas.forEach(function(f){
+      var fam4 = f.e4 ? (f.e4.d.familia || '') : '';
+      h += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 6px">' + _escSyncIMS(f.destino) + '</td><td style="padding:4px 6px;white-space:nowrap"><b>' + _escSyncIMS(f.pn) + '</b></td><td style="padding:4px 6px">' + _escSyncIMS(f.desc) + '</td><td style="padding:4px 6px;color:var(--text2)">' + _escSyncIMS(fam4) + '</td><td style="padding:4px 6px;white-space:nowrap">' + f.est + '</td></tr>';
+    });
+    h += '</tbody></table></div><div id="corrigeIMSStatus" style="margin-top:.5rem;font-size:12px"></div>';
+    box.innerHTML = h;
+  } catch (e) { box.innerHTML = '<span style="color:#ff4444;font-size:12px">❌ ' + _escSyncIMS(e.message) + '</span>'; }
+}
+async function corregirPlantaIMS() {
+  var filas = (window._verifBOM || []).filter(function(f){ return f.destino === 'P3' && f.e4; });
+  var st = document.getElementById('corrigeIMSStatus') || {};
+  var ok = [], omit = [];
+  filas.forEach(function(f){
+    var d = f.e4.d;
+    var vacia = (Number(d.actual) || 0) === 0 && (Number(d.entradas) || 0) === 0 && (Number(d.salidas) || 0) === 0 && (d.estatus || 'Pendiente') === 'Pendiente';
+    (vacia ? ok : omit).push(f);
+  });
+  if (!ok.length) { st.textContent = 'Ninguna se puede mover automáticamente (todas tienen stock o movimientos).'; return; }
+  if (!confirm('Se pasarán a IMS P3 (y se quitarán de IMS P4) ' + ok.length + ' partes con stock 0 y estatus Pendiente.' + (omit.length ? '\n' + omit.length + ' se dejan como están porque ya tienen stock/movimientos.' : '') + '\n\n¿Continuar?')) return;
+  st.textContent = '⏳ Moviendo...'; st.style.color = '#FFBA00';
+  try {
+    var batch = db.batch(), fechaISO = new Date().toISOString();
+    ok.forEach(function(f){
+      if (!f.e3) {
+        var ni = {pn: f.pn, desc: f.desc, familia: f.familia || 'OTRO', inicial: 0, precio: 0, estatus: 'Pendiente', ubicacion: 'Almacén', entradas: 0, salidas: 0, actual: 0,
+          historial: [{tipo: 'INI', fecha: fechaISO, qty: 0, loc: 'Almacén', user: 'BOM Simulator', ref: 'Corregido: movida de IMS P4 a IMS P3'}]};
+        batch.set(db.collection('planta3_inventario').doc(_getDocIdIMS(ni.pn, ni.desc)), ni);
+      }
+      batch.delete(db.collection('planta4_inventario').doc(f.e4.id));
+    });
+    await batch.commit();
+    st.innerHTML = '✅ ' + ok.length + ' partes movidas a IMS P3' + (omit.length ? ' · ' + omit.length + ' no se tocaron (tienen stock)' : '');
+    st.style.color = '#00e676';
+    verificarBOMvsIMS();
+  } catch (e) { st.textContent = '❌ ' + e.message; st.style.color = '#ff4444'; }
+}
+window.verificarBOMvsIMS = verificarBOMvsIMS;
+window.corregirPlantaIMS = corregirPlantaIMS;
 
 // ── ADMINISTRAR PARTES DEL BOM ACTIVO ──
 // Edita o elimina partes del BOM activo y replica el cambio en el IMS.
@@ -8618,8 +8702,10 @@ window.addEventListener('DOMContentLoaded', function() {
         Las partes que ya existen en el IMS <b style="color:var(--text)">NO se modifican</b> (se preserva su stock real).
       </div>
       <button id="btnCrearIMS" type="button" onclick="crearPartesNuevasIMS()" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(0,230,118,.35);background:transparent;color:#00e676;cursor:pointer;font-size:11px">↻ Volver a sincronizar ahora (con el BOM activo)</button>
+      <button type="button" onclick="verificarBOMvsIMS()" style="margin-left:.4rem;padding:5px 10px;border-radius:8px;border:1px solid rgba(0,230,118,.35);background:transparent;color:#00e676;cursor:pointer;font-size:11px">🔍 Ver en qué IMS está cada parte del BOM</button>
       <div id="crearIMSStatus" style="margin-top:.75rem;font-size:13px"></div>
       <div id="syncDetalleIMS" style="margin-top:.75rem"></div>
+      <div id="verifBOMIMS" style="margin-top:.75rem"></div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(212,87,140,.06);border-color:rgba(212,87,140,.25)">
       <div class="card-title" style="color:#D4578C">🗂️ Administrar Partes del BOM Activo</div>

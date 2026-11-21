@@ -5111,6 +5111,10 @@ function adminCargarBOM(file) {
         db.collection('bom_simulator_p4').doc('bom_activo').set({nombre:file.name,semana:semana,fecha:new Date().toISOString(),modelos:modelos,componentes:bomData.length,bom:JSON.stringify(bomData)}).then(function(){
           statusEl.textContent='✅ BOM guardado — '+modelos+' modelos · '+bomData.length+' componentes · '+semana;
           statusEl.style.color='var(--green)'; cargarBomActivo();
+          // Sincronización automática: crea en IMS P4 / IMS P3 las partes nuevas (sin clic)
+          crearPartesNuevasIMS(true).then(function(){
+            statusEl.textContent += ' · ' + (window._syncIMSTexto || '');
+          }).catch(function(e){ console.error(e); statusEl.textContent += ' · IMS: ❌ ' + e.message; });
         });
       } else {
         statusEl.textContent='✅ BOM cargado — '+modelos+' modelos (sin Firebase)';
@@ -7966,15 +7970,17 @@ function _getDocIdIMS(pn, desc) {
   return (pn + '_' + (desc||'')).replace(/[.#$[\]/\s]/g,'_').substring(0,100);
 }
 
-async function crearPartesNuevasIMS() {
-  var st = document.getElementById('crearIMSStatus');
-  var btn = document.getElementById('btnCrearIMS');
-  if (!st) return;
+// auto=true: se ejecuta sola al subir un BOM (sin confirmación ni botón). El resumen queda en window._syncIMSTexto.
+async function crearPartesNuevasIMS(auto) {
+  auto = (auto === true);
+  window._syncIMSTexto = '';
+  var st = document.getElementById('crearIMSStatus') || {style:{}};   // si la pestaña Admin no está dibujada, usa un objeto vacío
+  var btn = document.getElementById('btnCrearIMS') || {};
 
-  if (!db) { st.textContent='❌ Firebase no conectado'; st.style.color='#ff4444'; return; }
-  if (!BOM || !BOM.length) { st.textContent='⚠️ Primero carga un BOM'; st.style.color='#FFBA00'; return; }
+  if (!db) { st.textContent='❌ Firebase no conectado'; st.style.color='#ff4444'; window._syncIMSTexto='sin Firebase'; return; }
+  if (!BOM || !BOM.length) { st.textContent='⚠️ Primero carga un BOM'; st.style.color='#FFBA00'; window._syncIMSTexto='sin BOM'; return; }
 
-  if (!confirm('Se crearán en el IMS (P3 o P4, según corresponda) las partes nuevas del BOM con estatus "Pendiente" y stock 0.\nLas partes que ya existen NO se modificarán.\n\n¿Continuar?')) return;
+  if (!auto && !confirm('Se crearán en el IMS (P3 o P4, según corresponda) las partes nuevas del BOM con estatus "Pendiente" y stock 0.\nLas partes que ya existen NO se modificarán.\n\n¿Continuar?')) return;
 
   btn.disabled = true;
   st.textContent = '⏳ Leyendo inventario del IMS...';
@@ -8039,6 +8045,7 @@ async function crearPartesNuevasIMS() {
       st.innerHTML = '✅ Todas las partes del BOM ya existen en el IMS (P3 y P4)<br>' +
         '<span style="font-size:11px;color:var(--text2)">Verificadas: '+partesBOM.length+'</span>';
       st.style.color = '#00e676';
+      window._syncIMSTexto = 'IMS P4 +0 · IMS P3 +0 (todo ya existía)';
       btn.disabled = false;
       return;
     }
@@ -8089,6 +8096,7 @@ async function crearPartesNuevasIMS() {
       'Ya existían: <b>'+(partesBOM.length-nuevasP4.length-(nuevasP3.length-nuevasP3Pad))+'</b> · ' +
       'Total BOM: '+partesBOM.length+'</span>';
     st.style.color = '#00e676';
+    window._syncIMSTexto = 'IMS P4 +' + nuevasP4.length + ' · IMS P3 +' + nuevasP3.length;
 
     // Refrescar sincronización para que el header IMS muestre el nuevo total
     if (typeof sincIMS === 'function') sincIMS();
@@ -8096,6 +8104,7 @@ async function crearPartesNuevasIMS() {
   } catch(err) {
     st.textContent = '❌ Error: ' + err.message;
     st.style.color = '#ff4444';
+    window._syncIMSTexto = '❌ ' + err.message;
     console.error('crearPartesNuevasIMS:', err);
   } finally {
     btn.disabled = false;
@@ -8518,12 +8527,12 @@ window.addEventListener('DOMContentLoaded', function() {
       </div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(0,230,118,.06);border-color:rgba(0,230,118,.25)">
-      <div class="card-title" style="color:#00e676">🔄 Crear Partes Nuevas en IMS</div>
+      <div class="card-title" style="color:#00e676">🔄 Sincronización automática con IMS</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:.75rem">
-        Crea en el IMS las partes del BOM activo que aún no existen, con estatus <b style="color:var(--text)">Pendiente</b> y stock 0.<br>
+        Al subir un BOM nuevo, las partes que falten se crean solas en el IMS (P4 o P3, según corresponda), con estatus <b style="color:var(--text)">Pendiente</b> y stock 0.<br>
         Las partes que ya existen en el IMS <b style="color:var(--text)">NO se modifican</b> (se preserva su stock real).
       </div>
-      <button id="btnCrearIMS" class="btn btn-primary btn-sm" onclick="crearPartesNuevasIMS()" style="background:rgba(0,230,118,.2);border-color:rgba(0,230,118,.4);color:#00e676">🔄 Crear Partes Nuevas</button>
+      <button id="btnCrearIMS" style="display:none"></button>
       <div id="crearIMSStatus" style="margin-top:.75rem;font-size:13px"></div>
     </div>
     <div class="card" style="margin-top:1rem;background:rgba(212,87,140,.06);border-color:rgba(212,87,140,.25)">

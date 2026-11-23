@@ -264,7 +264,7 @@ function filasColas(doc, orden, etiqueta){
       var est, cls; var pend = it.pendiente || 0;
       if (it.listo && !falt.length) { est = T.listo; cls = 'ok'; }
       else if (it.listo) { var dl1 = detalleMatCola(it); if (dl1.length) { est = conDetalle(T.parcial, dl1); cls = 'mid'; } else { est = T.listo; cls = 'ok'; } }
-      else { var dl2 = detalleMatCola(it); est = dl2.length ? conDetalle(T.falta, dl2) : T.falta + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'no'; }
+      else { var dl2 = detalleMatCola(it); if (!dl2.length) dl2 = (it.materiales || []).filter(function(x){ return x.e !== 'ok'; }).map(function(x){ return lineaMat(MATL[x.k] || x.k, x.pn, x.disp, x.req); }); est = dl2.length ? conDetalle(T.falta, dl2) : T.falta; cls = 'no'; }
       var ms = it.modelos || [it.sm];
       out.push({ et: etiqueta(k) + ' · ' + (ms[0] || ''), sub: ms.length > 1 ? '+' + (ms.length - 1) + ' ' + ms.slice(1).join(', ') : '', pieza: it.pn || '', fecha: it.fecha || '', porDia: it.porDia || [], total: sumaDia(it.porDia) || pend, est: est, cls: cls, grupo: k, mods: ms, capDia: Number(it.capDia) || 0, pend: pend, prio: it.prioridad || 999 });
     });

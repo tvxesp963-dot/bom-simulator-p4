@@ -103,6 +103,8 @@ var T = {
   sinMat: '⚠ Sin material — fuera del plan por día · No material — not in daily plan · 자재 없음 — 일별 계획 제외',
   pend: ['Pendiente','Pending','잔량'],
   libre: ['Capacidad libre','Free capacity','여유 능력'],
+  enProd: 'en producción · in production · 생산 중',
+  leyenda: 'Estado: material · número de parte: tengo / necesito (igual que la etiqueta del piso). · Status: material · part number: have / need (same as the floor label). · 상태: 자재 · 부품번호: 보유 / 필요 (현장 라벨과 동일).',
   modoC: '🔀 Modo: Cascada · Cascade · 캐스케이드', modoA: '🔀 Modo: Actual · Current · 현재',
   limite: 'Límite · Deadline · 기한',
   notaC: 'Modo cascada: cada día de ASSY solo usa el material que medio proceso y Bundle ya entregaron al cierre del día anterior (más el inventario actual). Lo que no tiene material va aparte, con su fecha límite. Producido ya descontado. · Cascade mode: each ASSY day only uses material that mid process and Bundle delivered by the end of the previous day (plus current inventory). Items without material are listed separately with a deadline. Produced already deducted. · 캐스케이드 모드: ASSY는 전날 마감까지 중간공정과 번들이 공급한 자재(및 현재 재고)만 사용합니다. 자재 없는 항목은 기한과 함께 별도 표시. 생산량 차감 완료.',
@@ -173,6 +175,30 @@ function fijarPlan(){
   }).catch(function(e){ cargando = false; msg(T.errFijar + ' ' + (e && e.message || ''), 'er'); });
 }
 
+// ===== Detalle de material: "material · PN: tengo / necesito" (igual que la etiqueta al pasar el mouse en las pantallas de piso) =====
+var MATL = { SHEET_TOP: 'Sheet Top', CB_TOP_R: 'Chip Board Top Ranurado', CB_TOP_V: 'Chip Board Top Virgen', SHEET_LOW: 'Sheet Lower Box', CB_BOT_R: 'Chip Board Bot Ranurado', CB_BOT_V: 'Chip Board Bot Virgen', PULP: 'Pulp Tray', SETPAD: 'Set Pad', GALLETA: 'Galleta', STICKER: 'Sticker' };
+function lineaMat(nombre, pn, disp, req){ return nombre + (pn ? ' · ' + pn : '') + (disp != null && req != null ? ': ' + num(disp) + ' / ' + num(req) : ''); }
+function conDetalle(base, lineas){ return lineas.length ? base + '\n' + lineas.join('\n') : base; }
+function brEst(s){ return esc(s).replace(/\n/g, '<br>'); }
+function detalleMatAssy(m){
+  var out = [];
+  ['Strip', 'Top', 'Bot', 'Bundle'].forEach(function(k){
+    var mat = m.materiales ? m.materiales[k] : null;
+    if (mat === null || mat === undefined || mat === true) return;
+    out.push(lineaMat(k, m.pn && m.pn[k], m.disp && m.disp[k] != null ? m.disp[k] : null, m.req && m.req[k] != null ? m.req[k] : null));
+  });
+  return out;
+}
+function detalleMatCola(it){
+  var ms = it.materiales || [], out = [];
+  ms.forEach(function(x){
+    if (x.e === 'ok') return;
+    if (x.e == null && !(x.disp < x.req)) return;
+    if (/_V$/.test(x.k)) { var rk = x.k.replace(/_V$/, '_R'); var r = ms.filter(function(y){ return y.k === rk; })[0]; if (r && r.e === 'ok') return; }   // Virgen cubierto con el Ranurado: no es faltante
+    out.push(lineaMat(MATL[x.k] || x.k, x.pn, x.disp, x.req));
+  });
+  return out;
+}
 // ===== Armado de filas por área =====
 function sumaDia(porDia){ return (porDia || []).reduce(function(s, x){ return s + (x.q || 0); }, 0); }
 function faltantesObj(mat, pend){ var o = []; Object.keys(mat || {}).forEach(function(k){ if (mat[k] === false) o.push(k); }); return o; }
@@ -181,9 +207,9 @@ function filasAssy(doc){
   return repartoAssy(doc.modelos.filter(function(m){ return (m.pendiente || 0) > 0 || (m.porDia && m.porDia.length); }).map(function(m){
     var pend = m.pendiente || 0, cap = m.cap || 0, est, cls;
     if (cap >= pend && pend > 0) { est = T.listo; cls = 'ok'; }
-    else if (cap > 0) { est = T.parcial + ' ' + num(cap) + ' / ' + num(pend); cls = 'mid'; }
-    else { var f = faltantesObj(m.materiales); est = T.falta + (f.length ? ': ' + f.join(', ') : ''); cls = 'no'; }
-    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999, ord: m.orden || 999, cap: (m.cap == null ? null : m.cap), capTot: m.cap || 0, pend: pend, disp: m.disp || null, mat: m.materiales || null, falta: m.falta || null, conf: !!m.confirmado, alerta: (FIJO && VIVO && VIVO[m.sm] != null && VIVO[m.sm] < Math.min(m.cap || 0, pend)) ? VIVO[m.sm] : null };
+    else if (cap > 0) { est = conDetalle(T.parcial + ' ' + num(cap) + ' / ' + num(pend), detalleMatAssy(m)); cls = 'mid'; }
+    else { var f = faltantesObj(m.materiales), dl = detalleMatAssy(m); est = dl.length ? conDetalle(T.falta, dl) : T.falta + (f.length ? ': ' + f.join(', ') : ''); cls = 'no'; }
+    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999, ord: m.orden || 999, cap: (m.cap == null ? null : m.cap), capTot: m.cap || 0, pend: pend, disp: m.disp || null, pn: m.pn || null, req: m.req || null, mat: m.materiales || null, falta: m.falta || null, conf: !!m.confirmado, alerta: (FIJO && VIVO && VIVO[m.sm] != null && VIVO[m.sm] < Math.min(m.cap || 0, pend)) ? VIVO[m.sm] : null };
   }), doc);
 }
 // ASSY: reparto propio con la capacidad diaria (13,000): solo modelos con material,
@@ -229,8 +255,8 @@ function filasColas(doc, orden, etiqueta){
       var mats = it.materiales || [], falt = mats.filter(function(x){ return x.e ? x.e !== 'ok' : x.disp < x.req; }).map(function(x){ return x.k; });
       var est, cls; var pend = it.pendiente || 0;
       if (it.listo && !falt.length) { est = T.listo; cls = 'ok'; }
-      else if (it.listo) { est = T.parcial + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'mid'; }
-      else { est = T.falta + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'no'; }
+      else if (it.listo) { var dl1 = detalleMatCola(it); est = dl1.length ? conDetalle(T.parcial, dl1) : T.parcial + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'mid'; }
+      else { var dl2 = detalleMatCola(it); est = dl2.length ? conDetalle(T.falta, dl2) : T.falta + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'no'; }
       var ms = it.modelos || [it.sm];
       out.push({ et: etiqueta(k) + ' · ' + (ms[0] || ''), sub: ms.length > 1 ? '+' + (ms.length - 1) + ' ' + ms.slice(1).join(', ') : '', pieza: it.pn || '', fecha: it.fecha || '', porDia: it.porDia || [], total: sumaDia(it.porDia) || pend, est: est, cls: cls, grupo: k, mods: ms, capDia: Number(it.capDia) || 0, pend: pend, prio: it.prioridad || 999 });
     });
@@ -274,7 +300,7 @@ function guiaColas(rows, doc){
 var MODO = 'cascada';
 try { if (localStorage.getItem('planDiaModo') === 'actual') MODO = 'actual'; } catch (e) {}
 function setModo(m){ MODO = m; try { localStorage.setItem('planDiaModo', m); } catch (e) {} pintar(); }
-function notaActual(){ return MODO === 'cascada' ? T.notaC : T.nota; }
+function notaActual(){ return (MODO === 'cascada' ? T.notaC : T.nota) + '\n' + T.leyenda; }
 function capsAssy(){ var doc = DATOS && DATOS.assy; return { L: Number(doc && doc.capacidadDia) || 13000, S: Number(doc && doc.capacidadSabado) || 0, sab: !!(doc && doc.cal && doc.cal.sab) && (Number(doc && doc.capacidadSabado) || 0) > 0 }; }
 function capDeDia(iso){ var c = capsAssy(); return fechaD(iso).getDay() === 6 ? c.S : c.L; }
 function diasLaborales(n){
@@ -342,14 +368,14 @@ function necesidadAssy(rows){
   return out;
 }
 function estadoFaltaAssy(r, arr){
-  var falta = [], m = r.mat || {};
+  var lin = [], m = r.mat || {};
   if (r.disp) ['Strip', 'Top', 'Bot', 'Bundle'].forEach(function(k){
     if (m[k] == null || r.disp[k] == null) return;
-    var s = Number(r.disp[k]) || 0;
-    if (k !== 'Strip') { var o = ((arr[r.et] || {})[k]) || {}; Object.keys(o).forEach(function(f){ s += o[f]; }); }
-    if (s < r.pend) falta.push(k);
+    var s0 = Number(r.disp[k]) || 0, en = 0;
+    if (k !== 'Strip') { var o = ((arr[r.et] || {})[k]) || {}; Object.keys(o).forEach(function(f){ en += o[f]; }); }
+    if (s0 + en < r.pend) lin.push(lineaMat(k, r.pn && r.pn[k], s0, r.req && r.req[k] != null ? r.req[k] : r.pend) + (en > 0 ? ' (+' + num(en) + ' ' + T.enProd + ')' : ''));
   });
-  return T.falta + (falta.length ? ': ' + falta.join(', ') : '');
+  return conDetalle(T.falta, lin);
 }
 function cascadaPost(A, N){
   var d = DATOS || {}, arr = llegadasMateriales(d.assy, d.medio, d.bundle), lim = necesidadAssy(A.assy);
@@ -365,7 +391,7 @@ function cascadaPost(A, N){
     A[k].forEach(function(r){ var left = r.pend - sumaDia(r.porDia); if (left > 0 && r.cls !== 'no') N[k].push(Object.assign({}, r, { porDia: [], total: left, est: (r.cls === 'ok' ? T.parcial + ' ' + num(sumaDia(r.porDia)) + ' / ' + num(r.pend) : r.est) })); });
     N[k].forEach(function(r){
       var f = (r.mods || []).map(function(sm){ return lim[sm]; }).filter(Boolean).sort()[0];
-      if (f) r.est = r.est + ' · ' + T.limite + ' ' + fechaEnvio(f);
+      if (f) r.est = r.est + '\n' + T.limite + ' ' + fechaEnvio(f);
     });
   });
 }
@@ -394,7 +420,7 @@ function tablaHtml(rows, cols, hayDesp, tipo){
       var qa = r.porDia.filter(function(x){ return x.f === c && !x.g; }).reduce(function(s, x){ return s + (x.q || 0); }, 0);
       h += q > 0 ? '<td class="q' + (qa === 0 && r.porDia.some(function(x){ return x.g; }) ? ' g' : '') + '">' + (qa > 0 && qa < q ? num(qa) + '<small class="cg">+' + num(q - qa) + '</small>' : num(q)) + '</td>' : '<td class="z">–</td>'; });
     if (hayDesp) { var dq = r.porDia.filter(function(x){ return cols.indexOf(x.f) < 0; }).reduce(function(s, x){ return s + (x.q || 0); }, 0); tot.desp += dq; h += dq > 0 ? '<td class="q">' + num(dq) + '</td>' : '<td class="z">–</td>'; }
-    tot.total += r.total; h += '<td class="q">' + num(r.total) + '</td><td class="s ' + r.cls + '">' + esc(r.est) + (r.alerta != null ? '<br><b style="color:#b3261e">' + esc(tr3(T.hoySolo)) + ' ' + num(r.alerta) + '</b>' : '') + '</td></tr>';
+    tot.total += r.total; h += '<td class="q">' + num(r.total) + '</td><td class="s ' + r.cls + '">' + brEst(r.est) + (r.alerta != null ? '<br><b style="color:#b3261e">' + esc(tr3(T.hoySolo)) + ' ' + num(r.alerta) + '</b>' : '') + '</td></tr>';
   });
   h += '<tr class="tot"><td class="m" ' + (tipo === 'assy' ? '' : 'colspan="2"') + '>' + esc(tr3(T.total)) + '</td><td></td>';
   tot.cols.forEach(function(q){ h += '<td>' + (q > 0 ? num(q) : '–') + '</td>'; });
@@ -413,7 +439,7 @@ function tablaSinMat(rows, tipo){
   if (!rows.length) return '';
   var h = '<div class="nomat">' + esc(T.sinMat) + '</div><table class="p"><thead><tr><th style="text-align:left">' + th3(tipo === 'assy' ? T.modelo : T.linea) + '</th>' + (tipo === 'assy' ? '' : '<th>' + th3(T.pieza) + '</th>') + '<th>' + th3(T.envio) + '</th><th>' + th3(T.pend) + '</th><th style="text-align:left">' + th3(T.estado) + '</th></tr></thead><tbody>';
   rows.forEach(function(r){
-    h += '<tr><td class="m">' + esc(r.et) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' + (tipo === 'assy' ? '' : '<td style="text-align:left">' + esc(r.pieza) + '</td>') + '<td style="text-align:center">' + esc(fechaEnvio(r.fecha)) + '</td><td>' + num(r.total) + '</td><td class="s no">' + esc(r.est) + '</td></tr>';
+    h += '<tr><td class="m">' + esc(r.et) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' + (tipo === 'assy' ? '' : '<td style="text-align:left">' + esc(r.pieza) + '</td>') + '<td style="text-align:center">' + esc(fechaEnvio(r.fecha)) + '</td><td>' + num(r.total) + '</td><td class="s no">' + brEst(r.est) + '</td></tr>';
   });
   return h + '</tbody></table>';
 }
@@ -592,7 +618,7 @@ function exportarExcel(){
         hdr(hr, cTot, h3(T.total)); hdr(hr, cEst, h3(T.estado), true);
         var tot = X.cols.map(function(){ return 0; }), totD = 0, totT = 0;
         rows.forEach(function(x){
-          var row = fila(), mods = modelosDe(x); row.height = Math.max(22, 17 * mods.length + 5, x.alerta != null ? 34 : 0);
+          var row = fila(), mods = modelosDe(x); row.height = Math.max(22, 17 * mods.length + 5, x.alerta != null ? 34 : 0, 15 * String(x.est).split('\n').length + 6);
           function base(c, v, o){ var cell = row.getCell(c); cell.value = v; cell.border = BORDE; cell.alignment = { vertical: 'middle', horizontal: o.h || 'right', wrapText: true }; cell.font = { name: 'Calibri', size: 11, bold: !!o.b, italic: !!o.i, color: { argb: o.col || 'FF111111' } }; if (o.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } }; if (o.fmt) cell.numFmt = o.fmt; return cell; }
           base(1, lineaDe(x), { h: 'center', b: true });
           base(2, mods.join('\n'), { h: 'left', b: true });
@@ -636,7 +662,7 @@ function exportarExcel(){
         nomat.forEach(function(x){
           var row = fila();
           function b2(c, v, o){ var cell = row.getCell(c); cell.value = v; cell.border = BORDE; cell.alignment = { vertical: 'middle', horizontal: o.h || 'left', wrapText: true }; cell.font = { name: 'Calibri', size: 11, bold: !!o.b, color: { argb: o.col || 'FF111111' } }; if (o.fmt) cell.numFmt = o.fmt; }
-          var ms = modelosDe(x); row.height = Math.max(22, 17 * ms.length + 5);
+          var ms = modelosDe(x); row.height = Math.max(22, 17 * ms.length + 5, 15 * String(x.est).split('\n').length + 6);
           b2(1, lineaDe(x), { h: 'center', b: true }); b2(2, ms.join('\n'), { b: true }); b2(3, x.pieza || '', {}); b2(4, fechaEnvio(x.fecha), { h: 'center' }); b2(5, x.total, { h: 'right', fmt: '#,##0' });
           unirDesde(6); b2(6, x.est, { b: true, col: 'FFB3261E' });
         });

@@ -42,6 +42,7 @@ table.p td.z{color:#b0b6c4;text-align:center}
 table.p td.s{text-align:left;font-size:11.5px}
 table.p td.s.ok{color:#0a7a3e;font-weight:700}table.p td.s.no{color:#b3261e;font-weight:700}table.p td.s.mid{color:#946200;font-weight:700}
 table.p tr.tot td{background:#f2f4f9;font-weight:800}
+table.p tr.free td{background:#fafafa;color:#666;font-style:italic}table.p td.lib{color:#666;font-style:italic;text-align:right}
 .g{background:#fff6e0!important;color:#946200;font-style:italic}
 .cg{display:block;background:#fff6e0;color:#946200;font-style:italic;font-weight:700;font-size:11px;border-radius:3px;margin-top:2px;padding:0 4px}
 .cv{display:block;font-weight:700;font-size:10.5px}.cv.p{color:#946200}.cv.n{color:#b3261e}
@@ -101,6 +102,10 @@ var T = {
   lineaL: 'Línea · Line · 라인', lin: ['Línea','Line','라인'], excel: '📊 Excel', genXls: '⏳ Generando Excel… · Building Excel… · 엑셀 생성 중…', xlsOk: '✅ Excel descargado · Excel downloaded · 엑셀 다운로드됨', errXls: '⚠ No se pudo generar el Excel · Could not build the Excel · 엑셀 생성 실패',
   sinMat: '⚠ Sin material — fuera del plan por día · No material — not in daily plan · 자재 없음 — 일별 계획 제외',
   pend: ['Pendiente','Pending','잔량'],
+  libre: ['Capacidad libre','Free capacity','여유 능력'],
+  modoC: '🔀 Modo: Cascada · Cascade · 캐스케이드', modoA: '🔀 Modo: Actual · Current · 현재',
+  limite: 'Límite · Deadline · 기한',
+  notaC: 'Modo cascada: cada día de ASSY solo usa el material que medio proceso y Bundle ya entregaron al cierre del día anterior (más el inventario actual). Lo que no tiene material va aparte, con su fecha límite. Producido ya descontado. · Cascade mode: each ASSY day only uses material that mid process and Bundle delivered by the end of the previous day (plus current inventory). Items without material are listed separately with a deadline. Produced already deducted. · 캐스케이드 모드: ASSY는 전날 마감까지 중간공정과 번들이 공급한 자재(및 현재 재고)만 사용합니다. 자재 없는 항목은 기한과 함께 별도 표시. 생산량 차감 완료.',
   nota: 'Número normal = ya hay material · crema/cursiva (o +número crema) = guía, falta material. Producido ya descontado. Cada día se llena a la capacidad de la línea (ASSY 13,000): primero lo que ya tiene material y después el resto como guía. · Produced already deducted. Each day fills to line capacity (ASSY 13,000): available material first, the rest as a guide. · 생산량 차감 완료. 매일 라인 능력(ASSY 13,000)까지 채움: 자재 있는 모델 먼저, 나머지는 참고용.'
 };
 function tr3(a){ return a[0] + ' · ' + a[1] + ' · ' + a[2]; }
@@ -178,7 +183,7 @@ function filasAssy(doc){
     if (cap >= pend && pend > 0) { est = T.listo; cls = 'ok'; }
     else if (cap > 0) { est = T.parcial + ' ' + num(cap) + ' / ' + num(pend); cls = 'mid'; }
     else { var f = faltantesObj(m.materiales); est = T.falta + (f.length ? ': ' + f.join(', ') : ''); cls = 'no'; }
-    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999, ord: m.orden || 999, cap: (m.cap == null ? null : m.cap), capTot: m.cap || 0, pend: pend, alerta: (FIJO && VIVO && VIVO[m.sm] != null && VIVO[m.sm] < Math.min(m.cap || 0, pend)) ? VIVO[m.sm] : null };
+    return { et: m.sm, sub: m.code || '', pieza: m.code || '', fecha: m.fecha || '', porDia: m.porDia || [], total: sumaDia(m.porDia) || pend, est: est, cls: cls, orden: (m.porDia && m.porDia[0]) ? m.porDia[0].f : '9999', prio: m.prioridad || 999, ord: m.orden || 999, cap: (m.cap == null ? null : m.cap), capTot: m.cap || 0, pend: pend, disp: m.disp || null, mat: m.materiales || null, falta: m.falta || null, conf: !!m.confirmado, alerta: (FIJO && VIVO && VIVO[m.sm] != null && VIVO[m.sm] < Math.min(m.cap || 0, pend)) ? VIVO[m.sm] : null };
   }), doc);
 }
 // ASSY: reparto propio con la capacidad diaria (13,000): solo modelos con material,
@@ -227,10 +232,10 @@ function filasColas(doc, orden, etiqueta){
       else if (it.listo) { est = T.parcial + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'mid'; }
       else { est = T.falta + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'no'; }
       var ms = it.modelos || [it.sm];
-      out.push({ et: etiqueta(k) + ' · ' + (ms[0] || ''), sub: ms.length > 1 ? '+' + (ms.length - 1) + ' ' + ms.slice(1).join(', ') : '', pieza: it.pn || '', fecha: it.fecha || '', porDia: it.porDia || [], total: sumaDia(it.porDia) || pend, est: est, cls: cls, grupo: k, capDia: Number(it.capDia) || 0, pend: pend, prio: it.prioridad || 999 });
+      out.push({ et: etiqueta(k) + ' · ' + (ms[0] || ''), sub: ms.length > 1 ? '+' + (ms.length - 1) + ' ' + ms.slice(1).join(', ') : '', pieza: it.pn || '', fecha: it.fecha || '', porDia: it.porDia || [], total: sumaDia(it.porDia) || pend, est: est, cls: cls, grupo: k, mods: ms, capDia: Number(it.capDia) || 0, pend: pend, prio: it.prioridad || 999 });
     });
   });
-  return guiaColas(out, doc);
+  return MODO === 'cascada' ? out.map(function(r){ r.total = sumaDia(r.porDia) || r.pend; return r; }) : guiaColas(out, doc);
 }
 // Medio proceso y Bundle: misma regla que ASSY. Lo que ya tiene material sigue como lo programó el simulador;
 // lo que falta de cada modelo se agrega como guía (g:true) en los huecos de capacidad de cada línea.
@@ -265,10 +270,110 @@ function guiaColas(rows, doc){
   });
   return rows;
 }
+// ===== MODO CASCADA (2026-11-22): ASSY solo programa lo que medio proceso y Bundle ya entregaron al cierre del día anterior =====
+var MODO = 'cascada';
+try { if (localStorage.getItem('planDiaModo') === 'actual') MODO = 'actual'; } catch (e) {}
+function setModo(m){ MODO = m; try { localStorage.setItem('planDiaModo', m); } catch (e) {} pintar(); }
+function notaActual(){ return MODO === 'cascada' ? T.notaC : T.nota; }
+function capsAssy(){ var doc = DATOS && DATOS.assy; return { L: Number(doc && doc.capacidadDia) || 13000, S: Number(doc && doc.capacidadSabado) || 0, sab: !!(doc && doc.cal && doc.cal.sab) && (Number(doc && doc.capacidadSabado) || 0) > 0 }; }
+function capDeDia(iso){ var c = capsAssy(); return fechaD(iso).getDay() === 6 ? c.S : c.L; }
+function diasLaborales(n){
+  var c = capsAssy(), out = [], d = new Date(), g = 0; d.setHours(12, 0, 0, 0);
+  while (out.length < n && g++ < 200) { var w = d.getDay(); if ((w >= 1 && w <= 5) || (w === 6 && c.sab)) out.push({ f: isoLocal(d), cap: w === 6 ? c.S : c.L }); d.setDate(d.getDate() + 1); }
+  return out;
+}
+function tipoMedio(it){
+  var ks = (it.materiales || []).map(function(m){ return String(m.k || ''); }).join(' ');
+  if (/SHEET_TOP|CB_TOP/.test(ks)) return 'Top';
+  if (/SHEET_LOW|CB_BOT|PULP|SETPAD|STICKER|GALLETA/.test(ks)) return 'Bot';
+  var d = String(it.desc || '');
+  if (/bot|lower/i.test(d)) return 'Bot';
+  if (/top|gift/i.test(d)) return 'Top';
+  return null;
+}
+// Lo que medio proceso (Top/Bot) y Bundle producen CON material, por día y por modelo ASSY. Un código compartido por varios modelos se reparte en el orden de prioridad.
+function llegadasMateriales(doc, medio, bundle){
+  var need = {}, out = {};
+  ((doc && doc.modelos) || []).forEach(function(m){ var f = m.falta || {}; need[m.sm] = { Top: Math.max(0, f.Top || 0), Bot: Math.max(0, f.Bot || 0), Bundle: Math.max(0, f.Bundle || 0) }; out[m.sm] = { Top: {}, Bot: {}, Bundle: {} }; });
+  var ev = [], ik = 0;
+  var cm = (medio && medio.colas) || {};
+  Object.keys(cm).forEach(function(k){
+    ik++; if (/^VC/.test(k)) return;
+    (cm[k] || []).forEach(function(it, ii){ var t = tipoMedio(it); if (!t) return; (it.porDia || []).forEach(function(x){ if (x.q > 0) ev.push({ f: x.f, t: t, mods: (it.modelos || [it.sm]), q: x.q, o: ik * 1000 + ii }); }); });
+  });
+  ev.sort(function(a, b){ return a.f < b.f ? -1 : a.f > b.f ? 1 : a.o - b.o; });
+  ev.forEach(function(e){ var q = e.q; e.mods.forEach(function(sm){ if (q <= 0 || !need[sm]) return; var t = Math.min(q, need[sm][e.t]); if (t > 0) { need[sm][e.t] -= t; out[sm][e.t][e.f] = (out[sm][e.t][e.f] || 0) + t; q -= t; } }); });
+  var cb = (bundle && bundle.colas) || {};
+  Object.keys(cb).forEach(function(k){ (cb[k] || []).forEach(function(it){ var sm = it.sm; if (!need[sm]) return; (it.porDia || []).forEach(function(x){ var t = Math.min(x.q || 0, need[sm].Bundle); if (t > 0) { need[sm].Bundle -= t; out[sm].Bundle[x.f] = (out[sm].Bundle[x.f] || 0) + t; } }); }); });
+  return out;
+}
+// Máximo acumulado que se puede haber producido en ASSY de este modelo con el material que hay ANTES del día "hasta" (inventario + lo entregado en días anteriores)
+function maxPorMaterial(r, hasta, arr){
+  if (!r.disp) return r.capTot || 0;
+  var lim = Infinity, usado = false, m = r.mat || {};
+  ['Strip', 'Top', 'Bot', 'Bundle'].forEach(function(k){
+    if (m[k] == null || r.disp[k] == null) return;
+    var s = Number(r.disp[k]) || 0;
+    if (k !== 'Strip') { var o = ((arr[r.et] || {})[k]) || {}; Object.keys(o).forEach(function(f){ if (f < hasta) s += o[f]; }); }
+    lim = Math.min(lim, s); usado = true;
+  });
+  return usado ? lim : (r.capTot || 0);
+}
+function cascadaAssy(rows, arr){
+  var dias = diasLaborales(25), sched = {};
+  rows.forEach(function(r){ r.porDia = []; sched[r.et] = 0; });
+  var orden = rows.filter(function(r){ return r.pend > 0; }).sort(function(a, b){ var fa = a.fecha || '9999', fb = b.fecha || '9999'; return (b.conf ? 1 : 0) - (a.conf ? 1 : 0) || (fa < fb ? -1 : fa > fb ? 1 : 0) || (a.prio - b.prio) || (a.ord - b.ord); });
+  dias.forEach(function(d){
+    var rem = d.cap;
+    orden.forEach(function(r){
+      if (rem <= 0) return;
+      var q = Math.min(rem, r.pend - sched[r.et], maxPorMaterial(r, d.f, arr) - sched[r.et]);
+      if (q > 0) { r.porDia.push({ f: d.f, q: q, g: false }); sched[r.et] += q; rem -= q; }
+    });
+  });
+  rows.forEach(function(r){ r.total = sumaDia(r.porDia); r.orden = r.porDia.length ? r.porDia[0].f : '9999'; r.cap = null; });
+  return rows;
+}
+// Día en que ASSY empezaría cada modelo si hubiera todo el material (envío y prioridad): de ahí sale la fecha límite de medio proceso y Bundle (el día anterior)
+function necesidadAssy(rows){
+  var dias = diasLaborales(60), out = {}, i = 0, rem = dias.length ? dias[0].cap : 0;
+  rows.filter(function(r){ return r.pend > 0; }).sort(function(a, b){ var fa = a.fecha || '9999', fb = b.fecha || '9999'; return (b.conf ? 1 : 0) - (a.conf ? 1 : 0) || (fa < fb ? -1 : fa > fb ? 1 : 0) || (a.prio - b.prio) || (a.ord - b.ord); })
+    .forEach(function(r){ var q = r.pend; while (q > 0 && i < dias.length) { if (rem <= 0) { i++; if (i >= dias.length) break; rem = dias[i].cap; } if (out[r.et] === undefined) out[r.et] = dias[Math.max(i - 1, 0)].f; var t = Math.min(q, rem); q -= t; rem -= t; } });
+  return out;
+}
+function estadoFaltaAssy(r, arr){
+  var falta = [], m = r.mat || {};
+  if (r.disp) ['Strip', 'Top', 'Bot', 'Bundle'].forEach(function(k){
+    if (m[k] == null || r.disp[k] == null) return;
+    var s = Number(r.disp[k]) || 0;
+    if (k !== 'Strip') { var o = ((arr[r.et] || {})[k]) || {}; Object.keys(o).forEach(function(f){ s += o[f]; }); }
+    if (s < r.pend) falta.push(k);
+  });
+  return T.falta + (falta.length ? ': ' + falta.join(', ') : '');
+}
+function cascadaPost(A, N){
+  var d = DATOS || {}, arr = llegadasMateriales(d.assy, d.medio, d.bundle), lim = necesidadAssy(A.assy);
+  cascadaAssy(A.assy, arr);
+  var keep = [];
+  A.assy.forEach(function(r){
+    var left = r.pend - sumaDia(r.porDia);
+    if (r.porDia.length) keep.push(r);
+    if (left > 0) N.assy.push({ et: r.et, sub: r.sub, pieza: r.pieza, fecha: r.fecha, porDia: [], total: left, est: estadoFaltaAssy(r, arr), cls: 'no', pend: left, orden: '9999', prio: r.prio, ord: r.ord, lim: lim[r.et] || '' });
+  });
+  A.assy = keep;
+  ['medio', 'bundle'].forEach(function(k){
+    A[k].forEach(function(r){ var left = r.pend - sumaDia(r.porDia); if (left > 0 && r.cls !== 'no') N[k].push(Object.assign({}, r, { porDia: [], total: left, est: (r.cls === 'ok' ? T.parcial + ' ' + num(sumaDia(r.porDia)) + ' / ' + num(r.pend) : r.est) })); });
+    N[k].forEach(function(r){
+      var f = (r.mods || []).map(function(sm){ return lim[sm]; }).filter(Boolean).sort()[0];
+      if (f) r.est = r.est + ' · ' + T.limite + ' ' + fechaEnvio(f);
+    });
+  });
+}
 function armar(){
   var A = { assy: filasAssy(DATOS.assy), medio: filasColas(DATOS.medio, ['Zhongke','S1','S2','S3','S4','S5','VC1','VC2'], function(k){ return k; }), bundle: filasColas(DATOS.bundle, ['B1','B2','PRE'], function(k){ return k === 'PRE' ? 'Pre kit' : k; }) };
   var N = {};
   Object.keys(A).forEach(function(k){ if (k === 'assy') { N[k] = []; return; } N[k] = A[k].filter(function(r){ return r.cls === 'no' && !r.guiado; }); A[k] = A[k].filter(function(r){ return !(r.cls === 'no' && !r.guiado); }); });
+  if (MODO === 'cascada') cascadaPost(A, N);
   A.assy.sort(function(a, b){ return a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : (a.ord - b.ord) || (a.prio - b.prio); });
   // Columnas = días con producción en las áreas elegidas (máx. 7); lo demás va en "Después"
   var set = {};
@@ -294,7 +399,14 @@ function tablaHtml(rows, cols, hayDesp, tipo){
   h += '<tr class="tot"><td class="m" ' + (tipo === 'assy' ? '' : 'colspan="2"') + '>' + esc(tr3(T.total)) + '</td><td></td>';
   tot.cols.forEach(function(q){ h += '<td>' + (q > 0 ? num(q) : '–') + '</td>'; });
   if (hayDesp) h += '<td>' + (tot.desp > 0 ? num(tot.desp) : '–') + '</td>';
-  return h + '<td>' + num(tot.total) + '</td><td></td></tr></tbody></table>';
+  h += '<td>' + num(tot.total) + '</td><td></td></tr>';
+  if (tipo === 'assy' && MODO === 'cascada') {
+    h += '<tr class="free"><td class="m">' + esc(tr3(T.libre)) + '</td><td></td>';
+    cols.forEach(function(c, i){ var lib = Math.max(0, capDeDia(c) - tot.cols[i]); h += '<td class="lib">' + (lib > 0 ? num(lib) : '–') + '</td>'; });
+    if (hayDesp) h += '<td></td>';
+    h += '<td></td><td></td></tr>';
+  }
+  return h + '</tbody></table>';
 }
 
 function tablaSinMat(rows, tipo){
@@ -339,9 +451,9 @@ function pintar(){
   root.innerHTML =
     '<div class="bar"><h1>' + esc(T.titulo) + '</h1>' +
     '<span class="noprint">' + ['assy','medio','bundle'].map(function(k){ return '<label class="chk"><input type="checkbox" ' + (AREAS[k] ? 'checked' : '') + ' onchange="AREAS.' + k + '=this.checked;pintar()"> ' + (k === 'assy' ? 'ASSY' : k === 'medio' ? 'Medio proceso' : 'Bundle') + '</label>'; }).join('') + '</span>' +
-    '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn x" id="btnXl" onclick="exportarExcel()">' + esc(T.excel) + '</button><button class="btn g" onclick="fijarPlan()">' + esc(T.fijar) + '</button><button class="btn g" onclick="verCambios()">' + esc(T.cambios) + '</button><button class="btn g" onclick="verVivo()">' + esc(T.act) + '</button></div>' +
+    '<button class="btn" onclick="window.print()">' + esc(T.imprimir) + '</button><button class="btn w" id="btnWa" onclick="enviarWhatsApp()">' + esc(T.wa) + '</button><button class="btn x" id="btnXl" onclick="exportarExcel()">' + esc(T.excel) + '</button><button class="btn g" onclick="fijarPlan()">' + esc(T.fijar) + '</button><button class="btn g" onclick="verCambios()">' + esc(T.cambios) + '</button><button class="btn g" onclick="verVivo()">' + esc(T.act) + '</button><button class="btn g" onclick="setModo(MODO===\'cascada\'?\'actual\':\'cascada\')">' + esc(MODO === 'cascada' ? T.modoC : T.modoA) + '</button></div>' +
     '<div class="msg" id="msg"></div>' +
-    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2>' + bannerExcel() + '<div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) + edadPlan(FIJO.en) : T.lbVivo) + '</b>' + (function(){ var n = X.A.assy.filter(function(r){ return r.alerta != null; }).length; return n ? '<br><b style="color:#b3261e">⚠ ' + n + ' ' + esc(tr3(T.difVivo)) + '</b>' : ''; })() + '<br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(T.nota) + '</div></div><div id="panelCambios" class="noprint"></div>';
+    '<div class="sheet" id="sheet"><h2>' + esc(T.titulo) + (sem ? ' — ' + sem : '') + '</h2>' + bannerExcel() + '<div class="sub"><b style="color:' + (FIJO ? '#0a7a3e' : '#b3261e') + '">' + esc(FIJO ? T.lbFijo + ': ' + fechaHora(FIJO.en) + edadPlan(FIJO.en) : T.lbVivo) + '</b>' + (function(){ var n = X.A.assy.filter(function(r){ return r.alerta != null; }).length; return n ? '<br><b style="color:#b3261e">⚠ ' + n + ' ' + esc(tr3(T.difVivo)) + '</b>' : ''; })() + '<br>' + esc(T.pub) + ': ' + esc(pubs.join(' · ') || '—') + '</div>' + secs + '<div class="foot">' + esc(textoFuente()) + '<br>' + esc(notaActual()) + '</div></div><div id="panelCambios" class="noprint"></div>';
 }
 function msg(t, cls){ var m = document.getElementById('msg'); if (m) { m.className = 'msg ' + (cls || ''); m.textContent = t || ''; } }
 
@@ -506,6 +618,13 @@ function exportarExcel(){
         tot.forEach(function(q, i){ if (q > 0) bt(5 + i, q, 'right', '#,##0'); else bt(5 + i, '–', 'center'); });
         if (hD) { if (totD > 0) bt(cDesp, totD, 'right', '#,##0'); else bt(cDesp, '–', 'center'); }
         bt(cTot, totT, 'right', '#,##0'); bt(cEst, '');
+        if (k === 'assy' && MODO === 'cascada') {
+          var lr = fila(); lr.height = 20;
+          var bl = function(c, v, h, fmt){ var cell = lr.getCell(c); cell.value = v; cell.border = BORDE; cell.font = { name: 'Calibri', size: 11, italic: true, color: { argb: 'FF666666' } }; cell.alignment = { vertical: 'middle', horizontal: h || 'right' }; if (fmt) cell.numFmt = fmt; };
+          bl(1, tr3(T.libre), 'left'); bl(2, ''); bl(3, ''); bl(4, '');
+          X.cols.forEach(function(c, i){ var lib = Math.max(0, capDeDia(c) - tot[i]); if (lib > 0) bl(5 + i, lib, 'right', '#,##0'); else bl(5 + i, '–', 'center'); });
+          if (hD) bl(cDesp, ''); bl(cTot, ''); bl(cEst, '');
+        }
       }
       if (rows.length) {
         tabla(rows);
@@ -524,7 +643,7 @@ function exportarExcel(){
       }
     }
     area('assy', T.assy, 'FF0F6B3C'); area('medio', T.medio, 'FF1A4F9C'); area('bundle', T.bundle, 'FF7A4A00');
-    fila(); r++; var fr = ws.getRow(r); unir(fr, textoFuente() + '\n' + T.nota, { size: 9, color: 'FF666666', h: 90 });
+    fila(); r++; var fr = ws.getRow(r); unir(fr, textoFuente() + '\n' + notaActual(), { size: 9, color: 'FF666666', h: 90 });
     var nombre = 'Plan_Dia_' + sem + '_' + isoLocal(new Date()) + '.xlsx';
     return wb.xlsx.writeBuffer().then(function(buf){ descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre); window.__xlsOk = true; msg(T.xlsOk, 'ok'); });
   }).catch(function(e){ console.error(e); msg(T.errXls, 'er'); }).then(function(){ if (btn) btn.disabled = false; });

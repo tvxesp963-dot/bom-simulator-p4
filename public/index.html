@@ -2541,6 +2541,13 @@ function consCambiarModo(m) { try { localStorage.setItem('consModo', m); } catch
 function consCambiarFecha(f) { try { if (f) localStorage.setItem('consFechaAnt', f); } catch (e) {} renderCons(); }
 function consIdioma(l) { try { localStorage.setItem('autoChkLang', l); } catch (e) {} if (typeof pintarAutochequeo === 'function') pintarAutochequeo(); renderCons(); }
 
+// Llave de inventario compartido: GH64 (Ejection Pin/PIN/Data Cable) y GH68 (QSG/IBG/Sticker) son piezas compradas con UN solo inventario por N° de parte,
+// aunque cada modelo les ponga otra descripción. El resto (GH69 Sheet/Gift Box/Chip Board, GH90) sigue separado por PN+Descripción.
+function keyInvPool(pn, desc) {
+  var p = (pn || '').trim().toUpperCase();
+  if (p.indexOf('GH64') === 0 || p.indexOf('GH68') === 0) return p + '||*';
+  return p + '||' + (desc || '').trim().toUpperCase();
+}
 // CONSOLIDADO
 function renderCons() {
   document.getElementById('consTitle').textContent = `Consolidado Pedidos — ${document.getElementById('semanaRef').value}`;
@@ -2591,7 +2598,7 @@ function renderCons() {
   // compartan el mismo PN base. Cada variante suma su faltante real ENTRE LOS
   // MODELOS que la usan (ej. Sheet Top Box de KAXAA+KAXAU+KACHA se suma entre
   // sí), pero permanece separada de las demás variantes de ese mismo PN.
-  const keyPool = (pn, desc) => (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+  const keyPool = (pn, desc) => keyInvPool(pn, desc);
 
   // Déficit consolidado por PN+Desc: suma del FALTANTE REAL (sin 10%) de
   // cada modelo individual que usa este componente. El +10% se aplica
@@ -2609,19 +2616,19 @@ function renderCons() {
   const poolCompartido = {};
   BOM.forEach(r => {
     if (!r.pn) return;
-    const key = r.pn.trim().toUpperCase() + '||' + (r.desc||'').trim().toUpperCase();
+    const key = keyInvPool(r.pn, r.desc);
     if (poolCompartido[key] === undefined) poolCompartido[key] = r.inv || 0;
   });
   // Helper para obtener y descontar del pool
   const tomarPool = (pn, desc, cantidad) => {
-    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    const key = keyInvPool(pn, desc);
     const disponible = poolCompartido[key] || 0;
     const tomar = Math.min(disponible, cantidad);
     poolCompartido[key] = disponible - tomar;
     return tomar;
   };
   const verPool = (pn, desc) => {
-    const key = (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+    const key = keyInvPool(pn, desc);
     return poolCompartido[key] || 0;
   };
 
@@ -3735,7 +3742,7 @@ function exportarExcel(opts) {
   const VC_BG='FFF3CD';
 
   // ── Agrupar por variante (PN+Desc), igual que el Consolidado en pantalla ──
-  const keyPoolX = (pn, desc) => (pn||'').trim().toUpperCase() + '||' + (desc||'').trim().toUpperCase();
+  const keyPoolX = (pn, desc) => keyInvPool(pn, desc);
   const getRows = (plKey) => {
     const datosPlanta = window.consolidadoData[plKey] || {};
     const grupos = {};

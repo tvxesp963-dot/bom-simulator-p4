@@ -7753,8 +7753,9 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
 // ── REQUERIDO P1 (para el MES P1) ──
 // Publica en bom_simulator_p4/plan_p1_requerido la lista de códigos que P1 debe producir según el plan
 // (mismo cálculo del Consolidado, sección P1, capa urgente): una fila por N° de parte, en orden de prioridad.
-async function publicarRequeridoP1(usuario) {
-  if (typeof renderCons === 'function' && (!window.consolidadoData || !window.consolidadoData.P1 || (window._vistasPendientes && window._vistasPendientes.cons))) {
+async function publicarRequeridoP1(usuario, auto) {
+  // Siempre recalcula el Consolidado: el inventario del IMS acaba de refrescarse y consolidadoData puede estar viejo
+  if (typeof renderCons === 'function') {
     try { renderCons(); } catch (eR) { console.warn('[Requerido P1] renderCons', eR); }
   }
   const cd = (window.consolidadoData || {}).P1 || {};
@@ -7780,6 +7781,10 @@ async function publicarRequeridoP1(usuario) {
     x.modelos.sort(function (a, b) { return a.prioridad - b.prioridad; });
     return { pn: x.pn, desc: x.desc, pide: calcularAPedir(x.falta), falta: Math.round(x.falta), prioridad: x.prioridad, fecha: x.fecha, modelos: x.modelos };
   }).sort(function (a, b) { return (a.prioridad - b.prioridad) || a.pn.localeCompare(b.pn); });
+  // En automático solo escribe si cambió algo (o cada 30 min como latido) para no gastar escrituras
+  const huella = JSON.stringify(items.map(function (x) { return [x.pn, x.pide, x.prioridad, x.fecha]; })) + '|' + (window.simPlanArchivo || '');
+  if (auto && window._reqP1Huella === huella && Date.now() - (window._reqP1Ms || 0) < 30 * 60000) return items.length;
+  window._reqP1Huella = huella; window._reqP1Ms = Date.now();
   await db.collection('bom_simulator_p4').doc('plan_p1_requerido').set({
     publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario || '',
     planArchivo: window.simPlanArchivo || null, planCargadoEn: window.simPlanCargadoEn || null,
@@ -8008,7 +8013,7 @@ async function publicarPlanPiso(auto) {
     try { await publicarPlanBundle(auto, u, conTarget, produccionReal); }
     catch (eBundle) { console.warn('[Publicar bundle]', eBundle); avisoBundle = eBundle.message || 'error'; }
     let avisoP1 = '';
-    if (!auto) { try { await publicarRequeridoP1(u); } catch (eP1) { console.warn('[Requerido P1]', eP1); avisoP1 = eP1.message || 'error'; } }
+    try { await publicarRequeridoP1(u, auto); } catch (eP1) { console.warn('[Requerido P1]', eP1); if (!auto) avisoP1 = eP1.message || 'error'; }
     // Plan del día (plan-dia.html): al publicar a mano, se fija solo el mismo plan (así no hay que ir a "Fijar de nuevo")
     if (!auto && !avisoMedio && !avisoBundle && verificado !== false) {
       try {

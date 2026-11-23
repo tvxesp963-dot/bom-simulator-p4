@@ -190,12 +190,20 @@ function detalleMatAssy(m){
   return out;
 }
 function detalleMatCola(it){
+  // Igual que el Consolidado: el Ranurado cubre primero y el Virgen solo necesita el resto (req - Ranurado).
   var ms = it.materiales || [], out = [];
+  function par(k){ var o = k.slice(-2) === '_V' ? k.slice(0, -2) + '_R' : k.slice(-2) === '_R' ? k.slice(0, -2) + '_V' : null; return o ? ms.filter(function(y){ return y.k === o; })[0] : null; }
   ms.forEach(function(x){
-    if (x.e === 'ok') return;
-    if (x.e == null && !(x.disp < x.req)) return;
-    if (/_V$/.test(x.k)) { var rk = x.k.replace(/_V$/, '_R'); var r = ms.filter(function(y){ return y.k === rk; })[0]; if (r && r.e === 'ok') return; }   // Virgen cubierto con el Ranurado: no es faltante
-    out.push(lineaMat(MATL[x.k] || x.k, x.pn, x.disp, x.req));
+    var need = x.req, falta = x.e != null ? x.e !== 'ok' : x.disp < x.req;
+    if (/_V$/.test(x.k)) {
+      var r = par(x.k);
+      if (r) { need = Math.max(0, x.req - (r.disp || 0)); falta = x.disp < need; }
+    } else if (/_R$/.test(x.k)) {
+      var v = par(x.k);
+      if (v) { var nv = Math.max(0, v.req - (x.disp || 0)); if (x.disp >= x.req || v.disp >= nv) return; }   // Ranurado se hace en VC con el Virgen: solo es faltante si el Virgen tampoco alcanza
+    }
+    if (!falta) return;
+    out.push(lineaMat(MATL[x.k] || x.k, x.pn, x.disp, need));
   });
   return out;
 }
@@ -255,7 +263,7 @@ function filasColas(doc, orden, etiqueta){
       var mats = it.materiales || [], falt = mats.filter(function(x){ return x.e ? x.e !== 'ok' : x.disp < x.req; }).map(function(x){ return x.k; });
       var est, cls; var pend = it.pendiente || 0;
       if (it.listo && !falt.length) { est = T.listo; cls = 'ok'; }
-      else if (it.listo) { var dl1 = detalleMatCola(it); est = dl1.length ? conDetalle(T.parcial, dl1) : T.parcial + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'mid'; }
+      else if (it.listo) { var dl1 = detalleMatCola(it); if (dl1.length) { est = conDetalle(T.parcial, dl1); cls = 'mid'; } else { est = T.listo; cls = 'ok'; } }
       else { var dl2 = detalleMatCola(it); est = dl2.length ? conDetalle(T.falta, dl2) : T.falta + (falt.length ? ': ' + falt.join(', ') : ''); cls = 'no'; }
       var ms = it.modelos || [it.sm];
       out.push({ et: etiqueta(k) + ' · ' + (ms[0] || ''), sub: ms.length > 1 ? '+' + (ms.length - 1) + ' ' + ms.slice(1).join(', ') : '', pieza: it.pn || '', fecha: it.fecha || '', porDia: it.porDia || [], total: sumaDia(it.porDia) || pend, est: est, cls: cls, grupo: k, mods: ms, capDia: Number(it.capDia) || 0, pend: pend, prio: it.prioridad || 999 });

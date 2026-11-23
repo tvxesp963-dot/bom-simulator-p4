@@ -2738,6 +2738,11 @@ function renderCons() {
       // porque MANUAL BUNDLE suele tener inventario alto y ocultaba el faltante real de
       // componentes como Manual box / Manual pad / TMB T&C.
       const necesitaProducir = pl.key === 'P3' && bundleHeaderRow ? Math.max(0, target - bundleHeaderInvDisp) : target;
+      // GH64 (PIN / Ejection Pin / Data Cable) son insumos del Bundle: su necesidad es target - Bundle terminado (igual que el Plan del día),
+      // no el target del grupo Lower Box. Se calcula igual en cualquier planta (el Bundle terminado se toma de su inventario real).
+      const bundleHdrGH64 = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc||'').toUpperCase().includes('BUNDLE') && !(r.desc||'').toUpperCase().includes('MANUAL'));
+      const necesitaBundleGH64 = bundleHdrGH64 ? Math.max(0, target - (bundleHdrGH64.inv||0)) : target;
+      const vistoPoolPN = new Set();   // GH64/GH68: un modelo gasta el inventario de un N° de parte UNA sola vez aunque lo liste con 2 descripciones
 
       // Pool compartido para headers (Gift Box / Lower Box): el inventario disponible se descuenta
       // conforme cada modelo lo va tomando, en el mismo orden en que se procesan los modelos.
@@ -2821,6 +2826,7 @@ function renderCons() {
       // Función para obtener targetReal correcto según descripción del componente
       const getTargetReal = (r) => {
         const d = (r.desc||'').toUpperCase();
+        if ((r.pn||'').toUpperCase().indexOf('GH64') === 0 || r.familia === 'GH64') return necesitaBundleGH64;
         // Header (Gift Box / Lower Box) siempre contra target completo
         if (d.includes('GIFT BOX') || d.includes('LOWER BOX')) return target;
         // Chip Board: Ranurado usa targetReal completo; Virgen resta lo que Ranurado ya cubre
@@ -2887,6 +2893,17 @@ function renderCons() {
             // inventario/diferencia real; solo se le quita el "A Pedir" propio más
             // adelante (no se oculta la fila por completo, eso ocultaba el remanente
             // real disponible al usuario).
+          }
+          // Insumo genérico compartido (PIN, QSG, Sticker, Pulp Tray...): aunque a ESTE modelo le alcance, lo que toma se
+          // descuenta del pool para que el siguiente modelo en prioridad vea el remanente real (igual que el Plan del día).
+          const esGenCub = !esChipBoard && !d.includes('GIFT BOX') && !d.includes('LOWER BOX') && !d.includes('SHEET TOP') && !d.includes('SHEET LOWER') && !d.includes('SHEET LOW');
+          if (esGenCub) {
+            const kp = keyPool(r.pn, r.desc), pnU = (r.pn||'').toUpperCase();
+            if (pnU.indexOf('GH64') === 0 || pnU.indexOf('GH68') === 0) {
+              if (vistoPoolPN.has(kp)) return false;   // misma pieza con otra descripción en el mismo modelo
+              vistoPoolPN.add(kp);
+            }
+            if (inv >= tgt && tgt > 0) poolPlanta[kp] = Math.max(0, (poolPlanta[kp] ?? (r.inv||0)) - tgt);
           }
           return inv < tgt;
         });

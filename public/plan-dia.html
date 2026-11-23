@@ -223,6 +223,7 @@ function filasAssy(doc){
 // ASSY: reparto propio con la capacidad diaria (13,000): solo modelos con material,
 // en el orden del piso (más material listo primero, hacia abajo), llenando cada día.
 function isoLocal(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function horaArchivo(d){ return String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0'); }
 function repartoAssy(rows, doc){
   var capL = Number(doc && doc.capacidadDia) || 13000, capS = Number(doc && doc.capacidadSabado) || 0;
   var sab = !!(doc && doc.cal && doc.cal.sab) && capS > 0;
@@ -552,7 +553,7 @@ function enviarWhatsApp(){
     return new Promise(function(ok){ cv.toBlob(ok, 'image/png'); });
   }).then(function(blob){
     if (!blob) throw new Error('blob');
-    var nombre = 'Plan_Dia_' + new Date().toISOString().slice(0, 10) + '.png', file = new File([blob], nombre, { type: 'image/png' });
+    var ahoraP = new Date(), nombre = 'Plan_Dia_' + isoLocal(ahoraP) + '_' + horaArchivo(ahoraP) + '.png', file = new File([blob], nombre, { type: 'image/png' });
     // Celular: abre el menú de compartir con la imagen ya adjunta (WhatsApp aparece ahí)
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       return navigator.share({ files: [file], text: texto }).then(function(){ msg('✅', 'ok'); }).catch(function(e){ if (e && e.name === 'AbortError') msg(''); else throw e; });
@@ -678,7 +679,7 @@ function exportarExcel(){
     }
     area('assy', T.assy, 'FF0F6B3C'); area('medio', T.medio, 'FF1A4F9C'); area('bundle', T.bundle, 'FF7A4A00');
     fila(); r++; var fr = ws.getRow(r); unir(fr, textoFuente() + '\n' + notaActual(), { size: 9, color: 'FF666666', h: 90 });
-    var nombre = 'Plan_Dia_' + sem + '_' + isoLocal(new Date()) + '.xlsx';
+    var ahora = new Date(), nombre = 'Plan_Dia_' + sem + '_' + isoLocal(ahora) + '_' + horaArchivo(ahora) + '.xlsx';
     return wb.xlsx.writeBuffer().then(function(buf){ descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre); window.__xlsOk = true; msg(T.xlsOk, 'ok'); });
   }).catch(function(e){ console.error(e); msg(T.errXls, 'er'); }).then(function(){ if (btn) btn.disabled = false; });
 }

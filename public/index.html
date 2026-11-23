@@ -7750,6 +7750,45 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
   return salida;
 }
 
+// ── REQUERIDO P1 (para el MES P1) ──
+// Publica en bom_simulator_p4/plan_p1_requerido la lista de códigos que P1 debe producir según el plan
+// (mismo cálculo del Consolidado, sección P1, capa urgente): una fila por N° de parte, en orden de prioridad.
+async function publicarRequeridoP1(usuario) {
+  if (typeof renderCons === 'function' && (!window.consolidadoData || !window.consolidadoData.P1 || (window._vistasPendientes && window._vistasPendientes.cons))) {
+    try { renderCons(); } catch (eR) { console.warn('[Requerido P1] renderCons', eR); }
+  }
+  const cd = (window.consolidadoData || {}).P1 || {};
+  const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
+  const fec = (sm) => (window.simFechaEntregaPorModelo && window.simFechaEntregaPorModelo[sm]) || '';
+  const mapa = {};
+  Object.keys(cd).forEach(function (sm) {
+    ((cd[sm] && cd[sm].rows) || []).forEach(function (r) {
+      const desc = String(r.desc || '').toUpperCase();
+      if (desc.indexOf('RANURADO') >= 0) return;                 // el ranurado se cubre con Virgen (igual que el Consolidado)
+      if (!(r.aPedir > 0) || !(r.falta > 0)) return;              // solo lo que genera pedido a P1
+      const pn = String(r.pn || '').trim().toUpperCase(); if (!pn) return;
+      const k = pn + '||' + desc;
+      const x = mapa[k] || (mapa[k] = { pn: pn, desc: String(r.desc || ''), falta: 0, prioridad: 999, fecha: '', modelos: [] });
+      x.falta += r.falta;
+      const p = prio(sm); if (p < x.prioridad) x.prioridad = p;
+      const f = fec(sm); if (f && (!x.fecha || f < x.fecha)) x.fecha = f;
+      x.modelos.push({ sm: sm, falta: Math.round(r.falta), prioridad: p, fecha: f });
+    });
+  });
+  const items = Object.keys(mapa).map(function (k) {
+    const x = mapa[k];
+    x.modelos.sort(function (a, b) { return a.prioridad - b.prioridad; });
+    return { pn: x.pn, desc: x.desc, pide: calcularAPedir(x.falta), falta: Math.round(x.falta), prioridad: x.prioridad, fecha: x.fecha, modelos: x.modelos };
+  }).sort(function (a, b) { return (a.prioridad - b.prioridad) || a.pn.localeCompare(b.pn); });
+  await db.collection('bom_simulator_p4').doc('plan_p1_requerido').set({
+    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario || '',
+    planArchivo: window.simPlanArchivo || null, planCargadoEn: window.simPlanCargadoEn || null,
+    items: items
+  });
+  return items.length;
+}
+window.publicarRequeridoP1 = publicarRequeridoP1;
+
 async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionReal) {
   const colas = await calcularColasMedioProceso(conTargetOrdenado, produccionReal);
   await db.collection('bom_simulator_p4').doc('plan_piso_medio').set({
@@ -7968,6 +8007,8 @@ async function publicarPlanPiso(auto) {
     let avisoBundle = '';
     try { await publicarPlanBundle(auto, u, conTarget, produccionReal); }
     catch (eBundle) { console.warn('[Publicar bundle]', eBundle); avisoBundle = eBundle.message || 'error'; }
+    let avisoP1 = '';
+    if (!auto) { try { await publicarRequeridoP1(u); } catch (eP1) { console.warn('[Requerido P1]', eP1); avisoP1 = eP1.message || 'error'; } }
     // Plan del día (plan-dia.html): al publicar a mano, se fija solo el mismo plan (así no hay que ir a "Fijar de nuevo")
     if (!auto && !avisoMedio && !avisoBundle && verificado !== false) {
       try {
@@ -7989,6 +8030,7 @@ async function publicarPlanPiso(auto) {
     }
     if (avisoMedio && !auto) window.alert('ASSY publicado, pero el plan de medio proceso falló: ' + avisoMedio);
     if (avisoBundle && !auto) window.alert('El plan de Bundle P3 falló: ' + avisoBundle);
+    if (avisoP1 && !auto) window.alert('Se publicó el piso, pero el requerido de P1 (para el MES P1) falló: ' + avisoP1);
     regresar(auto ? '' : ((avisoMedio || avisoBundle) ? '⚠️ Revisar publicación' : '✅ ASSY + RGB + Bundle · auto 5 min'));
   } catch (e) {
     alert('Error: ' + e.message);

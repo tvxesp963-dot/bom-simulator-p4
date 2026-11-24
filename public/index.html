@@ -489,6 +489,7 @@ function latidoPisoAuto() {
 function tickPisoAuto() {
   if (!window._pisoAutoOn || !adminAuthed || modoSoloSimulador || typeof publicarPlanPiso !== 'function') return;
   escucharAjustesMaquinas();
+  escucharAjustesBundle();
   escucharLineaConf();
   window._pisoAutoTick2 = (window._pisoAutoTick2 || 0) + 1;
   if (window._pisoAutoTick2 % 5 !== 0) { latidoPisoAuto(); return; }
@@ -514,6 +515,26 @@ function escucharAjustesMaquinas() {
       tmr = setTimeout(() => { publicarPlanPiso(true).catch(() => {}); }, 4000);
     }, () => { window._escuchaAjustes = false; });
   } catch (e) { window._escuchaAjustes = false; }
+}
+
+// Cuando alguien cambia líneas desde la pantalla de piso de Bundle (botón "↔ Mover"), se republica en segundos
+function escucharAjustesBundle() {
+  try {
+    if (window._escuchaAjustesB || typeof db === 'undefined' || !db) return;
+    window._escuchaAjustesB = true;
+    let primera = true, tmr = null;
+    db.collection('bom_simulator_p4').doc('master_bundle').onSnapshot(snap => {
+      if (primera) { primera = false; return; }
+      if (snap.metadata.hasPendingWrites || !snap.exists) return;
+      const aj = snap.data().ajustes || {};
+      if (JSON.stringify(aj) === JSON.stringify(window.simBundleLineasPorModelo || {})) return;
+      window.simBundleLineasPorModelo = aj; try { guardarBundleLocal(); } catch (e) {}
+      if (typeof bundleRepintar === 'function') { try { bundleRepintar(); } catch (e) {} }
+      if (!window._pisoAutoOn || !adminAuthed || modoSoloSimulador) return;
+      clearTimeout(tmr);
+      tmr = setTimeout(() => { publicarPlanPiso(true).catch(() => {}); }, 4000);
+    }, () => { window._escuchaAjustesB = false; });
+  } catch (e) { window._escuchaAjustesB = false; }
 }
 
 // ===== Modelo confirmado por el leader en ASSY1 (doc linea_asy1: { sm, ts, por }) =====
@@ -7912,6 +7933,7 @@ async function publicarPlanPiso(auto) {
       regresar(); return;
     }
     await cargarMasterFirestore();
+    try { await cargarMasterBundleFirestore(); } catch (e) {}   // cambios de línea hechos desde el piso de Bundle (↔ Mover)
     if (!auto) pubEstado('⏳ Publicando... (2/4) calculando el plan.', 'run');
     const produccionReal = { ...(window.simProducidoManualPorModelo || {}) };
     const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;

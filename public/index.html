@@ -4763,7 +4763,25 @@ function alEntrarAdminPlan() {
   // Si todavía no hay plan compartido, se comparte el de este navegador.
   db.collection('bom_simulator_p4').doc('plan_compartido').get().then(function (d) {
     var tiene = false; try { tiene = !!localStorage.getItem('planCompleto_p4'); } catch (e) {}
-    if (!d.exists && tiene) publicarPlanCompartido();
+    if (!d.exists && tiene) { publicarPlanCompartido(); return; }
+    if (!d.exists) return;
+    // PC admin que NO es la maestra: si no tiene plan, o el compartido es más nuevo, lo trae (1 sola lectura, ya incluida arriba).
+    // La maestra no se toca: su plan local es igual o más nuevo que el compartido.
+    try {
+      var datos = (d.data() || {}).datos || {}, ver = String((d.data() || {}).ver || '');
+      var remotoPlan = null; try { remotoPlan = JSON.parse(datos.planCompleto_p4 || 'null'); } catch (e) {}
+      if (!remotoPlan || !remotoPlan.planCargadoEn) return;
+      var localPlan = null; try { localPlan = JSON.parse(localStorage.getItem('planCompleto_p4') || 'null'); } catch (e) {}
+      var localEn = (localPlan && localPlan.planCargadoEn) || '';
+      var yaAplicado = null; try { yaAplicado = sessionStorage.getItem('planCompartidoVerAdmin'); } catch (e) {}
+      if (yaAplicado === ver) return;               // evita recargar en bucle
+      if (localEn && localEn >= remotoPlan.planCargadoEn) return;   // el local es igual o más nuevo: no se pisa
+      PLAN_KEYS.forEach(function (k) {
+        try { if (datos[k] !== undefined) _lsSet.call(localStorage, k, datos[k]); else _lsRemove.call(localStorage, k); } catch (e) {}
+      });
+      try { sessionStorage.setItem('planCompartidoVerAdmin', ver); } catch (e) {}
+      location.reload();
+    } catch (e) { console.warn('No se pudo traer el plan compartido:', e); }
   }).catch(function () {});
 }
 
@@ -7868,7 +7886,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261106-1440';
+const BUILD_BOM='idx-20261125-1030';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {

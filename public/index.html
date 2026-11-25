@@ -6192,12 +6192,16 @@ async function aplicarPendientesIMS() {
     var prev = window._pendAplicado || {};
     Object.keys(prev).forEach(function(k){ imsInventario[k] = (imsInventario[k] || 0) - prev[k]; });
     window._pendAplicado = {};
+    // INTERRUPTOR (2026-11-25): APAGADO por defecto. El BOM refleja SOLO lo que ya se recibió (escaneó) en IMS P4. Para volver a contar pallets PENDING de destino IMS P4 como provisional, poner window.INV_PROVISIONAL_PENDIENTES = true.
+    if (window.INV_PROVISIONAL_PENDIENTES !== true) { window._pendTotal = 0; return; }
     var tot = 0, add = function(k, q){ imsInventario[k] = (imsInventario[k] || 0) + q; window._pendAplicado[k] = (window._pendAplicado[k] || 0) + q; };
     snap.forEach(function(doc) {
       var d = doc.data();
       if (String(d.fecha || '') < desde) return;
       var q = Number(d.qty) || 0, pn = String(d.parte || '').trim().toUpperCase(), desc = String(d.desc || '').trim().toUpperCase();
       if (!pn || q <= 0) return;
+      // Solo cuenta lo que va a llegar al IMS P4 (los pallets de P3 van a IMS P3 y NO deben sumar aquí)
+      if (String(d.destino || 'IMS P4').trim().toUpperCase() !== 'IMS P4') return;
       tot += q;
       add(pn, q); add(pn + '||PLANTA:P4', q);
       if (desc) { add(pn + '||' + desc, q); add(pn + '||' + desc + '||PLANTA:P4', q); }

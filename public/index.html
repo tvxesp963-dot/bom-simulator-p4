@@ -7824,6 +7824,7 @@ async function publicarRequeridoP1(usuario, auto) {
     x.modelos.sort(function (a, b) { return a.prioridad - b.prioridad; });
     return { pn: x.pn, desc: x.desc, pide: calcularAPedir(x.falta), falta: Math.round(x.falta), prioridad: x.prioridad, fecha: x.fecha, modelos: x.modelos };
   }).sort(function (a, b) { return (a.prioridad - b.prioridad) || a.pn.localeCompare(b.pn); });
+  window._reqP1Items = items;
   // En automático solo escribe si cambió algo (o cada 30 min como latido) para no gastar escrituras
   const huella = JSON.stringify(items.map(function (x) { return [x.pn, x.pide, x.prioridad, x.fecha]; })) + '|' + (window.simPlanArchivo || '');
   if (auto && window._reqP1Huella === huella && Date.now() - (window._reqP1Ms || 0) < 30 * 60000) return items.length;
@@ -7836,6 +7837,126 @@ async function publicarRequeridoP1(usuario, auto) {
   return items.length;
 }
 window.publicarRequeridoP1 = publicarRequeridoP1;
+
+
+// ── PLAN DE PISO P1 (para piso-p1.html del MES P1) ──
+// Misma idea que plan_piso_medio: el BOM Simulator calcula la cola de cada máquina de P1 y la publica en
+// bom_simulator_p4/plan_piso_p1. Entradas: lista requerida (plan_p1_requerido), master de "Máquinas por código"
+// (p1_codigos), capacidades en hojas/día (targets_p1) y papel del IMS P1 (planta1_papel_inventario).
+const P1_CACHE = { t: 0, m: null };
+async function leerMasterP1(forzar) {
+  if (!forzar && P1_CACHE.m && Date.now() - P1_CACHE.t < 10 * 60000) return P1_CACHE.m;
+  const r = await Promise.all([db.collection('p1_codigos').get(), db.collection('targets_p1').get(), db.collection('planta1_papel_inventario').get()]);
+  const codigos = {}, caps = {}, papel = {};
+  r[0].forEach(function (d) { const x = d.data(); const pn = String(x.pn || d.id).trim().toUpperCase(); if (pn) codigos[pn] = x; });
+  r[1].forEach(function (d) { const x = d.data(); if (!x.nombre) return; caps[x.nombre] = { hojasDia: Number(x.hojasDia) || 0, cambioMin: Number(x.cambioModeloMin) || 0, jornadaMin: Number(x.jornadaMin) || 480 }; });
+  const reDim = /\d+(?:[.,]\d+)?\s*(?:x|X|×)\s*\d+(?:[.,]\d+)?/;
+  r[2].forEach(function (d) {
+    const x = d.data(); const pn = String(x.pn || '').trim().toUpperCase(); if (!pn) return;
+    const ds = String(x.desc || x.descripcion || '').trim();
+    let dim = String(x.dimension || x.dimensiones || x.medida || x.medidas || x.tamano || '').trim();
+    if (!dim) { const mm = reDim.exec(ds); dim = mm ? mm[0] : ''; }
+    if (!papel[pn]) papel[pn] = { pn: pn, desc: ds, dim: dim, disp: 0 };
+    papel[pn].disp += Number(x.actual) || 0;
+  });
+  P1_CACHE.t = Date.now(); P1_CACHE.m = { codigos: codigos, caps: caps, papel: papel };
+  return P1_CACHE.m;
+}
+function etapaP1(n) { n = String(n || '').toUpperCase(); if (/^G[A-Z]$/.test(n)) return 0; if (/^ZP\d/.test(n)) return 1; if (n === 'EMBO') return 2; if (/^T[A-Z]$/.test(n)) return 3; if (/^P[12]$/.test(n)) return 4; return 9; }
+// Ruta de un código según las casillas marcadas en el master (misma lógica de "Máquinas por código")
+function rutaP1(c) {
+  let sel = (c.maquinas || []).filter(function (n) { return etapaP1(n) < 9; });
+  const peg = sel.filter(function (n) { return etapaP1(n) === 4; });
+  sel = sel.filter(function (n) { return etapaP1(n) !== 4; });
+  let S = String(c.stickerEn || '').toUpperCase(); if (S !== 'ZP5' && S !== 'ZP6') S = '';
+  if (!S && c.sticker) S = sel.find(function (n) { return etapaP1(n) === 1; }) || '';
+  if (S) sel = sel.filter(function (n) { return etapaP1(n) !== 0; });
+  const g = {}; sel.forEach(function (n) { const e = etapaP1(n); (g[e] = g[e] || []).push(n); });
+  if (S && !(g[1] || []).length) g[1] = [S];
+  const stages = Object.keys(g).map(Number).sort(function (a, b) { return a - b; }).map(function (e) { return { e: e, maqs: g[e].slice(), un: 'hojas' }; });
+  if (peg.length) stages.push({ e: 4, maqs: peg, un: 'pzas' });
+  return { stages: stages, S: S, foil: !!c.foil && !!g[2] };
+}
+function calcularColasP1(items, m) {
+  const codigos = m.codigos, caps = m.caps, pool = {};
+  Object.keys(m.papel).forEach(function (k) { pool[k] = m.papel[k].disp; });
+  const capDe = function (n) { return (caps[n] && caps[n].hojasDia) || 0; };
+  const iso = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const dias = []; const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  for (let i = 0; dias.length < 40 && i < 120; i++) { const d = new Date(hoy); d.setDate(d.getDate() + i); const fc = factorDiaCal(d); if (fc > 0) dias.push({ f: iso(d), fac: fc }); }
+  const est = {};
+  // Programa "qty" en la máquina: día por día según su capacidad; el cambio de modelo resta tiempo (minutos del master; 0 si no se ha capturado)
+  const programar = function (maq, qty, desde, peso) {
+    const cap = capDe(maq), e = est[maq] || (est[maq] = { dia: 0, usado: 0, n: 0 }), cm = caps[maq] || {};
+    const pd = []; let rest = qty, d0 = null;
+    if (!(cap > 0)) return { pd: pd, d0: null, sinCap: true };
+    if (e.dia < desde) { e.dia = desde; e.usado = 0; }
+    if (e.n > 0 && cm.cambioMin > 0) e.usado += cap * cm.cambioMin / (cm.jornadaMin || 480);
+    e.n++;
+    let guard = 0;
+    while (rest > 0.5 && e.dia < dias.length && guard++ < 400) {
+      const capDia = cap * dias[e.dia].fac, libre = capDia - e.usado;
+      if (libre <= 0.5) { e.dia++; e.usado = 0; continue; }
+      const q = Math.min(rest, libre / peso);
+      if (d0 === null) d0 = e.dia;
+      pd.push({ f: dias[e.dia].f, q: Math.round(q) }); e.usado += q * peso; rest -= q;
+      if (e.usado >= capDia - 0.5) { e.dia++; e.usado = 0; }
+    }
+    return { pd: pd, d0: d0, sinCap: false };
+  };
+  const carga = function (n) { const e = est[n]; return (e ? e.dia + e.usado / Math.max(1, capDe(n)) : 0) + (capDe(n) > 0 ? 0 : 1000); };
+  const colas = {}, sinAsignar = [];
+  items.forEach(function (it) {
+    const pn = String(it.pn || '').toUpperCase(), c = codigos[pn];
+    const base = { pn: pn, desc: it.desc || '', pide: Math.round(it.pide || 0), prioridad: it.prioridad || 999, fecha: it.fecha || '', modelos: (it.modelos || []).map(function (x) { return x.sm; }) };
+    if (!c) { sinAsignar.push(Object.assign({ motivo: 'codigo' }, base)); return; }
+    const ruta = rutaP1(c), formas = Number(c.formas) || 0;
+    if (!ruta.stages.length) { sinAsignar.push(Object.assign({ motivo: 'maquinas' }, base)); return; }
+    if (!(formas > 0)) { sinAsignar.push(Object.assign({ motivo: 'formas' }, base)); return; }
+    const piezas = Math.round(it.pide || 0);
+    const hojasTot = Math.ceil(piezas / formas), enProceso = Number(c.hojasProceso) || 0;
+    const hojas = Math.max(0, hojasTot - enProceso);
+    if (hojas <= 0) return;
+    const ppn = String(c.papel || '').trim().toUpperCase(), pap = ppn ? m.papel[ppn] : null;
+    const papel = { pn: ppn, desc: pap ? pap.desc : '', dim: pap ? pap.dim : '', disp: 0, req: hojas, e: 'no', asignado: !!ppn };
+    if (pap) { const disp = Math.max(0, pool[ppn] || 0); papel.disp = Math.round(disp); papel.e = disp >= hojas ? 'ok' : (disp > 0 ? 'parcial' : 'no'); pool[ppn] = Math.max(0, disp - hojas); }
+    let desde = 0, prev = [];
+    ruta.stages.forEach(function (st, si) {
+      const elegible = st.maqs.slice().sort(function (a, b) { return carga(a) - carga(b); });
+      const maq = elegible[0], qty = st.un === 'pzas' ? piezas : hojas;
+      let peso = 1, txt = '';
+      if (st.e === 1 && ruta.S) { if (maq === ruta.S) { peso = 2; txt = 'impresión + sticker'; } else txt = 'impresión'; }
+      if (st.e === 2 && ruta.foil) { peso = 2; txt = 'foil + embo'; }
+      const r = programar(maq, qty, desde, peso);
+      const capDia = capDe(maq);
+      const entrada = Object.assign({}, base, { formas: formas, etapa: st.e, etapaTxt: txt, un: st.un, target: Math.round(qty), viene: prev.slice(), primera: si === 0, papel: papel, porDia: r.pd, capDia: capDia, sinCap: r.sinCap, peso: peso,
+        dias: (capDia > 0) ? Math.round(qty * peso / capDia * 10) / 10 : null });
+      (colas[maq] = colas[maq] || []).push(entrada);
+      if (st.e === 1 && ruta.S && maq !== ruta.S) {   // sticker en la otra ZP: corre en línea con la impresión
+        const r2 = programar(ruta.S, qty, r.d0 === null ? desde : r.d0, 1);
+        (colas[ruta.S] = colas[ruta.S] || []).push(Object.assign({}, base, { formas: formas, etapa: 1, etapaTxt: 'sticker', un: 'hojas', target: Math.round(qty), viene: [maq], primera: false, papel: papel, porDia: r2.pd, capDia: capDe(ruta.S), sinCap: r2.sinCap, peso: 1,
+          dias: capDe(ruta.S) > 0 ? Math.round(qty / capDe(ruta.S) * 10) / 10 : null }));
+      }
+      if (r.d0 !== null) desde = r.d0;
+      prev = [maq];
+    });
+  });
+  Object.keys(colas).forEach(function (maq) { colas[maq].forEach(function (x, i) { x.orden = i + 1; }); });
+  return { colas: colas, sinAsignar: sinAsignar };
+}
+async function publicarPlanPisoP1(auto, usuario) {
+  const items = window._reqP1Items || [];
+  const m = await leerMasterP1(!auto);
+  const r = calcularColasP1(items, m);
+  const huella = JSON.stringify(r) + '|' + (window.simPlanArchivo || '');
+  if (auto && window._pisoP1Huella === huella && Date.now() - (window._pisoP1Ms || 0) < 30 * 60000) return;
+  window._pisoP1Huella = huella; window._pisoP1Ms = Date.now();
+  await db.collection('bom_simulator_p4').doc('plan_piso_p1').set({
+    publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario || '', auto: !!auto,
+    colas: r.colas, sinAsignar: r.sinAsignar, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null
+  });
+}
+window.publicarPlanPisoP1 = publicarPlanPisoP1;
 
 async function publicarPlanMedio(auto, usuario, conTargetOrdenado, produccionReal) {
   const colas = await calcularColasMedioProceso(conTargetOrdenado, produccionReal);
@@ -7886,7 +8007,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261125-1030';
+const BUILD_BOM='idx-20261126-1500';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {
@@ -8058,6 +8179,7 @@ async function publicarPlanPiso(auto) {
     catch (eBundle) { console.warn('[Publicar bundle]', eBundle); avisoBundle = eBundle.message || 'error'; }
     let avisoP1 = '';
     try { await publicarRequeridoP1(u, auto); } catch (eP1) { console.warn('[Requerido P1]', eP1); if (!auto) avisoP1 = eP1.message || 'error'; }
+    try { await publicarPlanPisoP1(auto, u); } catch (ePP1) { console.warn('[Plan piso P1]', ePP1); if (!auto) avisoP1 = (avisoP1 ? avisoP1 + ' · ' : '') + 'piso P1: ' + (ePP1.message || 'error'); }
     // Plan del día (plan-dia.html): al publicar a mano, se fija solo el mismo plan (así no hay que ir a "Fijar de nuevo")
     if (!auto && !avisoMedio && !avisoBundle && verificado !== false) {
       try {

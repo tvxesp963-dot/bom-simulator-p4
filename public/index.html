@@ -8018,20 +8018,24 @@ function calcularColasP1(items, m) {
     const ppn = String(c.papel || '').trim().toUpperCase(), pap = ppn ? m.papel[ppn] : null;
     const papel = { pn: ppn, desc: pap ? pap.desc : '', dim: pap ? pap.dim : '', disp: 0, req: hojas, e: 'no', asignado: !!ppn };
     if (pap) { const disp = Math.max(0, pool[ppn] || 0); papel.disp = Math.round(disp); papel.e = disp >= hojas ? 'ok' : (disp > 0 ? 'parcial' : 'no'); pool[ppn] = Math.max(0, disp - hojas); }
+    // [2026-11-27] Igual que P4: por día solo se programa lo que tiene papel. Si el papel está asignado en el master,
+    // las hojas sin papel quedan fuera del plan por día (salen como "Sin programar"); si no tiene papel asignado se programa todo.
+    const hojasProg = papel.asignado ? (pap ? Math.min(hojas, papel.disp) : 0) : hojas;
+    const piezasProg = hojas > 0 ? Math.min(piezas, Math.round(piezas * hojasProg / hojas)) : 0;
     let desde = 0, prev = [];
     ruta.stages.forEach(function (st, si) {
       const elegible = st.maqs.slice().sort(function (a, b) { return carga(a) - carga(b); });
-      const maq = elegible[0], qty = st.un === 'pzas' ? piezas : hojas;
+      const maq = elegible[0], qty = st.un === 'pzas' ? piezas : hojas, qtyProg = st.un === 'pzas' ? piezasProg : hojasProg;
       let peso = 1, txt = '';
       if (st.e === 1 && ruta.S) { if (maq === ruta.S) { peso = 2; txt = 'impresión + sticker'; } else txt = 'impresión'; }
       if (st.e === 2 && ruta.foil) { peso = 2; txt = 'foil + embo'; }
-      const r = programar(maq, qty, desde, peso);
+      const r = programar(maq, qtyProg, desde, peso);
       const capDia = capDe(maq);
       const entrada = Object.assign({}, base, { formas: formas, etapa: st.e, etapaTxt: txt, un: st.un, target: Math.round(qty), viene: prev.slice(), primera: si === 0, papel: papel, porDia: r.pd, capDia: capDia, sinCap: r.sinCap, peso: peso,
         dias: (capDia > 0) ? Math.round(qty * peso / capDia * 10) / 10 : null });
       (colas[maq] = colas[maq] || []).push(entrada);
       if (st.e === 1 && ruta.S && maq !== ruta.S) {   // sticker en la otra ZP: corre en línea con la impresión
-        const r2 = programar(ruta.S, qty, r.d0 === null ? desde : r.d0, 1);
+        const r2 = programar(ruta.S, qtyProg, r.d0 === null ? desde : r.d0, 1);
         (colas[ruta.S] = colas[ruta.S] || []).push(Object.assign({}, base, { formas: formas, etapa: 1, etapaTxt: 'sticker', un: 'hojas', target: Math.round(qty), viene: [maq], primera: false, papel: papel, porDia: r2.pd, capDia: capDe(ruta.S), sinCap: r2.sinCap, peso: 1,
           dias: capDe(ruta.S) > 0 ? Math.round(qty / capDe(ruta.S) * 10) / 10 : null }));
       }
@@ -8049,9 +8053,21 @@ async function publicarPlanPisoP1(auto, usuario) {
   const huella = JSON.stringify(r) + '|' + (window.simPlanArchivo || '');
   if (auto && window._pisoP1Huella === huella && Date.now() - (window._pisoP1Ms || 0) < 30 * 60000) return;
   window._pisoP1Huella = huella; window._pisoP1Ms = Date.now();
+  // [2026-11-27] Destino de cada parte (columna "Destino" del BOM, igual que la muestra el simulador) para que la
+  // etiqueta de Pallet Medio P1 diga a qué planta se envía. Se liga por código + descripción.
+  const destinos = [], vistosD = {};
+  try {
+    if (typeof _destinosBOM === 'function' && BOM && BOM.length) _destinosBOM().forEach(function (dd, rb) {
+      const pn = String(rb.pn || '').trim().toUpperCase(), ds = String(rb.desc || '').trim(); if (!pn) return;
+      const k = pn + '||' + ds.toUpperCase().replace(/\s+/g, ' '); if (vistosD[k]) return; vistosD[k] = 1;
+      destinos.push({ pn: pn, desc: ds, d: dd });
+    });
+  } catch (eD) { console.warn('[Piso P1] destinos', eD); }
+  const dDe = function (pn, ds) { const k = String(pn || '').toUpperCase() + '||' + String(ds || '').toUpperCase().replace(/\s+/g, ' ').trim(); const x = destinos.find(function (y) { return y.pn + '||' + y.desc.toUpperCase().replace(/\s+/g, ' ').trim() === k; }); return x ? x.d : ''; };
+  Object.keys(r.colas).forEach(function (mq) { r.colas[mq].forEach(function (e) { e.destino = dDe(e.pn, e.desc); }); });
   await db.collection('bom_simulator_p4').doc('plan_piso_p1').set({
     publicadoEn: new Date().toISOString(), publicadoMs: Date.now(), publicadoPor: usuario || '', auto: !!auto,
-    colas: r.colas, sinAsignar: r.sinAsignar, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null
+    colas: r.colas, sinAsignar: r.sinAsignar, destinos: destinos, cal: calSnapshot(), planCargadoEn: window.simPlanCargadoEn || null, planArchivo: window.simPlanArchivo || null
   });
 }
 window.publicarPlanPisoP1 = publicarPlanPisoP1;

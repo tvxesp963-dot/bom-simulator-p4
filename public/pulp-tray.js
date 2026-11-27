@@ -608,12 +608,7 @@
     var w3 = XLSX.utils.aoa_to_sheet(a3); numFmt(w3); head(w3, 12); cw(w3, [16, 44, 22, 18, 12, 12, 12, 14, 12, 18, 14, 40]);
     m3.forEach(function (m) { estiloFila(w3, m.r, 12, m.t === 'banda' ? BANDA : SUBTOT); });
     numFmt(w3); XLSX.utils.book_append_sheet(wb, w3, 'Model list');
-    // Pendientes
-    if (R.sinModelo.length) {
-      var a4 = [['Status', 'Forecast Code', 'Description', 'BOM Model', 'Forecast']];
-      R.sinModelo.forEach(function (x) { a4.push(['Not found in BOM', x.code, x.desc, '', x.tot]); });
-      var w4 = XLSX.utils.aoa_to_sheet(a4); head(w4, 5); numFmt(w4); cw(w4, [22, 16, 44, 22, 12]); XLSX.utils.book_append_sheet(wb, w4, 'Pending');
-    }
+    // (Sin hoja 'Pending': el Excel solo lleva modelos con Pulp Tray; los códigos sin BOM se ven solo en pantalla)
     var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
     var nomXl = 'Pulp_Tray_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.xlsx';
     if (modo === 'b64') return { nombre: nomXl, b64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) };

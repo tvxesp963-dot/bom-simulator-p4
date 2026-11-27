@@ -1342,7 +1342,9 @@ function calcularColasBundle(conTargetOrdenado, produccionReal) {
   const prio = (sm) => (window.simPrioridadPorModelo && window.simPrioridadPorModelo[sm]) || 999;
   const estadoMat = (disp, req) => (disp >= req ? 'ok' : (disp > 0 ? 'parcial' : 'no'));
   const pool = {};
-  const tomar = (pn, inv, cant) => { if (pool[pn] === undefined) pool[pn] = Math.max(0, inv || 0); const disp = pool[pn]; pool[pn] = Math.max(0, disp - cant); return disp; };
+  // [FIX-BUNDLE 2026-11-27] Pool por CÓDIGO + DESCRIPCIÓN (GH64/GH68 siguen por N° de parte, regla 2026-11-22)
+  const claveB = (pn, desc) => (/^GH6[48]/.test(pn) ? pn : pn + '||' + String(desc || '').toUpperCase().replace(/\s+/g, ' ').trim());
+  const tomar = (pn, inv, cant, desc) => { const k = claveB(pn, desc); if (pool[k] === undefined) pool[k] = Math.max(0, inv || 0); const disp = pool[k]; pool[k] = Math.max(0, disp - cant); return disp; };
   const items = [];
   conTargetOrdenado.slice().sort((a, b) => prio(a) - prio(b)).forEach(sm => {
     const g = bundleGrupoDe(sm); if (!g) return;
@@ -1350,9 +1352,11 @@ function calcularColasBundle(conTargetOrdenado, produccionReal) {
     const pendiente = Math.max(0, target - (produccionReal[sm] || 0) - Math.max(0, g.header.inv || 0));
     if (pendiente <= 0) return;
     const usados = {};
-    const materiales = g.subs.filter(s => s.pn).map(s => {
+    const pnHeader = String(g.header.pn || '').trim().toUpperCase();
+    // El propio Bundle (mismo código que el encabezado) no es material de sí mismo
+    const materiales = g.subs.filter(s => s.pn && String(s.pn).trim().toUpperCase() !== pnHeader).map(s => {
       const pn = String(s.pn).toUpperCase();
-      const disp = Math.round(tomar(pn, s.inv, pendiente));
+      const disp = Math.round(tomar(pn, s.inv, pendiente, s.desc));
       let k = String(s.desc || pn).trim().slice(0, 26) || pn;
       if (usados[k]) k = k + ' ' + pn; usados[k] = true;
       return { k, pn, disp, req: Math.round(pendiente), e: estadoMat(disp, pendiente) };
@@ -7809,23 +7813,59 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
   ['Zhongke', 'S1', 'S2', 'S3', 'S4', 'S5'].forEach(m => agregar(m, 'Top', planTop));
   ['S1', 'S2', 'S3', 'S4', 'S5'].forEach(m => agregar(m, 'Bot', planBot));
 
-  // VC1 (Chip Board Top) y VC2 (Chip Board Bottom): ranurar lo que falta, con pool compartido de virgen
-  const pool = {};
-  const tomar = (pn, cant) => { if (!pn) return 0; if (pool[pn] === undefined) { const r = BOM.find(x => x.pn === pn); pool[pn] = r ? (r.inv || 0) : 0; } const t = Math.min(pool[pn], cant); pool[pn] -= t; return t; };
+  // VC1 (Chip Board Top) y VC2 (Chip Board Bottom) — [FIX-VC 2026-11-27]
+  //  · Lo que hay que ranurar sale de lo MISMO que necesitan las máquinas de Top/Bottom (Pendiente − caja terminada ya en
+  //    inventario, con la cascada de prioridad: pick.requerido − pick.disponible), no del pendiente de ASSY.
+  //  · El Ranurado en inventario se descuenta UNA sola vez por código + descripción (pool compartido entre modelos).
+  //  · El Virgen se reparte por código + descripción (pool compartido) en orden de prioridad.
+  //  · Lo que sí tiene Virgen se programa por día con la capacidad de VC1/VC2; lo que no, queda pendiente (sin material).
+  const claveCD = r => String(r.pn || '').trim().toUpperCase() + '||' + String(r.desc || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const poolR = {}, poolV = {};
+  const tomarDe = (pool, r, cant) => { const k = claveCD(r); if (pool[k] === undefined) pool[k] = Math.max(0, r.inv || 0); const t = Math.min(pool[k], cant); pool[k] -= t; return t; };
+  const vcItems = {};
   ordenados.forEach(sm => {
-    const pendiente = Math.max(0, (simTargetsPorModelo[sm] || 0) - (produccionReal[sm] || 0));
-    if (pendiente <= 0) return;
-    [['VC1', 'TOP', 'Top'], ['VC2', 'BOTTOM', 'Bottom']].forEach(([maq, pos, txt]) => {
+    [['VC1', 'TOP', 'Top'], ['VC2', 'BOTTOM', 'Bot']].forEach(([maq, pos, tipoMP]) => {
+      const pick = (pickPorModelo[sm] || {})[tipoMP];
+      if (!pick) return;
+      const necesita = Math.max(0, Math.round((pick.requerido || 0) - (pick.disponible || 0)));
+      if (necesita <= 0) return;
       const virgen = getComp(sm, ['CHIP BOARD ' + pos, 'VIRGEN']);
       const ranur = getComp(sm, ['CHIP BOARD ' + pos, 'RANURADO']);
       if (!virgen || !ranur) return;
-      const falta = Math.max(0, pendiente - (ranur.inv || 0));
+      const falta = necesita - tomarDe(poolR, ranur, necesita);   // el ranurado ya hecho cubre primero
       if (falta <= 0) return;
-      const ok = tomar(virgen.pn, falta);
-      const lista = colas[maq] = colas[maq] || [];
-      const ex = lista.find(x => x.pn === String(ranur.pn).toUpperCase());
-      if (ex) { ex.pendiente += falta; ex.modelos.push(sm); if (ok > 0) ex.listo = true; return; }
-      lista.push({ tipo: 'VC', pn: String(ranur.pn).toUpperCase(), desc: ranur.desc || ('Chip Board ' + txt + ' (Ranurado)'), modelos: [sm], pendiente: falta, dia0: ok > 0 ? 0 : 999, listo: ok > 0, vc: { k: pos === 'TOP' ? 'CB_TOP_V' : 'CB_BOT_V', pn: String(virgen.pn).toUpperCase(), inv: virgen.inv || 0 } });
+      const conV = tomarDe(poolV, virgen, falta);                   // lo que se puede ranurar con el Virgen disponible
+      const k = maq + '|' + claveCD(ranur);
+      const it = vcItems[k] || (vcItems[k] = { maq, tipo: 'VC', pn: String(ranur.pn).toUpperCase(), desc: ranur.desc || ('Chip Board ' + (pos === 'TOP' ? 'Top' : 'Bottom') + ' (Ranurado)'), modelos: [], pendiente: 0, conVirgen: 0, vk: pos === 'TOP' ? 'CB_TOP_V' : 'CB_BOT_V', vpn: String(virgen.pn).toUpperCase(), porDia: [], dia0: 999 });
+      if (it.modelos.indexOf(sm) < 0) it.modelos.push(sm);
+      it.pendiente += falta; it.conVirgen += conV;
+    });
+  });
+  // Plan por día de VC1/VC2: solo la parte con Virgen, en orden de prioridad, llenando la capacidad diaria de la máquina
+  ['VC1', 'VC2'].forEach(maq => {
+    const lista = Object.values(vcItems).filter(it => it.maq === maq)
+      .sort((x, y) => Math.min(...x.modelos.map(prio)) - Math.min(...y.modelos.map(prio)));
+    const capDia = targetsMaq[maq] !== undefined ? (Number(targetsMaq[maq]) || 0) : 6000;   // sin target en el MES → 6,000/día; Inactiva o 0 → no se programa
+    const resto = lista.map(it => it.conVirgen);
+    const cur = new Date(); cur.setHours(0, 0, 0, 0);
+    for (let d = 0; d < 60 && capDia > 0 && resto.some(q => q > 0); d++) {
+      const f = factorDiaCal(cur);
+      if (f > 0) {
+        let cap = Math.round(capDia * f);
+        const fIso = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
+        lista.forEach((it, i) => {
+          if (cap <= 0 || resto[i] <= 0) return;
+          const t = Math.min(cap, resto[i]);
+          it.porDia.push({ f: fIso, q: t }); if (it.dia0 === 999) it.dia0 = d;
+          resto[i] -= t; cap -= t;
+        });
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    lista.forEach(it => {
+      it.listo = it.conVirgen > 0;
+      it.matsVC = [{ k: it.vk, pn: it.vpn, disp: Math.round(it.conVirgen), req: Math.round(it.pendiente), e: estadoMat(it.conVirgen, it.pendiente) }];
+      (colas[maq] = colas[maq] || []).push(it);
     });
   });
 
@@ -7841,7 +7881,7 @@ async function calcularColasMedioProceso(conTargetOrdenado, produccionReal) {
       fecha: it.modelos.map(sm => (window.simFechaEntregaPorModelo || {})[sm]).filter(Boolean).sort()[0] || '',
       prioridad: Math.min(...it.modelos.map(prio)),
       materiales: it.tipo === 'VC'
-        ? [{ k: it.vc.k, pn: it.vc.pn, disp: Math.max(0, Math.round(it.vc.inv)), req: Math.round(it.pendiente), e: estadoMat(it.vc.inv, it.pendiente) }]
+        ? it.matsVC
         : matsDe(it.tipo, it.modelos[0], it.pendiente),
       dias: (cap > 0 && it.pendiente > 0) ? Math.round(it.pendiente / cap * 10) / 10 : null,
       capDia: cap || 0,

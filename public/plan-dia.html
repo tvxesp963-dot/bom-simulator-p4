@@ -386,29 +386,84 @@ function estadoFaltaAssy(r, arr){
   });
   return conDetalle(T.falta, lin);
 }
-function cascadaPost(A, N){
-  var d = DATOS || {}, arr = llegadasMateriales(d.assy, d.medio, d.bundle), lim = necesidadAssy(A.assy);
+function cascadaPost(A, N, DM, DB){
+  var d = DATOS || {}, arr = llegadasMateriales(d.assy, DM || d.medio, DB || d.bundle), lim = necesidadAssy(A.assy);
   cascadaAssy(A.assy, arr);
   var keep = [];
   A.assy.forEach(function(r){
     var left = r.pend - sumaDia(r.porDia);
-    if (r.porDia.length) keep.push(r);
+    if (r.porDia.length) { keep.push(r); if (left > 0) { r.est = String(r.est).replace(/^[^\n]*/, T.parcial + ' ' + num(sumaDia(r.porDia)) + ' / ' + num(r.pend)); r.cls = 'mid'; } }
     if (left > 0) N.assy.push({ et: r.et, sub: r.sub, pieza: r.pieza, fecha: r.fecha, porDia: [], total: left, est: estadoFaltaAssy(r, arr), cls: 'no', pend: left, orden: '9999', prio: r.prio, ord: r.ord, lim: lim[r.et] || '' });
   });
   A.assy = keep;
   ['medio', 'bundle'].forEach(function(k){
     A[k].forEach(function(r){ var left = r.pend - sumaDia(r.porDia); if (left > 0 && r.cls !== 'no') N[k].push(Object.assign({}, r, { porDia: [], total: left, est: (r.cls === 'ok' ? T.parcial + ' ' + num(sumaDia(r.porDia)) + ' / ' + num(r.pend) : r.est) })); });
+    A[k].forEach(function(r){ var prog = sumaDia(r.porDia); if (prog > 0 && prog < r.pend && r.cls === 'ok') { r.est = T.parcial + ' ' + num(prog) + ' / ' + num(r.pend); r.cls = 'mid'; } });
     N[k].forEach(function(r){
       var f = (r.mods || []).map(function(sm){ return lim[sm]; }).filter(Boolean).sort()[0];
       if (f) r.est = r.est + '\n' + T.limite + ' ' + fechaEnvio(f);
     });
   });
 }
+// ===== [FIX 2026-11-27] Medio proceso y Bundle en modo cascada: solo se programa lo que alcanza el material =====
+// El simulador programa medio proceso "ideal" (solo prioridad + capacidad). Aquí se recorta cada día a lo que el material
+// realmente cubre (inventario compartido entre líneas, en orden de fecha). El Ranurado + Virgen del mismo Chip Board
+// suman (el Virgen se ranura en VC). Lo que no alcanza pasa a "Sin material". ASSY solo cuenta entregas con material.
+// Solo Bundle: el propio Bundle (mismo código que la pieza) no es material de sí mismo. En medio proceso NO aplica (Sheet Top comparte código con el Gift Box).
+function limpiarMats(it, esBundle){ if (!esBundle) return it.materiales || []; var pn = String(it.pn || '').toUpperCase(); return (it.materiales || []).filter(function(x){ return String(x.pn || '').toUpperCase() !== pn; }); }
+function recortarPorMaterial(doc, esBundle){
+  if (!doc || !doc.colas) return doc;
+  var c = JSON.parse(JSON.stringify(doc)), saldo = {}, ev = [];
+  function kMat(x){ return String(x.k || '') + '|' + String(x.pn || '').toUpperCase(); }
+  Object.keys(c.colas).forEach(function(maq, im){
+    (c.colas[maq] || []).forEach(function(it, ii){
+      it.materiales = limpiarMats(it, esBundle);
+      it.materiales.forEach(function(x){ var k = kMat(x); if (saldo[k] === undefined) saldo[k] = Math.max(0, Number(x.disp) || 0); });
+      (it.porDia || []).forEach(function(d){ ev.push({ it: it, d: d, o: im * 1000 + ii }); });
+      it.porDia = [];
+    });
+  });
+  ev.sort(function(a, b){ return a.d.f < b.d.f ? -1 : a.d.f > b.d.f ? 1 : a.o - b.o; });
+  ev.forEach(function(e){
+    var ms = e.it.materiales, lim = Number(e.d.q) || 0, grupos = {};
+    ms.forEach(function(x){ var base = String(x.k || '').replace(/_[RV]$/, ''), g = /_[RV]$/.test(x.k || '') ? 'CB:' + base : kMat(x); (grupos[g] = grupos[g] || []).push(x); });
+    Object.keys(grupos).forEach(function(g){ var tot = grupos[g].reduce(function(s, x){ return s + saldo[kMat(x)]; }, 0); lim = Math.min(lim, tot); });
+    lim = Math.max(0, Math.floor(lim));
+    if (lim <= 0) return;
+    Object.keys(grupos).forEach(function(g){   // consume: Ranurado primero, luego Virgen
+      var q = lim; grupos[g].slice().sort(function(a, b){ return /_R$/.test(a.k || '') ? -1 : /_R$/.test(b.k || '') ? 1 : 0; }).forEach(function(x){ var k = kMat(x), t = Math.min(q, saldo[k]); saldo[k] -= t; q -= t; });
+    });
+    e.it.porDia.push({ f: e.d.f, q: lim });
+  });
+  return c;
+}
+function datosArea(k){
+  var d = DATOS && DATOS[k]; if (!d) return d;
+  if (MODO === 'cascada') return recortarPorMaterial(d, k === 'bundle');
+  if (!d.colas) return d;
+  var c = JSON.parse(JSON.stringify(d)); Object.keys(c.colas).forEach(function(m){ (c.colas[m] || []).forEach(function(it){ it.materiales = limpiarMats(it, k === 'bundle'); }); }); return c;
+}
+// Un mismo código sin material puede salir en varias líneas (ej. Bundle B1 y B2): en "Sin material" se muestra una sola vez
+function unirSinMat(rows){
+  var out = [], idx = {};
+  rows.forEach(function(r){
+    var p = String(r.et).split(' · '), lin = p[0], resto = p.slice(1).join(' · '), k = r.pieza + '|' + resto + '|' + (r.sub || '');
+    if (idx[k] !== undefined) { var o = out[idx[k]], ps = String(o.et).split(' · '); if (ps[0].split(' / ').indexOf(lin) < 0) o.et = ps[0] + ' / ' + lin + ' · ' + ps.slice(1).join(' · '); return; }
+    idx[k] = out.length; out.push(r);
+  });
+  return out;
+}
 function armar(){
-  var A = { assy: filasAssy(DATOS.assy), medio: filasColas(DATOS.medio, ['Zhongke','S1','S2','S3','S4','S5','VC1','VC2'], function(k){ return k; }), bundle: filasColas(DATOS.bundle, ['B1','B2','PRE'], function(k){ return k === 'PRE' ? 'Pre kit' : k; }) };
+  var DM = datosArea('medio'), DB = datosArea('bundle');
+  var A = { assy: filasAssy(DATOS.assy), medio: filasColas(DM, ['Zhongke','S1','S2','S3','S4','S5','VC1','VC2'], function(k){ return k; }), bundle: filasColas(DB, ['B1','B2','PRE'], function(k){ return k === 'PRE' ? 'Pre kit' : k; }) };
   var N = {};
   Object.keys(A).forEach(function(k){ if (k === 'assy') { N[k] = []; return; } N[k] = A[k].filter(function(r){ return r.cls === 'no' && !r.guiado; }); A[k] = A[k].filter(function(r){ return !(r.cls === 'no' && !r.guiado); }); });
-  if (MODO === 'cascada') cascadaPost(A, N);
+  if (MODO === 'cascada') {
+    ['medio', 'bundle'].forEach(function(k){ A[k].forEach(function(r){ r.total = sumaDia(r.porDia); }); });
+    cascadaPost(A, N, DM, DB);
+    ['medio', 'bundle'].forEach(function(k){ A[k] = A[k].filter(function(r){ return sumaDia(r.porDia) > 0; }); });   // sin nada programado → solo en "Sin material"
+  }
+  ['medio', 'bundle'].forEach(function(k){ N[k] = unirSinMat(N[k]); });
   A.assy.sort(function(a, b){ return a.orden < b.orden ? -1 : a.orden > b.orden ? 1 : (a.ord - b.ord) || (a.prio - b.prio); });
   // Columnas = días con producción en las áreas elegidas (máx. 7); lo demás va en "Después"
   var set = {};

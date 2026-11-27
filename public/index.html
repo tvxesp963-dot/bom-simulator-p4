@@ -4850,39 +4850,22 @@ function initIMS() {
 }
 
 
-// ── PN COMPARTIDO (2026-11-27): clasifica la descripción en tipo de pieza (+ lado Top/Bot) ──
-function catDescPieza(d) {
-  d = String(d || '').toUpperCase();
-  var l = /\bTOP\b|GIFT/.test(d) ? 'TOP' : (/\bBOT|BOTTOM|LOWER/.test(d) ? 'BOT' : '');
-  if (d.indexOf('SHEET') >= 0) return { t: 'SHEET', l: l };
-  if (/CHIP\s*BOARD|CHIPBOARD/.test(d)) {
-    if (/RANURAD|GROOV/.test(d)) return { t: 'CB_R', l: l };
-    if (/VIRGEN|VIRGIN/.test(d)) return { t: 'CB_V', l: l };
-    return { t: 'CB', l: l };
-  }
-  if (/GIFT BOX|TOP BOX/.test(d)) return { t: 'GIFT', l: 'TOP' };
-  if (/LOWER BOX|LOWER BOT|BOTTOM BOX/.test(d)) return { t: 'LOWER', l: 'BOT' };
-  if (d.indexOf('PULP') >= 0) return { t: 'PULP', l: '' };
-  if (/SET PAD|PHONE PAD/.test(d)) return { t: 'SETPAD', l: '' };
-  if (d.indexOf('STICKER') >= 0) return { t: 'STICKER', l: '' };
-  if (d.indexOf('STRIP') >= 0) return { t: 'STRIP', l: '' };
-  return null;
-}
-function mismaPieza(a, b) { return !!(a && b) && a.t === b.t && (!a.l || !b.l || a.l === b.l); }
-// Renglones de IMS P4 (con descripción) de un PN: [{desc, q, cat}]
+// ── REGLA CÓDIGO + DESCRIPCIÓN (2026-11-27) ──
+function normDescIMS(d) { return String(d || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+// Renglones de IMS P4 (con descripción) de un código: [{desc, q}]
 function renglonesP4DePN(pnUp) {
   var out = [], pre = pnUp + '||', suf = '||PLANTA:P4';
   Object.keys(imsInventario).forEach(function(k) {
     if (k.indexOf(pre) !== 0 || k.slice(-suf.length) !== suf) return;
     var d = k.slice(pre.length, k.length - suf.length);
     if (!d || d.indexOf('||') >= 0) return;
-    out.push({ desc: d, q: imsInventario[k] || 0, cat: catDescPieza(d) });
+    out.push({ desc: d, q: imsInventario[k] || 0 });
   });
   return out;
 }
-window._invPnAvisos = window._invPnAvisos || {};
-function avisoPnCompartido(pnUp, desc, tipo, rengs) {
-  window._invPnAvisos[pnUp + '||' + String(desc || '').trim().toUpperCase()] = { pn: pnUp, desc: desc || '', tipo: tipo, ims: rengs.map(function(x){ return x.desc; }).join(' / ') };
+window._invDescAvisos = window._invDescAvisos || {};
+function avisoDescIMS(pnUp, desc, rengs) {
+  window._invDescAvisos[pnUp + '||' + normDescIMS(desc)] = { pn: pnUp, desc: desc || '', ims: rengs.map(function(x){ return x.desc + ' = ' + Math.round(x.q).toLocaleString('en-US'); }).join(' / ') };
 }
 function getInvIMS(pn, desc, planta, level) {
   var pnUp = pn.toUpperCase();
@@ -4919,28 +4902,28 @@ function getInvIMS(pn, desc, planta, level) {
     if (imsInventario[pnUp] !== undefined) return imsInventario[pnUp];
     return 0;
   }
-  // P4 y demás: lógica original sin cambios
+  // [REGLA CÓDIGO + DESCRIPCIÓN 2026-11-27] Un mismo N° de parte puede ser varias piezas distintas en el IMS P4
+  // (ej. GH69-46504A = Sheet Top Box + Gift Box (Top) + Chip Board Top). El inventario se liga por CÓDIGO + DESCRIPCIÓN:
+  //  1) renglón del IMS P4 con el mismo código y la misma descripción (sin importar mayúsculas/espacios) → ese inventario
+  //  2) si no hay descripción igual → 0 y ALERTA en Autochequeo (corregir la descripción en el BOM o en el IMS)
+  //  3) nunca se usa el total del código ni renglones con otra descripción
+  // Excepción: GH64/GH68 (piezas compradas, un solo inventario por N° de parte — regla del 2026-11-22) siguen igual.
+  // Aplica a todo lo que se lee del IMS P4 (destino P4 y también P1: Sheet y Chip Board se fabrican en P1 pero su inventario está en IMS P4).
+  if (pnUp.indexOf('GH68') !== 0 && pnUp.indexOf('GH64') !== 0) {
+    var rP4 = renglonesP4DePN(pnUp);
+    if (rP4.length) {
+      var dN = normDescIMS(descUp), suma = 0, hay = false;
+      rP4.forEach(function(x){ if (normDescIMS(x.desc) === dN) { hay = true; suma += x.q; } });
+      if (hay) return suma;
+      avisoDescIMS(pnUp, desc, rP4);
+      return 0;
+    }
+  }
+  // P4 y demás: lógica original sin cambios (solo llega aquí si el código no tiene renglones con descripción en IMS P4)
   // 1. Buscar por PN+DESC+PLANTA exacta (más específico)
   if (descUp && plantaUp) {
     var keyPlantaDesc = pnUp+'||'+descUp+'||PLANTA:'+plantaUp;
     if (imsInventario[keyPlantaDesc] !== undefined) return imsInventario[keyPlantaDesc];
-  }
-  // [FIX-PN-COMPARTIDO 2026-11-27] Un mismo PN puede tener en IMS P4 varios renglones que son PIEZAS DISTINTAS
-  // (ej. GH69-46504A = Sheet Top Box + Gift Box (Top) terminado + Chip Board Top). En ese caso NUNCA se usa el total
-  // por PN: cada renglón del BOM solo cuenta los renglones del IMS de su mismo tipo (Sheet, Gift Box, Lower Box,
-  // Chip Board Virgen/Ranurado, Pulp, Set Pad, Sticker, Strip; y Top/Bot si ambos lo dicen). Aplica en ambos sentidos.
-  // Si no hay renglón del mismo tipo → 0. Si la descripción del BOM no se puede clasificar → 0 y aviso en Autochequeo.
-  if (plantaUp === 'P4') {
-    var rP4 = renglonesP4DePN(pnUp);
-    var tiposP4 = {}; rP4.forEach(function(x){ if (x.cat) tiposP4[x.cat.t] = 1; });
-    if (Object.keys(tiposP4).length >= 2) {
-      var catB = catDescPieza(descUp);
-      if (!catB) { avisoPnCompartido(pnUp, desc, 'amb', rP4); return 0; }
-      var suma = 0, hay = false;
-      rP4.forEach(function(x){ if (mismaPieza(catB, x.cat)) { hay = true; suma += x.q; } });
-      if (!hay) avisoPnCompartido(pnUp, desc, 'sin', rP4);
-      return hay ? suma : 0;
-    }
   }
   // [FIX-M2 2026-11-02] Lower Box / Gift Box TERMINADO que comparte código GH69 con su Sheet (ej. GH69-46928A):
   // el total por PN mezclaba las hojas crudas con el medio proceso terminado, y el simulador creía que ya había
@@ -4983,16 +4966,12 @@ function getInvIMS(pn, desc, planta, level) {
   // 5. Buscar por PN solo (total)
   return imsInventario[pnUp] || 0;
 }
-// Revisión (consola): reportePnCompartidos() → lista de renglones del BOM con PN compartido, antes (total PN) y ahora
-window.reportePnCompartidos = function () {
-  var vistos = {}, out = [];
-  (BOM || []).forEach(function (r) {
-    var pn = String(r.pn || '').trim().toUpperCase(), k = r.sm + '|' + pn + '|' + r.desc;
-    if (vistos[k]) return; vistos[k] = 1;
-    var rr = renglonesP4DePN(pn), t = {}; rr.forEach(function (x) { if (x.cat) t[x.cat.t] = 1; });
-    if (Object.keys(t).length < 2) return;
-    out.push({ modelo: r.sm, pn: pn, descBOM: r.desc, antes_totalPN: imsInventario[pn + '||PLANTA:P4'] || 0, ahora: r.inv, IMS: rr.map(function (x) { return x.desc + '=' + x.q; }).join(' / ') });
-  });
+// Revisión (consola): reporteDescripciones() → renglones del BOM cuyo código existe en IMS P4 pero sin la misma descripción (se toman en 0)
+window.reporteDescripciones = function () {
+  var out = Object.keys(window._invDescAvisos || {}).map(function (k) { var x = window._invDescAvisos[k]; return { pn: x.pn, descBOM: x.desc, IMS_P4: x.ims }; });
+  var modelos = {};
+  (BOM || []).forEach(function (r) { var k = String(r.pn || '').trim().toUpperCase() + '||' + normDescIMS(r.desc); if (window._invDescAvisos[k]) (modelos[k] = modelos[k] || []).push(r.sm); });
+  out.forEach(function (o) { var k = o.pn + '||' + normDescIMS(o.descBOM); o.modelos = [...new Set(modelos[k] || [])].join(', '); });
   console.table(out); return out;
 };
 function getPrecioIMS(pn, desc) {
@@ -5005,7 +4984,7 @@ function getPrecioIMS(pn, desc) {
 }
 
 function actualizarInvBOM() {
-  window._invPnAvisos = {};
+  window._invDescAvisos = {};
   // Agrupar BOM por SM y detectar subs del bundle correctamente
   var smList = [...new Set(BOM.map(function(r){ return r.sm; }))];
   smList.forEach(function(sm) {
@@ -5073,7 +5052,7 @@ function sincIMS() {
         var desc = (d.desc||'').trim().toUpperCase();
         var actual = invActualIMS(d); // mismo campo que muestran los IMS
         rawP4[pn] = (rawP4[pn]||0) + actual;
-        if (desc) rawP4[pn+'||'+desc] = (rawP4[pn+'||'+desc]||0) + actual;
+        if (desc) rawP4[pn+'||'+desc] = (rawP4[pn+'||'+desc]||0) + actual;   // misma descripción en 2 renglones: se suman
         // Capturar precio P4
         if (d.precio && d.precio > 0) {
           var keyP = desc ? pn+'||'+desc : pn;
@@ -6336,7 +6315,7 @@ function _sincIMSFrescoReal(auto) {
           }
           if (desc) {
             var kD = pn+'||'+desc, kDP = kD+'||PLANTA:'+r.planta;
-            invLocal[kDP] = (invLocal[kDP]||0) + actual;   // suma renglones con mismo PN+DESC en la misma planta
+            invLocal[kDP] = (invLocal[kDP]||0) + actual;   // misma descripción en 2 renglones de la misma planta: se suman
             if (r.planta === 'P3') invLocal[kD] = actual;
             else { invLocal[kD] = vistoP4[kD] ? ((invLocal[kD]||0) + actual) : actual; vistoP4[kD] = true; }
           }
@@ -6427,7 +6406,7 @@ var AUTOCHK_TXT = {
         consDet: function (x) { return x.desc + ' (' + x.pn + ') pide ' + x.falta + ' pero con el ' + x.header + ' en inventario (' + x.disp + ') deberían ser máximo ' + x.max + '. No mandes este pedido; avisa a Tavox.'; },
         tgtDet: function (x) { return x.desc + ' (' + x.pn + ') pide ' + x.falta + ', más que todo el target del modelo (' + x.max + '). No mandes este pedido; avisa a Tavox.'; },
         cascTit: 'Inventario alterado', cascDet: 'Después de un cálculo el inventario no regresó a su valor original. Recarga la página (Ctrl+F5) antes de usar los números.',
-        pnTit: 'PN compartido en IMS P4', pnAmb: function (d, i) { return 'No se pudo saber a qué renglón del IMS corresponde "' + d + '" (IMS: ' + i + '). Se toma 0. Revisa la descripción en el BOM.'; }, pnSin: function (d, i) { return 'El IMS P4 no tiene renglón del tipo "' + d + '" para este PN (IMS: ' + i + '). Se toma 0.'; },
+        descTit: 'Descripción no coincide con IMS P4', descDet: function (d, i) { return 'El BOM dice "' + d + '" y el IMS P4 solo tiene: ' + i + '. Se toma 0 hasta que la descripción sea igual en BOM e IMS.'; },
         imsTit: 'Inventario desactualizado', imsNunca: 'Todavía no se sincroniza el IMS en esta sesión. Presiona Sync IMS.', imsViejo: function (h) { return 'La última sincronización con el IMS fue hace ' + h + ' h. Presiona Sync IMS.'; },
         banner: function (n) { return '⚠ Este consolidado tiene ' + n + (n === 1 ? ' número que no cuadra' : ' números que no cuadran') + '. Revisa antes de mandar el pedido.'; },
         confirmar: function (n) { return 'Hay ' + n + (n === 1 ? ' alerta' : ' alertas') + ' del autochequeo (números que no cuadran).\n\n¿Seguro que quieres continuar?'; } },
@@ -6437,7 +6416,7 @@ var AUTOCHK_TXT = {
         consDet: function (x) { return x.desc + ' (' + x.pn + ') asks for ' + x.falta + ' but with the ' + x.header + ' in stock (' + x.disp + ') it should be at most ' + x.max + '. Do not send this order; tell Tavox.'; },
         tgtDet: function (x) { return x.desc + ' (' + x.pn + ') asks for ' + x.falta + ', more than the whole model target (' + x.max + '). Do not send this order; tell Tavox.'; },
         cascTit: 'Inventory altered', cascDet: 'After a calculation the inventory did not return to its original value. Reload the page (Ctrl+F5) before using the numbers.',
-        pnTit: 'Shared PN in IMS P4', pnAmb: function (d, i) { return 'Could not tell which IMS row matches "' + d + '" (IMS: ' + i + '). Using 0. Check the BOM description.'; }, pnSin: function (d, i) { return 'IMS P4 has no row of type "' + d + '" for this PN (IMS: ' + i + '). Using 0.'; },
+        descTit: 'Description does not match IMS P4', descDet: function (d, i) { return 'BOM says "' + d + '" and IMS P4 only has: ' + i + '. Using 0 until the description is the same in BOM and IMS.'; },
         imsTit: 'Inventory out of date', imsNunca: 'IMS has not been synced in this session. Press Sync IMS.', imsViejo: function (h) { return 'Last IMS sync was ' + h + ' h ago. Press Sync IMS.'; },
         banner: function (n) { return '⚠ This consolidated order has ' + n + (n === 1 ? ' number that does not add up' : ' numbers that do not add up') + '. Check before sending the order.'; },
         confirmar: function (n) { return 'There ' + (n === 1 ? 'is 1 self-check alert' : 'are ' + n + ' self-check alerts') + ' (numbers that do not add up).\n\nAre you sure you want to continue?'; } },
@@ -6447,7 +6426,7 @@ var AUTOCHK_TXT = {
         consDet: function (x) { return x.desc + ' (' + x.pn + ') 요청 ' + x.falta + ', 그러나 ' + x.header + ' 재고(' + x.disp + ') 기준 최대 ' + x.max + '이어야 합니다. 이 발주를 보내지 말고 Tavox에게 알리세요.'; },
         tgtDet: function (x) { return x.desc + ' (' + x.pn + ') 요청 ' + x.falta + ', 모델 전체 목표(' + x.max + ')보다 많습니다. 이 발주를 보내지 말고 Tavox에게 알리세요.'; },
         cascTit: '재고 변경됨', cascDet: '계산 후 재고가 원래 값으로 돌아오지 않았습니다. 수치를 사용하기 전에 페이지를 새로고침(Ctrl+F5)하세요.',
-        pnTit: 'IMS P4 공용 품번', pnAmb: function (d, i) { return '"' + d + '"에 해당하는 IMS 행을 알 수 없습니다 (IMS: ' + i + '). 0으로 계산합니다. BOM 설명을 확인하세요.'; }, pnSin: function (d, i) { return 'IMS P4에 이 품번의 "' + d + '" 유형 행이 없습니다 (IMS: ' + i + '). 0으로 계산합니다.'; },
+        descTit: 'IMS P4 설명 불일치', descDet: function (d, i) { return 'BOM은 "' + d + '"인데 IMS P4에는 다음만 있습니다: ' + i + '. BOM과 IMS의 설명이 같아질 때까지 0으로 계산합니다.'; },
         imsTit: '재고 정보 오래됨', imsNunca: '이번 세션에서 IMS 동기화가 아직 안 되었습니다. Sync IMS를 누르세요.', imsViejo: function (h) { return '마지막 IMS 동기화가 ' + h + '시간 전입니다. Sync IMS를 누르세요.'; },
         banner: function (n) { return '⚠ 이 통합 발주에 맞지 않는 수치가 ' + n + '건 있습니다. 발주 전에 확인하세요.'; },
         confirmar: function (n) { return '자동 점검 경고가 ' + n + '건 있습니다 (맞지 않는 수치).\n\n계속하시겠습니까?'; } }
@@ -6514,9 +6493,15 @@ function ejecutarAutochequeo() {
     });
     // ── Regla 2: inventario restaurado tras la cascada ──
     if (window._autoChkCascadaMal) errores.push({ tit: tChk('cascTit'), det: tChk('cascDet') }); else ok++;
-    // ── Regla 4 (2026-11-27): PN compartido por piezas distintas en IMS P4 sin renglón claro para el BOM ──
-    var pnAv = Object.keys(window._invPnAvisos || {}).map(function (k) { return window._invPnAvisos[k]; });
-    if (pnAv.length) pnAv.slice(0, 15).forEach(function (x) { avisos.push({ tit: tChk('pnTit') + ' · ' + x.pn, det: tChk(x.tipo === 'amb' ? 'pnAmb' : 'pnSin')(x.desc, x.ims) }); });
+    // ── Regla 4 (2026-11-27): código + descripción. Si un renglón del BOM no tiene en IMS P4 un renglón con su misma descripción, se toma 0 → ALERTA ──
+    var dAv = Object.keys(window._invDescAvisos || {}).map(function (k) { return window._invDescAvisos[k]; });
+    // Modelos con target en el plan → ALERTA roja (detiene auto-publicar y correo automático); modelos fuera del plan → aviso amarillo
+    if (dAv.length) dAv.forEach(function (x) {
+      var k = x.pn + '||' + normDescIMS(x.desc);
+      var mods = [...new Set(BOM.filter(function (r) { return String(r.pn || '').trim().toUpperCase() + '||' + normDescIMS(r.desc) === k; }).map(function (r) { return r.sm; }))];
+      var enPlan = mods.filter(function (sm) { return (simTargetsPorModelo[sm] || 0) > 0; });
+      (enPlan.length ? errores : avisos).push({ tit: tChk('descTit') + ' · ' + x.pn, det: tChk('descDet')(x.desc, x.ims) + ' [' + (enPlan.length ? enPlan : mods).join(', ') + ']' });
+    });
     else ok++;
     // ── Regla 3: antigüedad del IMS (solo aviso) ──
     if (BOM.length) {

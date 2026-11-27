@@ -416,6 +416,9 @@ function recortarPorMaterial(doc, esBundle){
   var c = JSON.parse(JSON.stringify(doc)), saldo = {}, ev = [];
   function kMat(x){ return String(x.k || '') + '|' + String(x.pn || '').toUpperCase(); }
   Object.keys(c.colas).forEach(function(maq, im){
+    // VC1/VC2 no consumen del saldo: ranurar convierte Virgen → Ranurado y las máquinas S ya cuentan Ranurado + Virgen juntos.
+    // Su plan por día ya viene limitado al Virgen disponible desde el simulador.
+    if (/^VC/.test(maq)) return;
     (c.colas[maq] || []).forEach(function(it, ii){
       it.materiales = limpiarMats(it, esBundle);
       it.materiales.forEach(function(x){ var k = kMat(x); if (saldo[k] === undefined) saldo[k] = Math.max(0, Number(x.disp) || 0); });

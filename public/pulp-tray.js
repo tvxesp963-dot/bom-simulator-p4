@@ -167,10 +167,11 @@
   function calcular(fc, bom, produc, mapeo, opts) {
     opts = opts || {}; mapeo = mapeo || {}; produc = produc || {};
     var nW = fc.semanas.length;
-    var items = [], sinModelo = [], sinPulp = [], sinDemanda = 0;
+    var items = [], sinModelo = [], sinPulp = [], noAplica = [], sinDemanda = 0;
     fc.filas.forEach(function (f) {
       var tot = f.q.reduce(function (a, b) { return a + b; }, 0);
       if (tot <= 0) { sinDemanda++; return; }
+      if (mapeo[f.code] === '__NA__') { noAplica.push({ code: f.code, desc: f.desc, tot: tot }); return; } // marcado "no lleva Pulp Tray"
       var cand = [];
       bom.forEach(function (r) { if (r.familia === 'GH90' && norm(r.pn) === f.code && r.sm && cand.indexOf(r.sm) < 0) cand.push(r.sm); });
       var sm = mapeo[f.code] || (cand.length === 1 ? cand[0] : null);
@@ -231,7 +232,7 @@
       g.pedirSug = margen(g.falta);
       return g;
     });
-    return { semanas: fc.semanas, grupos: lista, items: items, sinModelo: sinModelo, sinPulp: sinPulp, sinDemanda: sinDemanda, sobra: sobra };
+    return { semanas: fc.semanas, grupos: lista, items: items, sinModelo: sinModelo, sinPulp: sinPulp, noAplica: noAplica, sinDemanda: sinDemanda, sobra: sobra };
   }
 
   // ============================ PANTALLA ============================
@@ -373,9 +374,17 @@
         '<div style="font-size:11px;color:var(--text2);margin:.4rem 0 .5rem">' + esc(t('sinBomA')) + '</div>' +
         R.sinModelo.map(function (x) {
           var cands = x.cand.length ? x.cand : [];
-          var opts = '<option value="">' + esc(t('elige')) + '</option>' + cands.concat(modelos.filter(function (m) { return cands.indexOf(m) < 0; })).map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join('');
+          var opts = '<option value="">' + esc(t('elige')) + '</option><option value="__NA__">' + esc(th('naOpc')) + '</option>' + cands.concat(modelos.filter(function (m) { return cands.indexOf(m) < 0; })).map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join('');
           return '<div style="display:flex;gap:.6rem;align-items:center;margin:3px 0;flex-wrap:wrap"><b>' + esc(x.code) + '</b><span style="color:var(--text2);flex:1;min-width:180px">' + esc(x.desc) + '</span><span>' + fmt(x.tot) + '</span>' +
             '<select onchange="ptAsignar(\'' + esc(x.code) + '\',this.value)" style="background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px">' + opts + '</select></div>';
+        }).join('') + '</details>';
+    }
+    // marcados "no aplica" (no llevan Pulp Tray): plegados, con opción de deshacer
+    if (R.noAplica && R.noAplica.length) {
+      h += '<details style="margin-top:.6rem;padding:.4rem .8rem;border-radius:8px;border:1px solid var(--border,#334)"><summary style="cursor:pointer;color:var(--text2);font-size:12px">' + esc(th('naT')(R.noAplica.length)) + '</summary>' +
+        R.noAplica.map(function (x) {
+          return '<div style="display:flex;gap:.6rem;align-items:center;margin:3px 0;flex-wrap:wrap;color:var(--text2)"><b>' + esc(x.code) + '</b><span style="flex:1;min-width:180px">' + esc(x.desc) + '</span><span>' + fmt(x.tot) + '</span>' +
+            '<button class="btn btn-secondary btn-sm" onclick="ptDeshacerNA(\'' + esc(x.code) + '\')">' + esc(th('naDes')) + '</button></div>';
         }).join('') + '</details>';
     }
     // detalle por modelo
@@ -492,6 +501,7 @@
     var m = leerMapeo(); m[code] = sm; guardarMapeo(m);
     if (S.fc) recalcLocal();
   }
+  function deshacerNA(code) { var m = leerMapeo(); delete m[code]; guardarMapeo(m); if (S.fc) recalcLocal(); }
   function toggleDesc(v) { S.desc = !!v; if (S.fc) recalcLocal(); }
 
   function excel(modo) {
@@ -613,21 +623,21 @@
 
   /* ---------------- FIJAR FORECAST + HISTORIAL Y CAMBIOS ENTRE CARGAS ---------------- */
   var TF = {
-    es: { fijar: '📌 Fijar este Forecast (se queda al refrescar la página)', fijarAyuda: 'Se guarda en este navegador. Si cargas otro Forecast con la casilla marcada, se fija el nuevo.',
+    es: { naOpc: '🚫 No aplica (no lleva Pulp Tray)', naT: function (n) { return '🚫 ' + n + ' códigos marcados "No aplica" (no llevan Pulp Tray) — ver'; }, naDes: '↩ Deshacer', fijar: '📌 Fijar este Forecast (se queda al refrescar la página)', fijarAyuda: 'Se guarda en este navegador. Si cargas otro Forecast con la casilla marcada, se fija el nuevo.',
       sig: function (n) { return n + ' cambios significativos vs el Forecast anterior'; }, sinSig: '✓ Sin cambios significativos vs el Forecast anterior',
       comp: 'Comparando contra', regla: 'Significativo = cambia 20% o más y al menos 1,000 pzas. Solo modelos que llevan Pulp Tray.',
       primero: 'ℹ Este es el primer Forecast guardado: a partir de la siguiente carga verás qué sube, baja, desaparece o es nuevo.',
       sube: '▲ Sube', baja: '▼ Baja', desap: '✕ Desaparece', nuevo: '✚ Nuevo', todas: 'Todas',
       cols: ['Cambio', 'Código GH90 / modelo', 'Pulp Tray', 'Semana', 'Antes', 'Ahora', 'Dif.'],
       menores: function (n) { return 'Ver cambios menores (' + n + ')'; }, cargando: '⏳ Buscando el Forecast anterior…', errHist: '⚠ No se pudo leer el historial del Forecast: ' },
-    en: { fijar: '📌 Pin this Forecast (stays after refreshing the page)', fijarAyuda: 'Saved in this browser. If you load another Forecast while checked, the new one is pinned.',
+    en: { naOpc: '🚫 Not applicable (no Pulp Tray)', naT: function (n) { return '🚫 ' + n + ' codes marked "Not applicable" (no Pulp Tray) — view'; }, naDes: '↩ Undo', fijar: '📌 Pin this Forecast (stays after refreshing the page)', fijarAyuda: 'Saved in this browser. If you load another Forecast while checked, the new one is pinned.',
       sig: function (n) { return n + ' significant changes vs the previous Forecast'; }, sinSig: '✓ No significant changes vs the previous Forecast',
       comp: 'Comparing against', regla: 'Significant = changes 20% or more and at least 1,000 pcs. Only models that carry a Pulp Tray.',
       primero: 'ℹ This is the first saved Forecast: from the next load you will see what goes up, down, disappears or is new.',
       sube: '▲ Up', baja: '▼ Down', desap: '✕ Gone', nuevo: '✚ New', todas: 'All',
       cols: ['Change', 'GH90 code / model', 'Pulp Tray', 'Week', 'Before', 'Now', 'Diff.'],
       menores: function (n) { return 'View minor changes (' + n + ')'; }, cargando: '⏳ Looking for the previous Forecast…', errHist: '⚠ Could not read the Forecast history: ' },
-    ko: { fijar: '📌 이 Forecast 고정 (새로고침해도 유지)', fijarAyuda: '이 브라우저에 저장됩니다. 체크된 상태에서 다른 Forecast를 불러오면 새 것이 고정됩니다.',
+    ko: { naOpc: '🚫 해당 없음 (Pulp Tray 없음)', naT: function (n) { return '🚫 "해당 없음"으로 표시된 코드 ' + n + '개 (Pulp Tray 없음) — 보기'; }, naDes: '↩ 취소', fijar: '📌 이 Forecast 고정 (새로고침해도 유지)', fijarAyuda: '이 브라우저에 저장됩니다. 체크된 상태에서 다른 Forecast를 불러오면 새 것이 고정됩니다.',
       sig: function (n) { return '이전 Forecast 대비 주요 변경 ' + n + '건'; }, sinSig: '✓ 이전 Forecast 대비 주요 변경 없음',
       comp: '비교 대상', regla: '주요 변경 = 20% 이상 그리고 1,000개 이상 변경. Pulp Tray를 사용하는 모델만.',
       primero: 'ℹ 처음 저장된 Forecast입니다. 다음 업로드부터 증가, 감소, 삭제, 신규를 볼 수 있습니다.',
@@ -911,6 +921,7 @@
 
   window.ptIdioma = idioma; window.ptArchivo = archivo; window.ptRecalcular = function () { correr(true); };
   window.ptAsignar = asignar; window.ptToggleDesc = toggleDesc; window.ptDesde = cambiarDesde; window.ptExcel = function () { excel(); };
+  window.ptDeshacerNA = deshacerNA;
   window.ptFijar = fijar; window.ptComparar = compararCon;
   window.ptEnviar = enviarReporte; window.ptDestinatarios = destinatarios;
   window.__ptCore = { leerForecast: leerForecast, calcular: calcular, margen: margen }; // para pruebas

@@ -409,8 +409,8 @@ function cascadaPost(A, N, DM, DB){
 // El simulador programa medio proceso "ideal" (solo prioridad + capacidad). Aquí se recorta cada día a lo que el material
 // realmente cubre (inventario compartido entre líneas, en orden de fecha). El Ranurado + Virgen del mismo Chip Board
 // suman (el Virgen se ranura en VC). Lo que no alcanza pasa a "Sin material". ASSY solo cuenta entregas con material.
-// Solo Bundle: el propio Bundle (mismo código que la pieza) no es material de sí mismo. En medio proceso NO aplica (Sheet Top comparte código con el Gift Box).
-function limpiarMats(it, esBundle){ if (!esBundle) return it.materiales || []; var pn = String(it.pn || '').toUpperCase(); return (it.materiales || []).filter(function(x){ return String(x.pn || '').toUpperCase() !== pn; }); }
+// Los materiales se usan tal cual. (Bundle: un renglón con el mismo código que el Bundle, ej. "MANUAL BUNDLE", SÍ es material para armarlo.)
+function limpiarMats(it, esBundle){ return it.materiales || []; }
 function recortarPorMaterial(doc, esBundle){
   if (!doc || !doc.colas) return doc;
   var c = JSON.parse(JSON.stringify(doc)), saldo = {}, ev = [];

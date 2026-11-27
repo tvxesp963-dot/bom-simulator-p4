@@ -1352,9 +1352,9 @@ function calcularColasBundle(conTargetOrdenado, produccionReal) {
     const pendiente = Math.max(0, target - (produccionReal[sm] || 0) - Math.max(0, g.header.inv || 0));
     if (pendiente <= 0) return;
     const usados = {};
-    const pnHeader = String(g.header.pn || '').trim().toUpperCase();
-    // El propio Bundle (mismo código que el encabezado) no es material de sí mismo
-    const materiales = g.subs.filter(s => s.pn && String(s.pn).trim().toUpperCase() !== pnHeader).map(s => {
+    // Nota (Tavox 2026-11-27): un renglón de Nivel 2 con el MISMO código que el Bundle (ej. "MANUAL BUNDLE") SÍ es material:
+    // tiene otra descripción y se usa para armar el Bundle final (Nivel 1, que se recibe terminado en P4). Se liga por código + descripción.
+    const materiales = g.subs.filter(s => s.pn).map(s => {
       const pn = String(s.pn).toUpperCase();
       const disp = Math.round(tomar(pn, s.inv, pendiente, s.desc));
       let k = String(s.desc || pn).trim().slice(0, 26) || pn;

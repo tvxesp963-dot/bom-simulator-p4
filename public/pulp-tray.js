@@ -290,6 +290,8 @@
       '<input id="ptFile" type="file" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="ptArchivo(this)">' +
       '<button class="btn btn-secondary btn-sm" onclick="ptRecalcular()">' + esc(t('recalc')) + '</button>' +
       '<button class="btn btn-success btn-sm" onclick="ptExcel()">' + esc(t('excel')) + '</button>' +
+      '<button class="btn btn-primary btn-sm" onclick="ptEnviar()">' + esc(tx('btnEnviar')) + '</button>' +
+      ((typeof adminAuthed !== 'undefined' && adminAuthed) ? '<button class="btn btn-secondary btn-sm" onclick="ptDestinatarios()">' + esc(tx('btnDest')) + '</button>' : '') +
       '<span id="ptNombre" style="color:var(--text2)">' + (S.nombre ? esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>' : '') + '</span></div>' +
       '<label style="display:flex;gap:6px;align-items:center;margin:.2rem 0" title="' + esc(t('descBottomAyuda')) + '"><input type="checkbox" id="ptDesc" onchange="ptToggleDesc(this.checked)"' + (S.desc ? ' checked' : '') + '> ' + esc(t('descBottom')) + '</label>' +
       '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 22px">' + esc(t('descBottomAyuda')) + '</div>' +
@@ -488,7 +490,7 @@
   }
   function toggleDesc(v) { S.desc = !!v; if (S.fc) recalcLocal(); }
 
-  function excel() {
+  function excel(modo) {
     if (!S.res) { msg(t('vacio'), 'warn'); return; }
     var R = S.res, wb = XLSX.utils.book_new();
     var head = function (ws, n) { for (var c = 0; c < n; c++) { var a = XLSX.utils.encode_cell({ r: 0, c: c }); if (ws[a]) ws[a].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1F3A5F' } }, alignment: { horizontal: 'center', wrapText: true } }; } };
@@ -599,11 +601,169 @@
       var w4 = XLSX.utils.aoa_to_sheet(a4); head(w4, 5); numFmt(w4); cw(w4, [22, 16, 44, 22, 12]); XLSX.utils.book_append_sheet(wb, w4, 'Pending');
     }
     var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
-    XLSX.writeFile(wb, 'Pulp_Tray_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.xlsx');
+    var nomXl = 'Pulp_Tray_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.xlsx';
+    if (modo === 'b64') return { nombre: nomXl, b64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) };
+    XLSX.writeFile(wb, nomXl);
   }
 
+  /* ---------------- ENVÍO: CORREO (Apps Script del BOM) + WHATSAPP — igual que Cable DLC ---------------- */
+  var TX = {
+    es: { btnEnviar: '📤 Enviar reporte (correo + WhatsApp)', btnDest: '👥 Destinatarios', dTit: 'Elige quién recibe el reporte de Pulp Tray', dSub: 'Usuarios del BOM Simulator y correos de la Lista de correos', guardar: 'Guardar', cancelar: 'Cancelar', cerrar: 'Cerrar', destOk: '✅ Destinatarios guardados', soloAdmin: 'Solo el Admin puede elegir destinatarios.', sinDest: 'No hay destinatarios: el Admin debe elegirlos con el botón Destinatarios. WhatsApp sí se puede enviar.', pedirClave: 'Escribe la clave del script de correo (se guarda solo en este navegador):', enviando: '⏳ Enviando reporte…', envOk: '✅ Correo enviado a {n} destinatario(s)', errClave: '❌ Clave del correo incorrecta. Vuelve a intentar.', errRed: '⚠ No se pudo confirmar el envío del correo. Revisa enviados antes de reenviar.', waSub: 'Ahora envía el resumen por WhatsApp:', waGo: '💬 Abrir WhatsApp y elegir contacto', waXl: '⬇ Descargar Excel (para adjuntar)', waDesc: 'Se descargó la imagen: en WhatsApp elige el contacto y adjúntala.', pegaImg: 'Imagen copiada: en WhatsApp elige el contacto y pega con Ctrl+V.', sinDb: 'Sin conexión a Firebase.' },
+    en: { btnEnviar: '📤 Send report (email + WhatsApp)', btnDest: '👥 Recipients', dTit: 'Choose who receives the Pulp Tray report', dSub: 'BOM Simulator users and emails from the Mailing list', guardar: 'Save', cancelar: 'Cancel', cerrar: 'Close', destOk: '✅ Recipients saved', soloAdmin: 'Only the Admin can choose recipients.', sinDest: 'No recipients: the Admin must choose them with the Recipients button. WhatsApp can still be sent.', pedirClave: 'Enter the mail script key (saved only in this browser):', enviando: '⏳ Sending report…', envOk: '✅ Email sent to {n} recipient(s)', errClave: '❌ Wrong mail key. Try again.', errRed: '⚠ Could not confirm the email. Check sent mail before resending.', waSub: 'Now send the summary by WhatsApp:', waGo: '💬 Open WhatsApp and choose contact', waXl: '⬇ Download Excel (to attach)', waDesc: 'Image downloaded: in WhatsApp choose the contact and attach it.', pegaImg: 'Image copied: in WhatsApp choose the contact and paste with Ctrl+V.', sinDb: 'No Firebase connection.' },
+    ko: { btnEnviar: '📤 보고서 보내기 (이메일 + WhatsApp)', btnDest: '👥 수신자', dTit: 'Pulp Tray 보고서 수신자 선택', dSub: 'BOM Simulator 사용자 및 메일 목록의 이메일', guardar: '저장', cancelar: '취소', cerrar: '닫기', destOk: '✅ 수신자가 저장되었습니다', soloAdmin: 'Admin만 수신자를 선택할 수 있습니다.', sinDest: '수신자가 없습니다. Admin이 수신자 버튼으로 선택해야 합니다. WhatsApp은 보낼 수 있습니다.', pedirClave: '메일 스크립트 키를 입력하세요 (이 브라우저에만 저장):', enviando: '⏳ 보고서 전송 중…', envOk: '✅ 이메일 {n}명에게 전송 완료', errClave: '❌ 메일 키가 틀렸습니다. 다시 시도하세요.', errRed: '⚠ 메일 전송을 확인할 수 없습니다. 다시 보내기 전에 보낸 편지함을 확인하세요.', waSub: '이제 WhatsApp으로 요약을 보내세요:', waGo: '💬 WhatsApp 열기 및 연락처 선택', waXl: '⬇ Excel 다운로드 (첨부용)', waDesc: '이미지를 다운로드했습니다. WhatsApp에서 연락처를 선택하고 첨부하세요.', pegaImg: '이미지가 복사되었습니다. WhatsApp에서 연락처를 선택하고 Ctrl+V로 붙여넣으세요.', sinDb: 'Firebase 연결 없음.' }
+  };
+  function tx(k) { return (TX[lang()] || TX.es)[k]; }
+  var DEST_DOC = 'pulp_tray_correos'; // bom_simulator_p4/pulp_tray_correos → { correos: [...] }
+  var destPT = null;
+  function fbDb() { if (typeof db !== 'undefined' && db) return db; if (typeof initIMS === 'function') { try { initIMS(); } catch (e) {} } return (typeof db !== 'undefined') ? db : null; }
+  function cargarDest() {
+    if (destPT) return Promise.resolve(destPT);
+    var d = fbDb(); if (!d) return Promise.resolve([]);
+    return d.collection('bom_simulator_p4').doc(DEST_DOC).get().then(function (doc) {
+      destPT = (doc.exists && Array.isArray(doc.data().correos)) ? doc.data().correos.map(function (e) { return String(e).toLowerCase(); }) : [];
+      return destPT;
+    }).catch(function () { return destPT || []; });
+  }
+  function ventana(html) {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:var(--surface,#111827);color:var(--text,#fff);border:1px solid var(--border,#334);border-radius:14px;max-width:480px;width:100%;max-height:85vh;display:flex;flex-direction:column;gap:10px;padding:18px">' + html + '</div>';
+    document.body.appendChild(ov); return ov;
+  }
+
+  // Botón Destinatarios (solo Admin): casillas con los usuarios del simulador + correos externos de la Lista de correos
+  function destinatarios() {
+    if (typeof adminAuthed === 'undefined' || !adminAuthed) { alert(tx('soloAdmin')); return; }
+    if (!fbDb()) { alert(tx('sinDb')); return; }
+    var base = (typeof cargarListaCorreos === 'function') ? cargarListaCorreos() : Promise.resolve();
+    Promise.all([base, cargarDest()]).then(function () {
+      var L = (typeof correosTodos === 'function') ? correosTodos() : [];
+      var sel = {}; (destPT || []).forEach(function (e) { sel[e] = 1; });
+      (destPT || []).forEach(function (e) { if (!L.some(function (u) { return u.correo === e; })) L.push({ nombre: '', correo: e }); });
+      L.sort(function (a, b) { return (a.nombre || a.correo).localeCompare(b.nombre || b.correo); });
+      var ov = ventana('<div style="font-weight:700;font-size:16px">' + esc(tx('dTit')) + '</div><div style="font-size:12px;color:var(--text2)">' + esc(tx('dSub')) + '</div>' +
+        '<div style="overflow:auto;flex:1;border:1px solid var(--border,#334);border-radius:10px">' +
+        L.map(function (u) { return '<label style="display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border,#334);cursor:pointer;font-size:13px"><input type="checkbox" data-e="' + esc(u.correo) + '" style="width:18px;height:18px"' + (sel[u.correo] ? ' checked' : '') + '><span><b>' + esc(u.nombre || u.correo) + '</b><br><span style="font-size:11px;color:var(--text2)">' + esc(u.correo) + '</span></span></label>'; }).join('') +
+        '</div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-x="no">' + esc(tx('cancelar')) + '</button><button class="btn btn-primary btn-sm" data-x="si">' + esc(tx('guardar')) + '</button></div>');
+      ov.querySelector('[data-x=no]').onclick = function () { ov.remove(); };
+      ov.querySelector('[data-x=si]').onclick = function () {
+        var lista = [].slice.call(ov.querySelectorAll('input[type=checkbox]')).filter(function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-e'); });
+        fbDb().collection('bom_simulator_p4').doc(DEST_DOC).set({ correos: lista, actualizadoEn: new Date().toISOString() }, { merge: true })
+          .then(function () { destPT = lista; ov.remove(); msg(tx('destOk'), 'ok'); })
+          .catch(function (e) { alert('Error: ' + e.message); });
+      };
+    });
+  }
+
+  // Resumen en 3 idiomas (imagen legible ~3000 px + texto para WhatsApp)
+  function resumenEnvio() {
+    var R = S.res, tReq = 0, tInv = 0, tFalta = 0;
+    R.grupos.forEach(function (g) { tReq += g.totNet; tInv += g.inv; tFalta += g.falta; });
+    var d = new Date(), pp = function (n) { return (n < 10 ? '0' : '') + n; };
+    var fecha = pp(d.getDate()) + '/' + pp(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pp(d.getHours()) + ':' + pp(d.getMinutes());
+    var texto = '🧻 Reporte Pulp Tray · Pulp Tray Report · Pulp Tray 보고서 (' + fecha + ')\n' +
+      '🇲🇽 Requerido: ' + fmt(tReq) + ' · Inventario IMS P4: ' + fmt(tInv) + ' · Falta: ' + fmt(tFalta) + '\n' +
+      '🇺🇸 Required: ' + fmt(tReq) + ' · IMS P4 inventory: ' + fmt(tInv) + ' · Short: ' + fmt(tFalta) + '\n' +
+      '🇰🇷 필요량: ' + fmt(tReq) + ' · IMS P4 재고: ' + fmt(tInv) + ' · 부족: ' + fmt(tFalta) + '\n' +
+      R.grupos.map(function (g) { return '• ' + g.pn + ': ' + (g.falta > 0 ? '❌ ' + fmt(g.falta) : '✅ OK'); }).join('\n') +
+      (S.nombre ? '\nForecast: ' + S.nombre : '');
+    return { tReq: tReq, tInv: tInv, tFalta: tFalta, fecha: fecha, texto: texto, asunto: 'Pulp Tray Report · Reporte Pulp Tray · ' + fecha };
+  }
+  function imagenResumen(rs) {
+    return new Promise(function (ok) {
+      var R = S.res, W = 1500, rowH = 66, S2 = 2, top = 430, H = top + 80 + R.grupos.length * rowH + 80;
+      var cv = document.createElement('canvas'); cv.width = W * S2; cv.height = H * S2; var c = cv.getContext('2d'); c.scale(S2, S2);
+      var NAVY = '#14213d', F = 'Arial, "Malgun Gothic", sans-serif';
+      c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
+      c.textAlign = 'left'; c.fillStyle = '#4a5576'; c.font = '20px ' + F;
+      c.fillText('Eunsung Mexicana P4 · ' + rs.fecha + (S.nombre ? ' · Forecast: ' + S.nombre : ''), 36, 44);
+      c.fillStyle = NAVY; c.font = 'bold 42px ' + F; c.fillText('Reporte Pulp Tray · Pulp Tray Report · Pulp Tray 보고서', 36, 100);
+      var k = [[['Requerido', 'Required', '필요량'], rs.tReq, NAVY], [['Inventario IMS P4', 'IMS P4 inventory', 'IMS P4 재고'], rs.tInv, '#1b7a34'], [['Falta', 'Short', '부족'], rs.tFalta, rs.tFalta > 0 ? '#b42318' : '#1b7a34']];
+      var kw = (W - 72 - 2 * 20) / 3;
+      k.forEach(function (x, i) {
+        var X = 36 + i * (kw + 20); c.fillStyle = '#f1f3f8'; c.fillRect(X, 140, kw, 200); c.strokeStyle = '#14213d'; c.lineWidth = 2; c.strokeRect(X, 140, kw, 200);
+        c.textAlign = 'center'; c.fillStyle = '#4a5576'; x[0].forEach(function (tt, j) { c.font = (j === 0 ? 'bold 22px ' : '18px ') + F; c.fillText(tt, X + kw / 2, 176 + j * 26); });
+        c.fillStyle = x[2]; c.font = 'bold 56px ' + F; c.fillText(fmt(x[1]), X + kw / 2, 310);
+      });
+      // Tabla por Pulp Tray PN
+      var cols = [{ x: 48, al: 'left', h: ['Pulp Tray PN'] }, { x: 330, al: 'left', h: ['Modelos', 'Models', '모델'] }, { x: 1020, al: 'right', h: ['Requerido', 'Required', '필요량'] }, { x: 1240, al: 'right', h: ['Inventario', 'Inventory', '재고'] }, { x: 1452, al: 'right', h: ['Falta', 'Short', '부족'] }];
+      var y0 = top - 40, hh = 90;
+      c.fillStyle = NAVY; c.fillRect(36, y0, W - 72, hh);
+      cols.forEach(function (cl) { c.textAlign = cl.al; c.fillStyle = '#fff'; cl.h.forEach(function (tt, j) { c.font = (j === 0 ? 'bold 20px ' : '16px ') + F; c.fillText(tt, cl.x, y0 + 28 + j * 22); }); });
+      R.grupos.forEach(function (g, j) {
+        var y = y0 + hh + j * rowH;
+        c.fillStyle = g.falta > 0 ? '#FFE5CC' : '#DFF0DB'; c.fillRect(36, y, W - 72, rowH);
+        c.strokeStyle = '#14213d'; c.lineWidth = 1.5; c.strokeRect(36, y, W - 72, rowH);
+        c.fillStyle = NAVY; c.textAlign = 'left'; c.font = 'bold 24px ' + F; c.fillText(g.pn, 48, y + 42);
+        var mods = g.modelos.join(', '); c.font = '17px ' + F;
+        while (mods.length > 4 && c.measureText(mods).width > 560) mods = mods.slice(0, -4) + '…';
+        c.fillText(mods, 330, y + 41);
+        c.textAlign = 'right'; c.font = '24px ' + F; c.fillText(fmt(g.totNet), 1020, y + 42); c.fillText(fmt(g.inv), 1240, y + 42);
+        c.font = 'bold 26px ' + F; c.fillStyle = g.falta > 0 ? '#b42318' : '#1b7a34'; c.fillText(g.falta > 0 ? fmt(g.falta) : 'OK', 1452, y + 42);
+      });
+      c.textAlign = 'left'; c.fillStyle = '#4a5576'; c.font = '17px ' + F;
+      c.fillText('Se adjunta el Excel completo · Full Excel attached · 전체 Excel을 첨부했습니다', 36, H - 36);
+      cv.toBlob(function (bl) { ok(bl); }, 'image/png');
+    });
+  }
+  function blobB64(bl) { return new Promise(function (ok, no) { var r = new FileReader(); r.onload = function () { ok(String(r.result).split(',')[1]); }; r.onerror = no; r.readAsDataURL(bl); }); }
+
+  // Botón Enviar reporte: correo a los destinatarios (imagen en el cuerpo + Excel adjunto) y luego ventana de WhatsApp
+  function enviarReporte() {
+    if (!S.res) { msg(t('vacio'), 'warn'); return; }
+    var xl = excel('b64'); if (!xl) return;
+    var rs = resumenEnvio(), imgBlob = null;
+    msg(tx('enviando'), 'warn');
+    cargarDest().then(function (dest) {
+      return imagenResumen(rs).then(function (bl) { imgBlob = bl; return blobB64(bl); }).then(function (img64) {
+        if (!dest.length) return { txt: tx('sinDest'), tipo: 'warn' };
+        if (typeof CORREO_URL === 'undefined') return { txt: 'Error: CORREO_URL', tipo: 'err' };
+        var key = ''; try { key = localStorage.getItem('bomCorreoKey') || ''; } catch (x) {}
+        if (!key) { key = (prompt(tx('pedirClave')) || '').trim(); if (!key) return { txt: tx('sinDest'), tipo: 'warn' }; }
+        return fetch(CORREO_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: key, asunto: rs.asunto, para: dest, cc: [], imagen: img64, xlsx: xl.b64, archivo: xl.nombre }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.ok) { try { localStorage.setItem('bomCorreoKey', key); } catch (x) {} return { txt: tx('envOk').replace('{n}', j.enviados || dest.length), tipo: 'ok' }; }
+            if (j && /clave/i.test(j.error || '')) { try { localStorage.removeItem('bomCorreoKey'); } catch (x) {} return { txt: tx('errClave'), tipo: 'err' }; }
+            return { txt: '❌ ' + ((j && j.error) || '?'), tipo: 'err' };
+          }).catch(function () { return { txt: tx('errRed'), tipo: 'warn' }; });
+      });
+    }).then(function (res) {
+      msg(res.txt, res.tipo);
+      ventanaWhatsApp(rs, imgBlob, xl, res.txt);
+    }).catch(function (e) { msg('Error: ' + e.message, 'err'); console.error(e); });
+  }
+  function ventanaWhatsApp(rs, imgBlob, xl, titulo) {
+    var ov = ventana('<div style="font-weight:700;font-size:16px">' + esc(titulo) + '</div><div style="font-size:12px;color:var(--text2)">' + esc(tx('waSub')) + '</div>' +
+      '<button class="btn btn-primary" data-x="wa" style="padding:11px">' + esc(tx('waGo')) + '</button>' +
+      '<button class="btn btn-secondary btn-sm" data-x="xl">' + esc(tx('waXl')) + '</button>' +
+      '<button class="btn btn-secondary btn-sm" data-x="no">' + esc(tx('cerrar')) + '</button>');
+    var nomImg = xl.nombre.replace('.xlsx', '.png');
+    var bajar = function (blob, nombre) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
+    ov.querySelector('[data-x=no]').onclick = function () { ov.remove(); };
+    ov.querySelector('[data-x=xl]').onclick = function () {
+      var bin = atob(xl.b64), u8 = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      bajar(new Blob([u8], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), xl.nombre);
+    };
+    // Mismo método del Cable DLC: celular = menú compartir con imagen; computadora = copia la imagen y abre WhatsApp con el texto
+    ov.querySelector('[data-x=wa]').onclick = function () {
+      var abrir = function (m) { window.open('https://wa.me/?text=' + encodeURIComponent(rs.texto), '_blank'); if (m) msg(m, 'ok'); };
+      if (!imgBlob) { abrir(''); return; }
+      var f = new File([imgBlob], nomImg, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        navigator.share({ files: [f], text: rs.texto }).catch(function (e) { if (!e || e.name !== 'AbortError') { bajar(imgBlob, nomImg); abrir(tx('waDesc')); } });
+        return;
+      }
+      if (navigator.clipboard && window.ClipboardItem) {
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': imgBlob })]).then(function () { abrir(tx('pegaImg')); }, function () { bajar(imgBlob, nomImg); abrir(tx('waDesc')); });
+      } else { bajar(imgBlob, nomImg); abrir(tx('waDesc')); }
+    };
+  }
+
+
   window.ptIdioma = idioma; window.ptArchivo = archivo; window.ptRecalcular = function () { correr(true); };
-  window.ptAsignar = asignar; window.ptToggleDesc = toggleDesc; window.ptDesde = cambiarDesde; window.ptExcel = excel;
+  window.ptAsignar = asignar; window.ptToggleDesc = toggleDesc; window.ptDesde = cambiarDesde; window.ptExcel = function () { excel(); };
+  window.ptEnviar = enviarReporte; window.ptDestinatarios = destinatarios;
   window.__ptCore = { leerForecast: leerForecast, calcular: calcular, margen: margen }; // para pruebas
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ponerPestana); else ponerPestana();
 })();

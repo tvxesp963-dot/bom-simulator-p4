@@ -266,6 +266,7 @@
   function mostrar() {
     var c = $('ptCaja'); if (!c) return;
     if (typeof BOM === 'undefined' || !BOM.length) { c.innerHTML = '<div style="padding:1.5rem;color:#FFBA00;font-weight:600">' + esc(t('sinBom')) + '</div>'; return; }
+    if (restaurarFijo()) { marco(); correr(false); return; } // Forecast fijado: se recupera al refrescar
     marco();
   }
   function banderas() {
@@ -298,8 +299,10 @@
       '<label style="display:flex;gap:8px;align-items:center;margin:.2rem 0;flex-wrap:wrap" title="' + esc(t('desdeAyuda')) + '">' + esc(t('desde')) + ': <input type="datetime-local" id="ptDesde" value="' + (S.fc ? fechaHora(new Date(desdeMs())) : '') + '" onchange="ptDesde(this.value)" style="background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:4px 6px"></label>' +
       '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 2px">' + esc(t('desdeAyuda')) + ' <b id="ptDesdeFuente" style="color:#4da6ff"></b></div>' +
       '<div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">' + esc(t('ims')) + ': <span id="ptEdad">' + edadIMS() + '</span></div>' +
-      '<div id="ptMsg" style="display:none"></div><div id="ptRes"></div>';
-    pintar();
+      '<label style="display:flex;gap:6px;align-items:center;margin:.2rem 0" title="' + esc(th('fijarAyuda')) + '"><input type="checkbox" id="ptFijar" onchange="ptFijar(this.checked)"' + (estaFijo() ? ' checked' : '') + '> ' + esc(th('fijar')) + '</label>' +
+      '<div style="font-size:11px;color:var(--text2);margin:0 0 .5rem 22px">' + esc(th('fijarAyuda')) + '</div>' +
+      '<div id="ptMsg" style="display:none"></div><div id="ptCambios"></div><div id="ptRes"></div>';
+    pintar(); pintarCambios();
   }
   function msg(txt, tipo) {
     var el = $('ptMsg'); if (!el) return;
@@ -453,7 +456,7 @@
     try { if (typeof sincIMSFresco === 'function') await sincIMSFresco(true); } catch (e) {}
     var el = $('ptEdad'); if (el) el.innerHTML = edadIMS();
   }
-  async function correr(forzar) {
+  async function correr(forzar, nuevaCarga) {
     if (S.ocupado) return; S.ocupado = true;
     try {
       if (typeof BOM === 'undefined' || !BOM.length) { msg(t('sinBom'), 'err'); return; }
@@ -464,6 +467,7 @@
       var dd = $('ptDesde'); if (dd) dd.value = fechaHora(new Date(desdeMs()));
       var ft = $('ptDesdeFuente'); if (ft) ft.textContent = textoFuente();
       recalcLocal();
+      trasCalcular(!!nuevaCarga);
       var b = $('ptNombre'); if (b) b.innerHTML = esc(t('archivo')) + ': <b style="color:var(--text)">' + esc(S.nombre) + '</b>';
     } catch (e) { msg(t('error') + (e && e.message ? e.message : e), 'err'); }
     finally { S.ocupado = false; }
@@ -477,8 +481,8 @@
         var fc = leerForecast(wb);
         if (!fc) { msg(t('formato'), 'err'); return; }
         if (!fc.filas.length) { msg(t('sinDatos'), 'err'); return; }
-        S.fc = fc; S.nombre = f.name; S.desde = null; inp.value = '';
-        correr(false);
+        S.fc = fc; S.nombre = f.name; S.desde = null; inp.value = ''; H.compId = '';
+        correr(false, true);
       } catch (e) { msg(t('error') + (e && e.message ? e.message : e), 'err'); }
     };
     rd.readAsArrayBuffer(f);
@@ -605,6 +609,150 @@
     if (modo === 'b64') return { nombre: nomXl, b64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) };
     XLSX.writeFile(wb, nomXl);
   }
+
+
+  /* ---------------- FIJAR FORECAST + HISTORIAL Y CAMBIOS ENTRE CARGAS ---------------- */
+  var TF = {
+    es: { fijar: '📌 Fijar este Forecast (se queda al refrescar la página)', fijarAyuda: 'Se guarda en este navegador. Si cargas otro Forecast con la casilla marcada, se fija el nuevo.',
+      sig: function (n) { return n + ' cambios significativos vs el Forecast anterior'; }, sinSig: '✓ Sin cambios significativos vs el Forecast anterior',
+      comp: 'Comparando contra', regla: 'Significativo = cambia 20% o más y al menos 1,000 pzas. Solo modelos que llevan Pulp Tray.',
+      primero: 'ℹ Este es el primer Forecast guardado: a partir de la siguiente carga verás qué sube, baja, desaparece o es nuevo.',
+      sube: '▲ Sube', baja: '▼ Baja', desap: '✕ Desaparece', nuevo: '✚ Nuevo', todas: 'Todas',
+      cols: ['Cambio', 'Código GH90 / modelo', 'Pulp Tray', 'Semana', 'Antes', 'Ahora', 'Dif.'],
+      menores: function (n) { return 'Ver cambios menores (' + n + ')'; }, cargando: '⏳ Buscando el Forecast anterior…', errHist: '⚠ No se pudo leer el historial del Forecast: ' },
+    en: { fijar: '📌 Pin this Forecast (stays after refreshing the page)', fijarAyuda: 'Saved in this browser. If you load another Forecast while checked, the new one is pinned.',
+      sig: function (n) { return n + ' significant changes vs the previous Forecast'; }, sinSig: '✓ No significant changes vs the previous Forecast',
+      comp: 'Comparing against', regla: 'Significant = changes 20% or more and at least 1,000 pcs. Only models that carry a Pulp Tray.',
+      primero: 'ℹ This is the first saved Forecast: from the next load you will see what goes up, down, disappears or is new.',
+      sube: '▲ Up', baja: '▼ Down', desap: '✕ Gone', nuevo: '✚ New', todas: 'All',
+      cols: ['Change', 'GH90 code / model', 'Pulp Tray', 'Week', 'Before', 'Now', 'Diff.'],
+      menores: function (n) { return 'View minor changes (' + n + ')'; }, cargando: '⏳ Looking for the previous Forecast…', errHist: '⚠ Could not read the Forecast history: ' },
+    ko: { fijar: '📌 이 Forecast 고정 (새로고침해도 유지)', fijarAyuda: '이 브라우저에 저장됩니다. 체크된 상태에서 다른 Forecast를 불러오면 새 것이 고정됩니다.',
+      sig: function (n) { return '이전 Forecast 대비 주요 변경 ' + n + '건'; }, sinSig: '✓ 이전 Forecast 대비 주요 변경 없음',
+      comp: '비교 대상', regla: '주요 변경 = 20% 이상 그리고 1,000개 이상 변경. Pulp Tray를 사용하는 모델만.',
+      primero: 'ℹ 처음 저장된 Forecast입니다. 다음 업로드부터 증가, 감소, 삭제, 신규를 볼 수 있습니다.',
+      sube: '▲ 증가', baja: '▼ 감소', desap: '✕ 삭제', nuevo: '✚ 신규', todas: '전체',
+      cols: ['변경', 'GH90 코드 / 모델', 'Pulp Tray', '주차', '이전', '현재', '차이'],
+      menores: function (n) { return '작은 변경 보기 (' + n + ')'; }, cargando: '⏳ 이전 Forecast 찾는 중…', errHist: '⚠ Forecast 이력을 읽을 수 없습니다: ' }
+  };
+  function th(k) { return (TF[lang()] || TF.es)[k]; }
+  var FIJO_KEY = 'ptForecastFijo', COL_HIST = 'pulp_tray_forecast';
+  var H = { lista: null, compId: '', cargando: false };
+
+  // ---- Fijar (localStorage de este navegador) ----
+  function estaFijo() { try { return !!localStorage.getItem(FIJO_KEY); } catch (e) { return false; } }
+  function guardarFijo() { try { localStorage.setItem(FIJO_KEY, JSON.stringify({ fc: S.fc, nombre: S.nombre, desde: S.desde })); } catch (e) {} }
+  function fijar(v) {
+    if (v && S.fc) guardarFijo();
+    else if (!v) { try { localStorage.removeItem(FIJO_KEY); } catch (e) {} }
+  }
+  function restaurarFijo() {
+    if (S.fc) return false;
+    try {
+      var d = JSON.parse(localStorage.getItem(FIJO_KEY) || 'null');
+      if (!d || !d.fc || !d.fc.filas) return false;
+      S.fc = d.fc; S.nombre = d.nombre || ''; S.desde = d.desde || null; return true;
+    } catch (e) { return false; }
+  }
+
+  // ---- Historial en Firestore: cada Forecast distinto que se carga queda guardado ----
+  function firma(fc) {
+    var s = JSON.stringify([fc.semanas, fc.filas.map(function (f) { return [f.code, f.q, f.oh]; })]), h = 5381;
+    for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36) + '-' + s.length;
+  }
+  function leerHist() {
+    if (typeof db === 'undefined' || !db) return Promise.resolve([]);
+    return db.collection(COL_HIST).orderBy('ms', 'desc').limit(12).get().then(function (snap) {
+      H.lista = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      return H.lista;
+    });
+  }
+  function guardarHist() {
+    if (!S.fc || typeof db === 'undefined' || !db) return Promise.resolve();
+    var fm = firma(S.fc);
+    return leerHist().then(function (l) {
+      if (l.some(function (x) { return x.firma === fm; })) return;
+      var u = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? currentUser.email : '';
+      return db.collection(COL_HIST).add({ nombre: S.nombre, ms: Date.now(), cargadoEn: new Date().toISOString(), por: u, firma: fm,
+        semanas: S.fc.semanas, filas: S.fc.filas.map(function (f) { return { code: f.code, desc: f.desc, q: f.q, oh: f.oh || 0 }; }) })
+        .then(function () { return leerHist(); });
+    });
+  }
+  function previos() { var fm = S.fc ? firma(S.fc) : ''; return (H.lista || []).filter(function (x) { return x.firma !== fm; }); }
+
+  // ---- Comparación código por código y semana por semana (solo semanas que traen los dos Forecast) ----
+  function comparar(prev) {
+    var pfc = { semanas: prev.semanas || [], filas: prev.filas || [] };
+    var info = {};
+    var meter = function (items) { items.forEach(function (it) { if (!info[it.code]) info[it.code] = { sm: it.sm, pn: it.pn }; }); };
+    meter(S.res ? S.res.items : []);
+    try { meter(calcular(pfc, BOM, {}, leerMapeo(), {}).items); } catch (e) {}
+    var comunes = S.fc.semanas.filter(function (w) { return pfc.semanas.indexOf(w) >= 0; });
+    var mapa = function (fc) { var m = {}; fc.filas.forEach(function (f) { var o = {}; fc.semanas.forEach(function (w, j) { o[w] = f.q[j] || 0; }); m[f.code] = o; }); return m; };
+    var A = mapa(pfc), N = mapa(S.fc), suma = function (o) { return o ? comunes.reduce(function (a, w) { return a + (o[w] || 0); }, 0) : 0; };
+    var out = [];
+    Object.keys(info).forEach(function (code) {
+      var a = A[code], n = N[code], ta = suma(a), tn = suma(n), base = { code: code, sm: info[code].sm, pn: info[code].pn };
+      if (ta > 0 && tn === 0) { out.push(Object.assign({ tipo: 'desap', sem: '', antes: ta, ahora: 0, sig: ta >= 1000 }, base)); return; }
+      if (ta === 0 && tn > 0) { out.push(Object.assign({ tipo: 'nuevo', sem: '', antes: 0, ahora: tn, sig: tn >= 1000 }, base)); return; }
+      comunes.forEach(function (w) {
+        var x = (a && a[w]) || 0, y = (n && n[w]) || 0, d = y - x; if (!d) return;
+        var pct = x > 0 ? Math.abs(d) / x : 1;
+        out.push(Object.assign({ tipo: d > 0 ? 'sube' : 'baja', sem: 'W' + w, antes: x, ahora: y, sig: Math.abs(d) >= 1000 && pct >= 0.2 }, base));
+      });
+    });
+    out.sort(function (p, q) { return Math.abs(q.ahora - q.antes) - Math.abs(p.ahora - p.antes); });
+    return out;
+  }
+
+  function pintarCambios() {
+    var el = $('ptCambios'); if (!el) return;
+    if (!S.fc || !S.res) { el.innerHTML = ''; return; }
+    if (H.cargando) { el.innerHTML = '<div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">' + esc(th('cargando')) + '</div>'; return; }
+    var pv = previos();
+    if (!pv.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text2);margin-bottom:.6rem">' + esc(th('primero')) + '</div>'; return; }
+    var prev = pv.filter(function (x) { return x.id === H.compId; })[0] || pv[0]; H.compId = prev.id;
+    var cs = comparar(prev), sig = cs.filter(function (c) { return c.sig; }), men = cs.filter(function (c) { return !c.sig; });
+    var cnt = { sube: 0, baja: 0, desap: 0, nuevo: 0 }; sig.forEach(function (c) { cnt[c.tipo]++; });
+    var col = { sube: '#ff4444', baja: '#00e676', desap: 'var(--text)', nuevo: '#4da6ff' };
+    var fechaC = function (x) { var d = new Date(x.ms); return d.toLocaleDateString('es-MX') + ' ' + d.toTimeString().slice(0, 5); };
+    var opts = pv.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === prev.id ? ' selected' : '') + '>' + esc(x.nombre || '?') + ' (' + esc(fechaC(x)) + ')</option>'; }).join('');
+    var tabla = function (lista) {
+      return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>' +
+        th('cols').map(function (c, i) { return '<th style="' + TH + (i < 4 ? ';text-align:left' : '') + '">' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        lista.map(function (c) {
+          var d = c.ahora - c.antes, pct = c.antes > 0 ? ' (' + (d > 0 ? '+' : '') + Math.round(d / c.antes * 100) + '%)' : '';
+          return '<tr><td style="' + TD + ';text-align:left;color:' + col[c.tipo] + ';font-weight:600">' + esc(th(c.tipo)) + '</td>' +
+            '<td style="' + TD + ';text-align:left">' + esc(c.code) + ' · ' + esc(c.sm) + '</td><td style="' + TD + ';text-align:left">' + esc(c.pn) + '</td>' +
+            '<td style="' + TD + ';text-align:left">' + esc(c.sem || th('todas')) + '</td><td style="' + TD + '">' + fmt(c.antes) + '</td><td style="' + TD + '">' + fmt(c.ahora) + '</td>' +
+            '<td style="' + TD + ';font-weight:600;color:' + col[c.tipo] + '">' + (d > 0 ? '+' : '') + fmt(d) + pct + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    };
+    var hay = sig.length > 0, bc = hay ? '#FFBA00' : '#00e676';
+    var h = '<div style="margin-bottom:.8rem;padding:.7rem .9rem;border-radius:10px;border:1px solid ' + bc + ';background:' + (hay ? 'rgba(255,186,0,.08)' : 'rgba(0,230,118,.06)') + '">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">' +
+      '<div style="font-weight:700;font-size:14px;color:' + bc + '">' + esc(hay ? '⚠ ' + th('sig')(sig.length) : th('sinSig')) + '</div>' +
+      '<div style="font-size:12px;color:var(--text2)">' + esc(th('comp')) + ': <select onchange="ptComparar(this.value)" style="background:var(--bg3,#151c2e);border:1px solid var(--border,#334);color:var(--text,#fff);border-radius:6px;padding:3px 6px">' + opts + '</select></div></div>' +
+      '<div style="font-size:11px;color:var(--text2);margin:.3rem 0 .5rem">' + esc(th('regla')) + '</div>';
+    if (hay) {
+      h += '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">' + ['sube', 'baja', 'desap', 'nuevo'].map(function (k) {
+        return '<div style="min-width:110px;padding:.35rem .7rem;border-radius:8px;background:var(--bg3,#151c2e)"><div style="font-size:11px;color:var(--text2)">' + esc(th(k)) + '</div><div style="font-size:20px;font-weight:700;color:' + col[k] + '">' + cnt[k] + '</div></div>';
+      }).join('') + '</div>' + tabla(sig);
+    }
+    if (men.length) h += '<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:12px;color:var(--text2)">' + esc(th('menores')(men.length)) + '</summary>' + tabla(men) + '</details>';
+    el.innerHTML = h + '</div>';
+  }
+  // Se llama después de cada cálculo: guarda la carga en el historial (si es nueva) y compara
+  function trasCalcular(nuevaCarga) {
+    if (!S.fc) return;
+    if (estaFijo()) guardarFijo(); // mantiene al día el Forecast fijado (incluye 'Producido desde')
+    H.cargando = true; pintarCambios();
+    var p = (nuevaCarga ? guardarHist() : (H.lista ? Promise.resolve() : leerHist()));
+    p.then(function () { H.cargando = false; pintarCambios(); })
+      .catch(function (e) { H.cargando = false; var el = $('ptCambios'); if (el) el.innerHTML = '<div style="font-size:12px;color:#FFBA00;margin-bottom:.6rem">' + esc(th('errHist') + (e && e.message ? e.message : e)) + '</div>'; });
+  }
+  function compararCon(id) { H.compId = id; pintarCambios(); }
 
   /* ---------------- ENVÍO: CORREO (Apps Script del BOM) + WHATSAPP — igual que Cable DLC ---------------- */
   var TX = {
@@ -763,6 +911,7 @@
 
   window.ptIdioma = idioma; window.ptArchivo = archivo; window.ptRecalcular = function () { correr(true); };
   window.ptAsignar = asignar; window.ptToggleDesc = toggleDesc; window.ptDesde = cambiarDesde; window.ptExcel = function () { excel(); };
+  window.ptFijar = fijar; window.ptComparar = compararCon;
   window.ptEnviar = enviarReporte; window.ptDestinatarios = destinatarios;
   window.__ptCore = { leerForecast: leerForecast, calcular: calcular, margen: margen }; // para pruebas
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ponerPestana); else ponerPestana();

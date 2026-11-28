@@ -8121,7 +8121,7 @@ function abrirPantallasPiso() {
 }
 window.abrirPantallasPiso = abrirPantallasPiso;
 
-const BUILD_BOM='idx-20261126-1500';
+const BUILD_BOM='idx-20261128-0700';
 // Vigilante de versión: una pestaña que lleva días abierta con código viejo puede publicar un plan viejo al piso.
 // Cada 10 min compara su versión con la publicada; si hay una más nueva avisa y NO publica.
 (function vigilarVersion() {
@@ -8235,7 +8235,7 @@ async function publicarPlanPiso(auto) {
       // terminado por modelo). Si el BOM del modelo trae un GH96 en la sección
       // Bottom se usa ese; si no trae ninguno, se queda el código de siempre.
       if (!/^GH96/i.test(pn.Bot || '')) {
-        const filaGH96 = BOM.find(r => r.sm === sm && /^GH96/i.test((r.pn || '').trim()) && getSectionByRow(r) === 'BOT');
+        const filaGH96 = BOM.find(r => r.sm === sm && /^GH96/i.test((r.pn || '').trim()) && getSectionByRow(r) === 'BOT' && !r.isLevel2 && r.level !== 2 && !/SHEET|CHIP/i.test(r.desc || '')); // solo el Bottom terminado (nivel 1), nunca un hijo como el Sheet Lower Box
         if (filaGH96) { pn.Bot = filaGH96.pn; desc.Bot = filaGH96.desc || desc.Bot; }
       }
       const bundle = BOM.find(r => r.sm === sm && r.familia === 'GH90' && (r.desc || '').toUpperCase().includes('BUNDLE'));
